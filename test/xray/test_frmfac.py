@@ -7,57 +7,60 @@ from mpl_toolkits.mplot3d import Axes3D
 
 from numpy.linalg import norm
 
-def form_factor(q0, atomz):
+def form_factor(qo, atomz):
     
     if ( atomz == 1 ):
-        fi = 0.493002*exp(-10.5109*qo)
-        fi+= 0.322912*exp(-26.1257*qo)
-        fi+= 0.140191*exp(-3.14236*qo)
-        fi+= 0.040810*exp(-57.7997*qo)
+        fi = 0.493002*np.exp(-10.5109*qo)
+        fi+= 0.322912*np.exp(-26.1257*qo)
+        fi+= 0.140191*np.exp(-3.14236*qo)
+        fi+= 0.040810*np.exp(-57.7997*qo)
         fi+= 0.003038
     
     elif ( atomz == 8):
-        fi = 3.04850*exp(-13.2771*qo)
-        fi+= 2.28680*exp(-5.70110*qo)
-        fi+= 1.54630*exp(-0.323900*qo)
-        fi+= 0.867000*exp(-32.9089*qo)
+        fi = 3.04850*np.exp(-13.2771*qo)
+        fi+= 2.28680*np.exp(-5.70110*qo)
+        fi+= 1.54630*np.exp(-0.323900*qo)
+        fi+= 0.867000*np.exp(-32.9089*qo)
         fi+= 0.2508
 
     elif ( atomz == 26):
-        fi = 11.7695*exp(-4.7611*qo)
-        fi+= 7.35730*exp(-0.307200*qo)
-        fi+= 3.52220*exp(-15.3535*qo)
-        fi+= 2.30450*exp(-76.8805*qo)
+        fi = 11.7695*np.exp(-4.7611*qo)
+        fi+= 7.35730*np.exp(-0.307200*qo)
+        fi+= 3.52220*np.exp(-15.3535*qo)
+        fi+= 2.30450*np.exp(-76.8805*qo)
         fi+= 1.03690
 
     elif ( atomz == 79):
-        fi = 16.8819*exp(-0.4611*qo)
-        fi+= 18.5913*exp(-8.6216*qo)
-        fi+= 25.5582*exp(-1.4826*qo)
-        fi+= 5.86*exp(-36.3956*qo)
+        fi = 16.8819*np.exp(-0.4611*qo)
+        fi+= 18.5913*np.exp(-8.6216*qo)
+        fi+= 25.5582*np.exp(-1.4826*qo)
+        fi+= 5.86*np.exp(-36.3956*qo)
         fi+= 12.0658
         
     # else approximate with Nitrogen
     else:
-        fi = 12.2126*exp(-0.005700*qo)
-        fi+= 3.13220*exp(-9.89330*qo)
-        fi+= 2.01250*exp(-28.9975*qo)
-        fi+= 1.16630*exp(-0.582600*qo)
+        fi = 12.2126*np.exp(-0.005700*qo)
+        fi+= 3.13220*np.exp(-9.89330*qo)
+        fi+= 2.01250*np.exp(-28.9975*qo)
+        fi+= 1.16630*np.exp(-0.582600*qo)
         fi+= -11.529
         
     return fi
     
     
-def rquaternion():
+def rquaternion(rfloat=None):
+    
+    if rfloat == None:
+        rfloat = np.random.rand(3)
     
     q = np.zeros(4)
     
-    s = np.random.rand()
+    s = rfloat[0]
     sig1 = np.sqrt(s)
     sig2 = np.sqrt(1.0 - s)
     
-    theta1 = 2.0 * np.pi * np.random.rand()
-    theta2 = 2.0 * np.pi * np.random.rand()
+    theta1 = 2.0 * np.pi * rfloat[1]
+    theta2 = 2.0 * np.pi * rfloat[2]
     
     w = np.cos(theta2) * sig2
     x = np.sin(theta1) * sig1
@@ -127,10 +130,10 @@ def rand_rotate_vector(v):
     return v_prime
 
 
-def rand_rotate_molecule(xyzlist):
+def rand_rotate_molecule(xyzlist, rfloat=None):
 
     # get a random quaternion vector
-    q = rquaternion()
+    q = rquaternion(rfloat)
     
     # take the quaternion conjugated
     qconj = np.zeros(4)
@@ -142,7 +145,7 @@ def rand_rotate_molecule(xyzlist):
     rotated_xyzlist = np.zeros(xyzlist.shape)
     qv = np.zeros(4)
     
-    for i in range(xyzlist.shape[0])
+    for i in range(xyzlist.shape[0]):
         
         qv[1:] = xyzlist[i,:].copy()
     
@@ -153,7 +156,7 @@ def rand_rotate_molecule(xyzlist):
     return rotated_xyzlist
     
     
-def simulate_shot(xyzlist, atomic_numbers, num_molecules, q_grid):
+def simulate_shot(xyzlist, atomic_numbers, num_molecules, q_grid, rfloats=None):
     """
     Simulate a single x-ray scattering shot off an ensemble of identical
     molecules.
@@ -172,6 +175,13 @@ def simulate_shot(xyzlist, atomic_numbers, num_molecules, q_grid):
     q_grid : ndarray, float, 2d
         An m x 3 array of the q-vectors corresponding to each detector position.
     
+    Optional Parameters
+    -------------------
+    rfloats : ndarray, float, n x 3
+        A bunch of random floats, uniform on [0,1] to be used to seed the 
+        quaternion computation.
+        
+    
     Returns
     -------
     I : ndarray, float
@@ -182,9 +192,12 @@ def simulate_shot(xyzlist, atomic_numbers, num_molecules, q_grid):
     I = np.zeros(q_grid.shape[0])
     
     for n in range(num_molecules):
-        print "shooting molecule %d of %d" % (n, num_molecules)
+        print "shooting molecule %d of %d" % (n+1, num_molecules)
         
-        rotated_xyzlist = rand_rotate_molecule(xyzlist)
+        if rfloats == None:
+            rotated_xyzlist = rand_rotate_molecule(xyzlist)
+        else:
+            rotated_xyzlist = rand_rotate_molecule(xyzlist, rfloats[n,:])
         
         for i,qvector in enumerate(q_grid):
             
@@ -192,9 +205,9 @@ def simulate_shot(xyzlist, atomic_numbers, num_molecules, q_grid):
             
             for j in range(xyzlist.shape[0]):
                 
-                fi = form_factor(q0, atomic_numbers[j])
+                fi = form_factor(np.linalg.norm(qvector), atomic_numbers[j])
                 r = xyzlist[j]
-                F += fi * np.exp( 1j * np.dot(q, r) )
+                F += fi * np.exp( 1j * np.dot(qvector, r) )
     
             I[i] += np.power( np.abs(F), 2 )
 
@@ -231,4 +244,22 @@ def plot_rotations():
 
     
 if __name__ == '__main__':
-    plot_rotations()
+    
+    # if main, lets produce a text file for the simulated shot
+    
+    xyzQ = np.loadtxt('reference/512_atom_benchmark.xyz')
+    xyzlist = xyzQ[:,:3]
+    atomic_numbers = xyzQ[:,3].flatten()
+    
+    q_grid = np.loadtxt('reference/512_q.xyz')
+    
+    rfloats = np.loadtxt('reference/2048_x_3_random_floats.txt')
+    num_molecules = rfloats.shape[0]
+    
+    I = simulate_shot(xyzlist, atomic_numbers, num_molecules, q_grid, rfloats=rfloats)
+    np.savetxt('simulated_shot_reference.dat', I)
+    
+    print 'SAVED: simulated_shot_reference.dat'
+    
+    
+    
