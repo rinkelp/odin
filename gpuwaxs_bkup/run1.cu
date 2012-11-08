@@ -1,3 +1,6 @@
+#define real float
+#define real2 float2
+
 #include <main.cu>
 #include <stdio.h>
 #include <vector>
@@ -8,22 +11,59 @@
 
 using namespace std;
 
-void uniform_01(vector<float> &f) {
+void uniform_01(vector<real> &f) {
     for(int i=0; i<f.size(); i++) {
-        f[i]=(float) rand()/(float) RAND_MAX;
+        f[i]=(real) rand()/(real) RAND_MAX;
     }
 }
 
-float uniform_rand01() {
-    
-
-
-    return 500*(float) rand()/(float) RAND_MAX;
+real uniform_rand01() {
+    return (real) rand()/(real) RAND_MAX;
 }
 
-void load_in_rands(vector<float> &r1, 
-                   vector<float> &r2, 
-                   vector<float> &r3, 
+
+void random_load_in_rands(vector<real> &r1, 
+                          vector<real> &r2, 
+                          vector<real> &r3, 
+                          char *filename) {
+
+    for(int i=0; i<r1.size(); i++) {
+        r1[i]=uniform_rand01();
+        r2[i]=uniform_rand01();
+        r3[i]=uniform_rand01();
+    }
+
+}
+
+void random_load_in_r(vector<real> &rx,
+                      vector<real> &ry,
+                      vector<real> &rz,
+                      vector<int> &id,
+                      char *filename) {
+
+    for(int i=0; i<rx.size(); i++) {
+        rx[i]=uniform_rand01();
+        ry[i]=uniform_rand01();
+        rz[i]=uniform_rand01();
+        id[i]=1;
+    }
+
+}
+
+void random_load_in_q(vector<real> &qx, 
+                      vector<real> &qy,
+                      vector<real> &qz,
+                      char *filename) {
+    for(int i=0; i<qx.size(); i++) {
+        qx[i]=uniform_rand01();
+        qy[i]=uniform_rand01();
+        qz[i]=uniform_rand01();
+    }
+}
+
+void load_in_rands(vector<real> &r1, 
+                   vector<real> &r2, 
+                   vector<real> &r3, 
                    char *filename) {
 
     ifstream in(filename);   
@@ -45,9 +85,9 @@ void load_in_rands(vector<float> &r1,
 }
 
 
-void load_in_r(vector<float> &rx,
-               vector<float> &ry,
-               vector<float> &rz,
+void load_in_r(vector<real> &rx,
+               vector<real> &ry,
+               vector<real> &rz,
                vector<int> &id,
                char *filename) {
 
@@ -69,9 +109,9 @@ void load_in_r(vector<float> &rx,
     in.close();
 }
 
-void load_in_q(vector<float> &qx, 
-               vector<float> &qy,
-               vector<float> &qz,
+void load_in_q(vector<real> &qx, 
+               vector<real> &qy,
+               vector<real> &qz,
                char *filename) {
     ifstream in(filename);   
 
@@ -108,7 +148,7 @@ inline ostream& operator<< (ostream &out, const vector<int> &s) {
 }
 
 
-inline ostream& operator<< (ostream &out, const vector<float> &s) {
+inline ostream& operator<< (ostream &out, const vector<real> &s) {
     for(int i=0; i<s.size(); i++) {
         out << s[i] << " ";
     }
@@ -123,48 +163,49 @@ int main() {
     // allocate atomicIdentities
 
     const int tpb = 512;
-    const int bpg = 4;
+    const int bpg = 100;
 
     int nRotations = tpb*bpg;
-    int nAtoms = 512; 
-    int nQ = 512;
+    int nAtoms = 1024; 
+    int nQ = 190731;
 
-    unsigned int nQ_size = nQ*sizeof(int);
-    unsigned int nAtoms_size = nAtoms*sizeof(int);
-    unsigned int nRotations_size = nRotations*sizeof(int);
+    unsigned int nQ_size = nQ*sizeof(real);
+    unsigned int nAtoms_size = nAtoms*sizeof(real);
+    unsigned int nAtoms_idsize = nAtoms*sizeof(int);
+    unsigned int nRotations_size = nRotations*sizeof(real);
 
-    vector<float> h_qx(nQ);
-    vector<float> h_qy(nQ);
-    vector<float> h_qz(nQ);
-    vector<float> h_outQ(nQ);
-    vector<float> h_rx(nAtoms);
-    vector<float> h_ry(nAtoms);
-    vector<float> h_rz(nAtoms);
-    vector<int>   h_id(nAtoms);
+    vector<real> h_qx(nQ);
+    vector<real> h_qy(nQ);
+    vector<real> h_qz(nQ);
+    vector<real> h_outQ(nQ);
+    vector<real> h_rx(nAtoms);
+    vector<real> h_ry(nAtoms);
+    vector<real> h_rz(nAtoms);
+    vector<int>  h_id(nAtoms);
 
-    vector<float> h_rand1(nRotations);
-    vector<float> h_rand2(nRotations);
-    vector<float> h_rand3(nRotations);
+    vector<real> h_rand1(nRotations);
+    vector<real> h_rand2(nRotations);
+    vector<real> h_rand3(nRotations);
 
-    load_in_r(h_rx, h_ry, h_rz, h_id, "512_atom_benchmark.xyz");
-    load_in_q(h_qx, h_qy, h_qz, "512_q.xyz");
-    load_in_rands(h_rand1, h_rand2, h_rand3, "2048_x_3_random_floats.txt");
+    random_load_in_r(h_rx, h_ry, h_rz, h_id, "512_atom_benchmark.xyz");
+    random_load_in_q(h_qx, h_qy, h_qz, "512_q.xyz");
+    random_load_in_rands(h_rand1, h_rand2, h_rand3, "512_x_3_random_floats.txt");
 
     for(int i=0; i < h_outQ.size(); i++) {
         h_outQ[i]=0;
     } 
 
-    float *d_qx; deviceMalloc( (void **) &d_qx, nQ_size);
-    float *d_qy; deviceMalloc( (void **) &d_qy, nQ_size);
-    float *d_qz; deviceMalloc( (void **) &d_qz, nQ_size);
-    float *d_outQ; deviceMalloc( (void **) &d_outQ, nQ_size);
-    float *d_rx; deviceMalloc( (void **) &d_rx, nAtoms_size);
-    float *d_ry; deviceMalloc( (void **) &d_ry, nAtoms_size);
-    float *d_rz; deviceMalloc( (void **) &d_rz, nAtoms_size);
-    int   *d_id; deviceMalloc( (void **) &d_id, nAtoms_size);
-    float *d_rand1; deviceMalloc( (void **) &d_rand1, nRotations_size);
-    float *d_rand2; deviceMalloc( (void **) &d_rand2, nRotations_size);
-    float *d_rand3; deviceMalloc( (void **) &d_rand3, nRotations_size);
+    real *d_qx; deviceMalloc( (void **) &d_qx, nQ_size);
+    real *d_qy; deviceMalloc( (void **) &d_qy, nQ_size);
+    real *d_qz; deviceMalloc( (void **) &d_qz, nQ_size);
+    real *d_outQ; deviceMalloc( (void **) &d_outQ, nQ_size);
+    real *d_rx; deviceMalloc( (void **) &d_rx, nAtoms_size);
+    real *d_ry; deviceMalloc( (void **) &d_ry, nAtoms_size);
+    real *d_rz; deviceMalloc( (void **) &d_rz, nAtoms_size);
+    int   *d_id; deviceMalloc( (void **) &d_id, nAtoms_idsize);
+    real *d_rand1; deviceMalloc( (void **) &d_rand1, nRotations_size);
+    real *d_rand2; deviceMalloc( (void **) &d_rand2, nRotations_size);
+    real *d_rand3; deviceMalloc( (void **) &d_rand3, nRotations_size);
 
     cudaMemcpy(d_qx, &h_qx[0], nQ_size, cudaMemcpyHostToDevice);
     cudaMemcpy(d_qy, &h_qy[0], nQ_size, cudaMemcpyHostToDevice);
@@ -173,7 +214,7 @@ int main() {
     cudaMemcpy(d_rx, &h_rx[0], nAtoms_size, cudaMemcpyHostToDevice);
     cudaMemcpy(d_ry, &h_ry[0], nAtoms_size, cudaMemcpyHostToDevice);
     cudaMemcpy(d_rz, &h_rz[0], nAtoms_size, cudaMemcpyHostToDevice);
-    cudaMemcpy(d_id, &h_id[0], nAtoms_size, cudaMemcpyHostToDevice);
+    cudaMemcpy(d_id, &h_id[0], nAtoms_idsize, cudaMemcpyHostToDevice);
     cudaMemcpy(d_rand1, &h_rand1[0], nRotations_size, cudaMemcpyHostToDevice);
     cudaMemcpy(d_rand2, &h_rand2[0], nRotations_size, cudaMemcpyHostToDevice);
     cudaMemcpy(d_rand3, &h_rand3[0], nRotations_size, cudaMemcpyHostToDevice);
@@ -189,8 +230,8 @@ int main() {
     cudaThreadSynchronize();
     error = cudaGetLastError(); printf("Last error: %d \n", error);
 
-    for(int i=0; i<min((int)h_outQ.size(),512); i++) {
-        printf("%.0f ", h_outQ[i]);
+    for(int i=0; i<min((int)h_outQ.size(),1); i++) {
+        printf("%e \n", h_outQ[i]);
     }
 
 }
