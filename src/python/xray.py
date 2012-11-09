@@ -415,7 +415,8 @@ class Shot(object):
             pass
         else:
             q = self.q_values[ bisect_left(self.q_values, q) ]
-            logger.warning('Passed value `q` not on grid -- using closest possible value')
+            logger.warning('Passed value `q` not on grid -- using closest '
+                           'possible value')
         return q
         
         
@@ -427,7 +428,8 @@ class Shot(object):
             pass
         else:
             phi = self.phi_values[ bisect_left(self.phi_values, phi) ]
-            logger.warning('Passed value `phi` not on grid -- using closest possible value')
+            logger.warning('Passed value `phi` not on grid -- using closest '
+                           'possible value')
         return phi
         
         
@@ -441,7 +443,8 @@ class Shot(object):
             pass
         else:
             pdeltahi = self.phi_values[ bisect_left(self.phi_values, delta) ]
-            logger.warning('Passed value `delta` not on grid -- using closest possible value')
+            logger.warning('Passed value `delta` not on grid -- using closest '
+                           'possible value')
         return delta
         
         
@@ -646,10 +649,178 @@ class Shotset(Shot):
     
     See Also
     --------
-    Shot : odin.xray.Shot
+    odin.xray.Shot
         A single shot dataset.
     """
         
     def __init__(self, list_of_shots):
+        """
+        Generate a Shotset instance, representing a collection of Shot objects.
+        
+        Parameters
+        ----------
+        list_of_shots : list of odin.xray.Shot objects
+            The shots to include in a set. Should be related, i.e. all the same
+            experimental system. All of the shots should be projected onto
+            the same (q,phi) grid (using odin.xray.Shot._interpolate_to_polar),
+            which should be done by default. If not, the class will try to fix
+            things and whine if unsuccessful.
+            
+        See Also
+        --------
+        odin.xray.Shot
+            A single shot dataset.
+        """
+        
+        self.shots = list_of_shots
+        self.num_shots = len(list_of_shots)
+    
+        self._check_qvectors_same()
+        
+        
+    def _check_qvectors_same(self):
+        """
+        For a lot of the below to work, we need to make sure that all of the 
+        q-phi grids in the shots are the same. If some are different, here
+        we recalculate them.
+        """
         raise NotImplementedError()
+    
+    
+    def I(self, q, phi):
+        """
+        Return the intensity at (q,phi).
+        """
+        
+        intensity = 0.0
+    
+        for shot in self.shot_list:
+            intensity += shot.I(q,phi)
+            
+        intensity /= float(self.num_shots)
+        
+        return intensity 
+
+
+    def qintensity(self, q):
+        """
+        Averages over the azimuth phi to obtain an intensity for magnitude |q|.
+
+        Parameters
+        ----------
+        q : float
+            The scattering vector magnitude to calculate the intensity at.
+
+        Returns
+        -------
+        intensity : float
+            The intensity at |q| averaged over the azimuth : < I(|q|) >_phi.
+        """
+        
+        qintensity = 0.0
+    
+        for shot in self.shot_list:
+            qintensity += shot.qintensity(q)
+            
+        qintensity /= float(self.num_shots)
+        
+        return qintensity
+        
+    
+    def intensity_profile(self):
+        """
+        Averages over the azimuth phi to obtain an intensity profile.
+
+        Returns
+        -------
+        intensity_profile : ndarray, float
+            An n x 2 array, where the first dimension is the magnitude |q| and
+            the second is the average intensity at that point < I(|q|) >_phi.
+        """
+        
+        intensity_profile = shot_list[0].intensity_profile()
+    
+        for shot in self.shot_list[1:]:
+            intensity_profile[:,1] += shot.intensity_profile()
+            
+        intensity_profile[:,1] /= float(self.num_shots)
+        
+        return intensity_profile
+        
+        
+    def correlate(self, q1, q2, delta):
+        """
+        Compute the correlation function C(q1, q2, delta) for the shot, averaged
+        for each measured value of the azimuthal angle phi.
+
+        Parameters
+        ----------
+        q1 : float
+            The magnitude of the first position to correlate.
+
+        q2 : float
+            The magnitude of the second position to correlate.
+
+        delta : float
+            The angle between the first and second q-vectors to calculate the
+            correlation for.
+
+        Returns
+        -------
+        correlation : float
+            The correlation between q1/q2 at angle delta. Specifically, this
+            is the correlation function  with the mean subtracted <x*y> - <x><y>
+
+        See Also
+        --------
+        odin.xray.Shot.correlate_ring
+            Correlate for many values of delta
+        """
+        
+        correlation = 0.0
+    
+        for shot in self.shot_list:
+            correlation += shot.correlate(q1, q2, delta)
+            
+        correlation /= float(self.num_shots)
+        
+        return correlation
+        
+        
+    def correlate_ring(self, q1, q2):
+        """
+        Compute the correlation function C(q1, q2, delta) for the shot, averaged
+        for each measured value of the azimuthal angle phi, for many values
+        of delta.
+
+        Parameters
+        ----------
+        q1 : float
+            The magnitude of the first position to correlate.
+
+        q2 : float
+            The magnitude of the second position to correlate.
+
+        Returns
+        -------
+        correlation_ring : ndarray, float
+            A 2d array, where the first dimension is the value of the angle
+            delta employed, and the second is the correlation at that point.
+
+        See Also
+        --------
+        odin.xray.Shot.correlate
+            Correlate for one value of delta
+        """   
+    
+        # just average all the correlation_rings from each shot
+        correlation_ring = shot_list[0].correlate_ring(q1, q2)
+    
+        for shot in self.shot_list[1:]:
+            correlation_ring[:,1] += shot.correlate_ring(q1, q2)
+            
+        correlation_ring[:,1] /= float(self.num_shots)
+        
+        return correlation_ring
+    
     
