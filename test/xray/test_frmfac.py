@@ -7,7 +7,10 @@ from mpl_toolkits.mplot3d import Axes3D
 
 from numpy.linalg import norm
 
-def form_factor(qo, atomz):
+def form_factor(qvector, atomz):
+    
+    mq = np.sum( np.power(qvector, 2) )
+    qo = mq / (16.*np.pi*np.pi)
     
     if ( atomz == 1 ):
         fi = 0.493002*np.exp(-10.5109*qo)
@@ -134,6 +137,7 @@ def rand_rotate_molecule(xyzlist, rfloat=None):
 
     # get a random quaternion vector
     q = rquaternion(rfloat)
+    print "quaternion:", q
     
     # take the quaternion conjugated
     qconj = np.zeros(4)
@@ -151,7 +155,7 @@ def rand_rotate_molecule(xyzlist, rfloat=None):
     
         q_prime = hprod( hprod(q, qv), qconj )
     
-        rotated_xyzlist[i] = q_prime[1:].copy() # want the last 3 elements...
+        rotated_xyzlist[i,:] = q_prime[1:].copy() # want the last 3 elements...
     
     return rotated_xyzlist
     
@@ -181,7 +185,6 @@ def simulate_shot(xyzlist, atomic_numbers, num_molecules, q_grid, rfloats=None):
         A bunch of random floats, uniform on [0,1] to be used to seed the 
         quaternion computation.
         
-    
     Returns
     -------
     I : ndarray, float
@@ -200,16 +203,23 @@ def simulate_shot(xyzlist, atomic_numbers, num_molecules, q_grid, rfloats=None):
             rotated_xyzlist = rand_rotate_molecule(xyzlist, rfloats[n,:])
         
         for i,qvector in enumerate(q_grid):
-            
+
+            # compute the molecular form factor F(q)
             F = 0.0
-            
             for j in range(xyzlist.shape[0]):
+                fi = form_factor(qvector, atomic_numbers[j])
+                r = rotated_xyzlist[j,:]
                 
-                fi = form_factor(np.linalg.norm(qvector), atomic_numbers[j])
-                r = xyzlist[j]
+                #print "r:", r
+                
+                F1 = fi * np.exp( 1j * np.dot(qvector, r) )
+                
+                x = np.dot(qvector, r)
+                #print "qsum:", ( np.cos(x) + 1j*np.sin(x) )
+                
                 F += fi * np.exp( 1j * np.dot(qvector, r) )
     
-            I[i] += np.power( np.abs(F), 2 )
+            I[i] += F.real*F.real + F.imag*F.imag
 
     return I
 
@@ -251,9 +261,9 @@ if __name__ == '__main__':
     xyzlist = xyzQ[:,:3]
     atomic_numbers = xyzQ[:,3].flatten()
     
-    q_grid = np.loadtxt('reference/512_q.xyz')
+    q_grid = np.loadtxt('reference/512_q.xyz')[:1]
     
-    rfloats = np.loadtxt('reference/2048_x_3_random_floats.txt')
+    rfloats = np.loadtxt('reference/512_x_3_random_floats.txt')[:1]
     num_molecules = rfloats.shape[0]
     
     I = simulate_shot(xyzlist, atomic_numbers, num_molecules, q_grid, rfloats=rfloats)
