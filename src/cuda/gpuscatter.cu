@@ -41,32 +41,14 @@ __device__ double atomicAdd(double* address, double val) {
 }
 
 
-// figure out mirrors...
-/*
-real __device__ fastsin(real x) {
-
-    // move x to between -pi/2 and pi/2
-
-
-    real a; // between 0 and pi/2
-
-    // slower than store multiple copies of a*a, a*a*a, etc. but saves registers
-    real r = a - (a*a*a)/(3*2) + (a*a*a*a*a)/(5*4*3*2) - (a*a*a*a*a*a*a)/(7*6*5*4*3*2);
-
-    real f;
-    
-    f = (a < 0) ? a : -a;
-
-    return f;
-}
-*/
-
-// x,y,z - real vector
-// b - quaternion
 void __device__ rotate(real x, real y, real z,
                        real b0, real b1, real b2, real b3,
                        real &ox, real &oy, real &oz) {
 
+    // x,y,z      -- real vector
+    // b          -- quaternion for rotation
+    // ox, oy, oz -- rotated real vector
+    
     real a0 = 0;
     real a1 = x;
     real a2 = y;
