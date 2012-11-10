@@ -82,19 +82,20 @@ void __global__ kernel(float const * const __restrict__ q_x,
                        float const * const __restrict__ q_z, 
                        float *outQ, // <-- not const 
                        int   const nQ,
-		               float const * const __restrict__ r_x, 
+		       float const * const __restrict__ r_x, 
                        float const * const __restrict__ r_y, 
                        float const * const __restrict__ r_z,
-		               int   const * const __restrict__ atomicIdentities, 
+		       int   const * const __restrict__ atomicIdentities, 
                        int   const numAtoms, 
                        float const * const __restrict__ randN1, 
                        float const * const __restrict__ randN2, 
                        float const * const __restrict__ randN3) {
+
     // shared array for block-wise reduction
     __shared__ float sdata[blockSize];
     
     int tid = threadIdx.x;
-	int gid = blockIdx.x*blockDim.x + threadIdx.x;
+    int gid = blockIdx.x*blockDim.x + threadIdx.x;
 
     // determine the rotated locations
     float rand1 = randN1[gid]; 

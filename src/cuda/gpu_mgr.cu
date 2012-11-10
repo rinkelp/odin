@@ -9,9 +9,7 @@ This class will get translated into python via swig
 
 
 #include <stdio.h>
-#include <vector>
 #include <assert.h>
-#include <iostream>
 #include <fstream>
 #include <sstream>
 
@@ -24,15 +22,6 @@ using namespace std;
 void deviceMalloc( void ** ptr, int bytes) {
     cudaError_t err = cudaMalloc(ptr, (size_t) bytes);
     assert(err == 0);
-}
-
-
-inline ostream& operator<< (ostream &out, const vector<float> &s) {
-    for(int i=0; i<s.size(); i++) {
-        out << s[i] << " ";
-    }
-    out << endl;   
-    return out;
 }
 
 
@@ -86,10 +75,10 @@ GPUScatter::GPUScatter (int bpg_,      // <-- defines the number of rotations
     int nRotations = tpb*bpg;
     
     // compute the memory necessary to hold input/output
-    unsigned int nQ_size = nQ*sizeof(float);
-    unsigned int nAtoms_size = nAtoms*sizeof(float);
-    unsigned int nAtoms_idsize = nAtoms*sizeof(int);
-    unsigned int nRotations_size = nRotations*sizeof(float);
+    const unsigned int nQ_size = nQ*sizeof(float);
+    const unsigned int nAtoms_size = nAtoms*sizeof(float);
+    const unsigned int nAtoms_idsize = nAtoms*sizeof(int);
+    const unsigned int nRotations_size = nRotations*sizeof(float);
 
     // allocate memory on the board
     float *d_qx;    deviceMalloc( (void **) &d_qx, nQ_size);
@@ -136,7 +125,7 @@ void GPUScatter::retreive() {
     cudaMemcpy(&h_outQ[0], d_outQ, nQ_size, cudaMemcpyDeviceToHost);
     cudaThreadSynchronize();
     cudaError_t err = cudaGetLastError();
-    if(err != 0) { cout << err << endl; assert(0); }
+    assert(err == 0);
 }
 
 GPUScatter::~GPUScatter() {
