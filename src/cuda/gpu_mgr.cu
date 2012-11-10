@@ -71,7 +71,7 @@ GPUScatter::GPUScatter (int bpg_,      // <-- defines the number of rotations
     h_outQ = h_outQ_;
     
     // set some size parameters
-    int tpb = 512;
+    static const int tpb = 512;
     int nRotations = tpb*bpg;
     
     // compute the memory necessary to hold input/output

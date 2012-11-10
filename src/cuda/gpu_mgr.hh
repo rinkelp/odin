@@ -6,7 +6,7 @@ class GPUScatter {
     // declare variables
     // in CPU memory
     int bpg;      // <-- defines the number of rotations
-    int tpb;      // always = 512
+    static const int tpb = 512;      // always = 512
     unsigned int nQ_size;
 
     int nQ;
