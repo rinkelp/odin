@@ -8,7 +8,6 @@ This class will get translated into python via swig
 */
 
 
-#include <main.cu>
 #include <stdio.h>
 #include <vector>
 #include <assert.h>
@@ -40,25 +39,25 @@ inline ostream& operator<< (ostream &out, const vector<float> &s) {
 GPUScatter::GPUScatter (int bpg_,      // <-- defines the number of rotations
 
                         int nQ_,
-                        int* h_qx_,    // size: nQ
-                        int* h_qy_,    // size: nQ
-                        int* h_qz_,    // size: nQ
+                        float* h_qx_,    // size: nQ
+                        float* h_qy_,    // size: nQ
+                        float* h_qz_,    // size: nQ
 
                         int nAtoms_,
-                        int* h_rx_,    // size: nAtoms
-                        int* h_ry_,    // size: nAtoms
-                        int* h_rz_,    // size: nAtoms
-                        int* h_id_,    // size: nAtoms
+                        float* h_rx_,    // size: nAtoms
+                        float* h_ry_,    // size: nAtoms
+                        float* h_rz_,    // size: nAtoms
+                        float* h_id_,    // size: nAtoms
                         
-                        int* h_rand1_, // size: nRotations
-                        int* h_rand2_, // size: nRotations
-                        int* h_rand3_, // size: nRotations
+                        float* h_rand1_, // size: nRotations
+                        float* h_rand2_, // size: nRotations
+                        float* h_rand3_, // size: nRotations
                         
-                        int* h_outQ_   // size: nQ (OUTPUT)
+                        float* h_outQ_   // size: nQ (OUTPUT)
                         ) {
                             
     /* All arguments consist of 
-     *   (1) an int pointer to the beginning of the array to be passed
+     *   (1) a float pointer to the beginning of the array to be passed
      *   (2) ints representing the size of each array
      */
     
@@ -83,7 +82,7 @@ GPUScatter::GPUScatter (int bpg_,      // <-- defines the number of rotations
     h_outQ = h_outQ_;
     
     // set some size parameters
-    const int tpb = 512;
+    int tpb = 512;
     int nRotations = tpb*bpg;
     
     // compute the memory necessary to hold input/output
@@ -100,7 +99,7 @@ GPUScatter::GPUScatter (int bpg_,      // <-- defines the number of rotations
     float *d_rx;    deviceMalloc( (void **) &d_rx, nAtoms_size);
     float *d_ry;    deviceMalloc( (void **) &d_ry, nAtoms_size);
     float *d_rz;    deviceMalloc( (void **) &d_rz, nAtoms_size);
-    int  *d_id;    deviceMalloc( (void **) &d_id, nAtoms_idsize);
+    int   *d_id;    deviceMalloc( (void **) &d_id, nAtoms_idsize);
     float *d_rand1; deviceMalloc( (void **) &d_rand1, nRotations_size);
     float *d_rand2; deviceMalloc( (void **) &d_rand2, nRotations_size);
     float *d_rand3; deviceMalloc( (void **) &d_rand3, nRotations_size);
@@ -119,15 +118,15 @@ GPUScatter::GPUScatter (int bpg_,      // <-- defines the number of rotations
     cudaMemcpy(d_rand3, &h_rand3[0], nRotations_size, cudaMemcpyHostToDevice);
 
     // check for errors
-    cudaError_t error;
-    assert(error == 0);  
+    cudaError_t err = cudaGetLastError();
+    assert(err == 0);  
 }
 
 void GPUScatter::run() {
     // execute the kernel
     kernel<tpb> <<<bpg, tpb>>> (d_qx, d_qy, d_qz, d_outQ, nQ, d_rx, d_ry, d_rz, d_id, nAtoms, d_rand1, d_rand2, d_rand3);
     cudaThreadSynchronize();
-    err = cudaGetLastError();
+    cudaError_t err = cudaGetLastError();
     assert(err == 0);
 }
 
@@ -136,11 +135,21 @@ void GPUScatter::retreive() {
     // copys the array to the output array passed as input
     cudaMemcpy(&h_outQ[0], d_outQ, nQ_size, cudaMemcpyDeviceToHost);
     cudaThreadSynchronize();
-    err = cudaGetLastError();
+    cudaError_t err = cudaGetLastError();
     if(err != 0) { cout << err << endl; assert(0); }
 }
 
 GPUScatter::~GPUScatter() {
     // destroy the class
-    cudaFree(array_device);
+    cudaFree(d_qx);
+    cudaFree(d_qy);
+    cudaFree(d_qz);
+    cudaFree(d_rx);
+    cudaFree(d_ry);
+    cudaFree(d_rz);
+    cudaFree(d_id);
+    cudaFree(d_rand1);
+    cudaFree(d_rand2);
+    cudaFree(d_rand3);
+    cudaFree(d_outQ);
 }

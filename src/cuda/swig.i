@@ -1,6 +1,6 @@
 /* -*- C -*-  (not really, but good for syntax highlighting) */
 
-%module gpuadder
+%module gpuscatter
 /* This is the swig "interface file" which gives instructions to swig
    on how to turn the class declared in manager.hh into the python module
    "gpuadder"
@@ -29,7 +29,18 @@
    passed to methods which are supposed to be interpreted as arrays,
    we don't need the following line: */
 
-// %apply (int* ARGOUT_ARRAY1, int DIM1) {(int* array_host_, int length_)}
+%apply (int DIM1, float* IN_ARRAY1) {(int nQ_, float* h_qx_), 
+                                     (int nQ1, float* h_qy_),
+                                     (int nQ2, float* h_qz_),
+                                     (int nAtoms_, float* h_rx_),
+                                     (int nAtoms1, float* h_ry_),
+                                     (int nAtoms2, float* h_rz_),
+                                     (int nAtoms3, float* h_id_),
+                                     (int nRot0, float* h_rand1_),
+                                     (int nRot1, float* h_rand2_),
+                                     (int nRot2, float* h_rand3_)}
+
+%apply (int DIM1, float* ARGOUT_ARRAY1) {(int nQ3, float* h_outQ_)}
 
 /* if instead the names of the pointers were not the standard ones, this
    type of translation would be necessary.

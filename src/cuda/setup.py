@@ -54,7 +54,7 @@ nvcc_compiled = Extension('this_name_is_irrelevant',
                           extra_compile_args=['-arch=sm_20', '--ptxas-options=-v', '-c', '--compiler-options', "'-fPIC'"],
                           # we need to include src as an input directory so that the header files and device_kernel.cu
                           # can be found
-                          include_dirs=['/usr/local/cuda/include', 'src'],
+                          include_dirs=['/usr/local/cuda/include', '.'],
                           )
 
 # the swig wrapper for gpuaddr.cu gets compiled, and then linked to gpuaddr.o

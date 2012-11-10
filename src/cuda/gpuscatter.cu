@@ -5,10 +5,10 @@
 // warning: this code is not safe due to reduction if total # of threads != multiple of
 // blockSize ... too lazy to add in ifs for now 
 // todo: add in ifs and while loops for > 67million
-void __device__ generate_random_quaternion(real r1, real r2, real r3,
-                real &q1, real &q2, real &q3, real &q4) {
+void __device__ generate_random_quaternion(float r1, float r2, float r3,
+                float &q1, float &q2, float &q3, float &q4) {
     
-    real s, sig1, sig2, theta1, theta2, w, x, y, z;
+    float s, sig1, sig2, theta1, theta2, w, x, y, z;
     
     s = r1;
     sig1 = sqrt(s);
@@ -41,33 +41,33 @@ __device__ double atomicAdd(double* address, double val) {
 }
 
 
-void __device__ rotate(real x, real y, real z,
-                       real b0, real b1, real b2, real b3,
-                       real &ox, real &oy, real &oz) {
+void __device__ rotate(float x, float y, float z,
+                       float b0, float b1, float b2, float b3,
+                       float &ox, float &oy, float &oz) {
 
-    // x,y,z      -- real vector
+    // x,y,z      -- float vector
     // b          -- quaternion for rotation
-    // ox, oy, oz -- rotated real vector
+    // ox, oy, oz -- rotated float vector
     
-    real a0 = 0;
-    real a1 = x;
-    real a2 = y;
-    real a3 = z;
+    float a0 = 0;
+    float a1 = x;
+    float a2 = y;
+    float a3 = z;
 
-    real c0 = b0*a0 - b1*a1 - b2*a2 - b3*a3;
-    real c1 = b0*a1 + b1*a0 + b2*a3 - b3*a2;
-    real c2 = b0*a2 - b1*a3 + b2*a0 + b3*a1;
-    real c3 = b0*a3 + b1*a2 - b2*a1 + b3*a0;   
+    float c0 = b0*a0 - b1*a1 - b2*a2 - b3*a3;
+    float c1 = b0*a1 + b1*a0 + b2*a3 - b3*a2;
+    float c2 = b0*a2 - b1*a3 + b2*a0 + b3*a1;
+    float c3 = b0*a3 + b1*a2 - b2*a1 + b3*a0;   
 
-    real bb0 = b0;
-    real bb1 = -b1;
-    real bb2 = -b2;
-    real bb3 = -b3;
+    float bb0 = b0;
+    float bb1 = -b1;
+    float bb2 = -b2;
+    float bb3 = -b3;
 
-  //real cc0 = c0*bb0 - c1*bb1 - c2*bb2 - c3*bb3;
-    real cc1 = c0*bb1 + c1*bb0 + c2*bb3 - c3*bb2;
-    real cc2 = c0*bb2 - c1*bb3 + c2*bb0 + c3*bb1;
-    real cc3 = c0*bb3 + c1*bb2 - c2*bb1 + c3*bb0;   
+  //float cc0 = c0*bb0 - c1*bb1 - c2*bb2 - c3*bb3;
+    float cc1 = c0*bb1 + c1*bb0 + c2*bb3 - c3*bb2;
+    float cc2 = c0*bb2 - c1*bb3 + c2*bb0 + c3*bb1;
+    float cc3 = c0*bb3 + c1*bb2 - c2*bb1 + c3*bb0;   
 
     ox = cc1;
     oy = cc2;
@@ -77,49 +77,49 @@ void __device__ rotate(real x, real y, real z,
 
 
 template<unsigned int blockSize>
-void __global__ kernel(real const * const __restrict__ q_x, 
-                       real const * const __restrict__ q_y, 
-                       real const * const __restrict__ q_z, 
-                       real *outQ, // <-- not const 
+void __global__ kernel(float const * const __restrict__ q_x, 
+                       float const * const __restrict__ q_y, 
+                       float const * const __restrict__ q_z, 
+                       float *outQ, // <-- not const 
                        int   const nQ,
-		               real const * const __restrict__ r_x, 
-                       real const * const __restrict__ r_y, 
-                       real const * const __restrict__ r_z,
+		               float const * const __restrict__ r_x, 
+                       float const * const __restrict__ r_y, 
+                       float const * const __restrict__ r_z,
 		               int   const * const __restrict__ atomicIdentities, 
                        int   const numAtoms, 
-                       real const * const __restrict__ randN1, 
-                       real const * const __restrict__ randN2, 
-                       real const * const __restrict__ randN3) {
+                       float const * const __restrict__ randN1, 
+                       float const * const __restrict__ randN2, 
+                       float const * const __restrict__ randN3) {
     // shared array for block-wise reduction
-    __shared__ real sdata[blockSize];
+    __shared__ float sdata[blockSize];
     
     int tid = threadIdx.x;
 	int gid = blockIdx.x*blockDim.x + threadIdx.x;
 
     // determine the rotated locations
-    real rand1 = randN1[gid]; 
-    real rand2 = randN2[gid]; 
-    real rand3 = randN3[gid]; 
+    float rand1 = randN1[gid]; 
+    float rand2 = randN2[gid]; 
+    float rand3 = randN3[gid]; 
 
     // rotation quaternions
-    real q0, q1, q2, q3;
+    float q0, q1, q2, q3;
     generate_random_quaternion(rand1, rand2, rand3, q0, q1, q2,q3);
 
     // for each q vector
     for(int iq = 0; iq < nQ; iq++) {
-        real qx = q_x[iq];
-        real qy = q_y[iq];
-        real qz = q_z[iq];
-        real mq = qx*qx+qy*qy+qz*qz;
-        real qo = mq / (4*4*M_PI*M_PI);
+        float qx = q_x[iq];
+        float qy = q_y[iq];
+        float qz = q_z[iq];
+        float mq = qx*qx+qy*qy+qz*qz;
+        float qo = mq / (4*4*M_PI*M_PI);
         //accumulant
-        real2 Qsum;
+        float2 Qsum;
         Qsum.x = 0;
         Qsum.y = 0;
         // for each atom in molecule
 
         // precompute fis
-        real fi1, fi79;
+        float fi1, fi79;
         fi1=fi79=0;
 
         // if H
@@ -163,7 +163,7 @@ void __global__ kernel(real const * const __restrict__ q_x,
 
         for(int a = 0; a < numAtoms; a++) {
             // calculate fi
-            real fi = 0;
+            float fi = 0;
             int atomicNumber = atomicIdentities[a];
             if(atomicNumber == 1) {
                 fi = fi1;
@@ -172,19 +172,19 @@ void __global__ kernel(real const * const __restrict__ q_x,
             // else default to N
             } 
             // get the current positions
-            real rx = r_x[a];
-            real ry = r_y[a];
-            real rz = r_z[a];
-            real ax, ay, az;
+            float rx = r_x[a];
+            float ry = r_y[a];
+            float rz = r_z[a];
+            float ax, ay, az;
 
             rotate(rx, ry, rz, q0, q1, q2, q3, ax, ay, az);
-            real qr = ax*qx + ay*qy + az*qz;
+            float qr = ax*qx + ay*qy + az*qz;
 
             Qsum.x += fi*__sinf(qr);
             Qsum.y += fi*__cosf(qr);
             
         } // finished one molecule.
-        real fQ = Qsum.x*Qsum.x + Qsum.y*Qsum.y;  
+        float fQ = Qsum.x*Qsum.x + Qsum.y*Qsum.y;  
         sdata[tid] = fQ;
         __syncthreads();
         // Todo: quite slow but correct, speed up reduction later if becomes bottleneck!
@@ -200,7 +200,7 @@ void __global__ kernel(real const * const __restrict__ q_x,
     }
 }
 
-__global__ void randTest(real *a) {
+__global__ void randTest(float *a) {
     int gid = blockIdx.x*blockDim.x + threadIdx.x;
 
     int tt = __cosf(gid);

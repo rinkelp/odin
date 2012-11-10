@@ -4,24 +4,44 @@
 class GPUScatter {
     
     // declare variables
-    int bpg_;      // <-- defines the number of rotations
+    // in CPU memory
+    int bpg;      // <-- defines the number of rotations
+    int tpb;      // always = 512
+    unsigned int nQ_size;
 
-    int nQ_;
-    int* h_qx_;    // size: nQ
-    int* h_qy_;    // size: nQ
-    int* h_qz_;    // size: nQ
+    int nQ;
+    float* h_qx;    // size: nQ
+    float* h_qy;    // size: nQ
+    float* h_qz;    // size: nQ
 
-    int nAtoms_;
-    int* h_rx_;    // size: nAtoms
-    int* h_ry_;    // size: nAtoms
-    int* h_rz_;    // size: nAtoms
-    int* h_id_;    // size: nAtoms
+    int nAtoms;
+    float* h_rx;    // size: nAtoms
+    float* h_ry;    // size: nAtoms
+    float* h_rz;    // size: nAtoms
+    float* h_id;    // size: nAtoms
 
-    int* h_rand1_; // size: nRotations
-    int* h_rand2_; // size: nRotations
-    int* h_rand3_; // size: nRotations
+    float* h_rand1; // size: nRotations
+    float* h_rand2; // size: nRotations
+    float* h_rand3; // size: nRotations
 
-    int* h_outQ_;  // size: nQ (OUTPUT)
+    float* h_outQ;  // size: nQ (OUTPUT)
+
+    // on device
+    float* d_qx;    // size: nQ
+    float* d_qy;    // size: nQ
+    float* d_qz;    // size: nQ
+
+    float* d_rx;    // size: nAtoms
+    float* d_ry;    // size: nAtoms
+    float* d_rz;    // size: nAtoms
+    float* d_id;    // size: nAtoms
+
+    float* d_rand1; // size: nRotations
+    float* d_rand2; // size: nRotations
+    float* d_rand3; // size: nRotations
+
+    float* d_outQ;  // size: nQ (OUTPUT)
+
 
 public:
   /* By using the swig default names INPLACE_ARRAY1, DIM1 in the header
@@ -35,26 +55,26 @@ public:
        %apply (int* ARGOUT_ARRAY1, int DIM1) {(int* myarray, int length)}
    */
 
-  GPUAdder( int bpg_,      // <-- defines the number of rotations
+  GPUScatter( int bpg_,      // <-- defines the number of rotations
             
             int nQ_,
-            int* h_qx_,    // size: nQ
-            int* h_qy_,    // size: nQ
-            int* h_qz_,    // size: nQ
+            float* h_qx_,    // size: nQ
+            float* h_qy_,    // size: nQ
+            float* h_qz_,    // size: nQ
 
             int nAtoms_,
-            int* h_rx_,    // size: nAtoms
-            int* h_ry_,    // size: nAtoms
-            int* h_rz_,    // size: nAtoms
-            int* h_id_,    // size: nAtoms
+            float* h_rx_,    // size: nAtoms
+            float* h_ry_,    // size: nAtoms
+            float* h_rz_,    // size: nAtoms
+            float* h_id_,    // size: nAtoms
 
-            int* h_rand1_, // size: nRotations
-            int* h_rand2_, // size: nRotations
-            int* h_rand3_, // size: nRotations
+            float* h_rand1_, // size: nRotations
+            float* h_rand2_, // size: nRotations
+            float* h_rand3_, // size: nRotations
 
-            int* h_outQ_,  // size: nQ (OUTPUT)
+            float* h_outQ_  // size: nQ (OUTPUT)
            );
   void run();                              // does operation inplace on the GPU
   void retreive();                         // gets results back from GPU
-  ~GPUAdder();                             // destructor
+  ~GPUScatter();                             // destructor
 };
