@@ -35,25 +35,24 @@ public:
        %apply (int* ARGOUT_ARRAY1, int DIM1) {(int* myarray, int length)}
    */
 
-  GPUAdder(int DIM1,                     // constructor (copies to GPU)
-  
-           int DIM1,
-           int* INPLACE_ARRAY1,
-           int* INPLACE_ARRAY1,
-           int* INPLACE_ARRAY1,
-           
-           int DIM1,
-           int* INPLACE_ARRAY1,
-           int* INPLACE_ARRAY1,
-           int* INPLACE_ARRAY1,
-           int* INPLACE_ARRAY1,
-           
-           int DIM1,
-           int* INPLACE_ARRAY1,
-           int* INPLACE_ARRAY1,
-           int* INPLACE_ARRAY1,
-           
-           int* INPLACE_ARRAY1
+  GPUAdder( int bpg_,      // <-- defines the number of rotations
+            
+            int nQ_,
+            int* h_qx_,    // size: nQ
+            int* h_qy_,    // size: nQ
+            int* h_qz_,    // size: nQ
+
+            int nAtoms_,
+            int* h_rx_,    // size: nAtoms
+            int* h_ry_,    // size: nAtoms
+            int* h_rz_,    // size: nAtoms
+            int* h_id_,    // size: nAtoms
+
+            int* h_rand1_, // size: nRotations
+            int* h_rand2_, // size: nRotations
+            int* h_rand3_, // size: nRotations
+
+            int* h_outQ_,  // size: nQ (OUTPUT)
            );
   void run();                              // does operation inplace on the GPU
   void retreive();                         // gets results back from GPU
