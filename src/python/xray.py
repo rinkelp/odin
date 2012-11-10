@@ -1,6 +1,12 @@
+# THIS FILE IS PART OF ODIN
+
 
 """
 Classes, methods, functions for use with xray scattering experiments.
+
+Todo:
+-- add simulate_shot factor functions to Shot and Shotset
+
 """
 
 from bisect import bisect_left
@@ -15,7 +21,7 @@ logger = logging.getLogger(__name__)
 # FUNDAMENTAL CONSTANTS
 
 h = 4.135677516e-15   # Planks constant | eV s
-c = 299792458     # speed of light  | m / s
+c = 299792458         # speed of light  | m / s
 
 # ------------------------------------------------------------------------------
 
@@ -33,7 +39,24 @@ class Beam(object):
     self.wavenumber  (angular, inv. angstroms)
     """
     
-    def __init__(self, **kwargs):
+    def __init__(self, flux, **kwargs):
+        """
+        Generate an instance of the Beam class.
+        
+        Parameters
+        ----------
+        flux : float
+            The photon flux in the focal point of the beam.
+        
+        **kwargs : dict
+            Exactly one of the following, in the indicated units
+            -- energy:     keV
+            -- wavelength: angstroms
+            -- frequency:  Hz
+            -- wavenumber: inverse angstroms
+        """
+        
+        self.flux = flux
         
         # make sure we have only one argument
         if len(kwargs) != 1:
@@ -822,5 +845,67 @@ class Shotset(Shot):
         correlation_ring[:,1] /= float(self.num_shots)
         
         return correlation_ring
+    
+    
+def simulate_shot(traj, num_molecules, beam, detector,
+                  traj_weights=None, gpu=False):
+    """
+    Simulate a scattering 'shot', i.e. one exposure of x-rays to a sample.
+    
+    Assumes we have a Boltzmann distribution of `num_molecules` identical  
+    molecules (`trajectory`), exposed to a beam defined by `beam` and projected
+    onto `detector`.
+    
+    Each conformation is randomly rotated before the scattering simulation is
+    performed. Atomic form factors from X, finite photon statistics, and the 
+    dilute-sample (no scattering interference from adjacent molecules) 
+    approximation are employed.
+    
+    Parameters
+    ----------
+    traj : odin.mdtraj
+        A trajectory object that contains a set of structures, representing
+        the Boltzmann ensemble of the sample. If len(traj) == 1, then we assume
+        the sample consists of a single homogenous structure, replecated 
+        `num_molecules` times.
+        
+    detector : odin.xray.Detector
+        A detector object the shot will be projected onto.
+        
+    beam : odin.xray.beam
+        
+        
+    num_molecules : int
+        The number of molecules estimated to be in the `beam`'s focus.
+        
+    traj_weights : ndarray, float
+        If `traj` contains many structures, an array that provides the Boltzmann
+        weight of each structure. Default: if traj_weights == None, weights
+        each structure equally.
+        
+    gpu : bool
+        Try to run the computation on a local GPU.
+        
+    Returns
+    -------
+    intensities : ndarray, float
+        An array of the intensities at each pixel of the detector.
+        
+    See Also
+    --------
+    odin.xray.Shot.simulate()
+    odin.xray.Shotset.simulate()
+        These are factory functions that call this function, and wrap the
+        results into the Shot and Shotset classes, respectively.
+    """
+    
+    # extract form factors for each atom in the molecule
+    
+    
+    # generate 
+    
+    
+    
+    
     
     

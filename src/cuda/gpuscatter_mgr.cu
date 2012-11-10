@@ -36,7 +36,7 @@ GPUScatter::GPUScatter (int bpg_,      // <-- defines the number of rotations
                         float* h_rx_,    // size: nAtoms
                         float* h_ry_,    // size: nAtoms
                         float* h_rz_,    // size: nAtoms
-                        int* h_id_,      // size: nAtoms
+                        float* h_frmfcts_,// size:nAtoms
                         
                         float* h_rand1_, // size: nRotations
                         float* h_rand2_, // size: nRotations
@@ -62,7 +62,7 @@ GPUScatter::GPUScatter (int bpg_,      // <-- defines the number of rotations
     h_rx = h_rx_;
     h_ry = h_ry_;
     h_rz = h_rz_;
-    h_id = h_id_;
+    h_frmfcts = h_frmfcts_;
 
     h_rand1 = h_rand1_;
     h_rand2 = h_rand2_;
@@ -81,17 +81,17 @@ GPUScatter::GPUScatter (int bpg_,      // <-- defines the number of rotations
     const unsigned int nRotations_size = nRotations*sizeof(float);
 
     // allocate memory on the board
-    float *d_qx;    deviceMalloc( (void **) &d_qx, nQ_size);
-    float *d_qy;    deviceMalloc( (void **) &d_qy, nQ_size);
-    float *d_qz;    deviceMalloc( (void **) &d_qz, nQ_size);
-    float *d_outQ;  deviceMalloc( (void **) &d_outQ, nQ_size);
-    float *d_rx;    deviceMalloc( (void **) &d_rx, nAtoms_size);
-    float *d_ry;    deviceMalloc( (void **) &d_ry, nAtoms_size);
-    float *d_rz;    deviceMalloc( (void **) &d_rz, nAtoms_size);
-    int   *d_id;    deviceMalloc( (void **) &d_id, nAtoms_idsize);
-    float *d_rand1; deviceMalloc( (void **) &d_rand1, nRotations_size);
-    float *d_rand2; deviceMalloc( (void **) &d_rand2, nRotations_size);
-    float *d_rand3; deviceMalloc( (void **) &d_rand3, nRotations_size);
+    float *d_qx;        deviceMalloc( (void **) &d_qx, nQ_size);
+    float *d_qy;        deviceMalloc( (void **) &d_qy, nQ_size);
+    float *d_qz;        deviceMalloc( (void **) &d_qz, nQ_size);
+    float *d_outQ;      deviceMalloc( (void **) &d_outQ, nQ_size);
+    float *d_rx;        deviceMalloc( (void **) &d_rx, nAtoms_size);
+    float *d_ry;        deviceMalloc( (void **) &d_ry, nAtoms_size);
+    float *d_rz;        deviceMalloc( (void **) &d_rz, nAtoms_size);
+    float *d_frmfacts;  deviceMalloc( (void **) &d_id, nAtoms_idsize);
+    float *d_rand1;     deviceMalloc( (void **) &d_rand1, nRotations_size);
+    float *d_rand2;     deviceMalloc( (void **) &d_rand2, nRotations_size);
+    float *d_rand3;     deviceMalloc( (void **) &d_rand3, nRotations_size);
 
     // copy input/output arrays to board memory
     cudaMemcpy(d_qx, &h_qx[0], nQ_size, cudaMemcpyHostToDevice);
@@ -101,7 +101,7 @@ GPUScatter::GPUScatter (int bpg_,      // <-- defines the number of rotations
     cudaMemcpy(d_rx, &h_rx[0], nAtoms_size, cudaMemcpyHostToDevice);
     cudaMemcpy(d_ry, &h_ry[0], nAtoms_size, cudaMemcpyHostToDevice);
     cudaMemcpy(d_rz, &h_rz[0], nAtoms_size, cudaMemcpyHostToDevice);
-    cudaMemcpy(d_id, &h_id[0], nAtoms_idsize, cudaMemcpyHostToDevice);
+    cudaMemcpy(d_frmfacts, &h_frmfacts[0], nAtoms_idsize, cudaMemcpyHostToDevice);
     cudaMemcpy(d_rand1, &h_rand1[0], nRotations_size, cudaMemcpyHostToDevice);
     cudaMemcpy(d_rand2, &h_rand2[0], nRotations_size, cudaMemcpyHostToDevice);
     cudaMemcpy(d_rand3, &h_rand3[0], nRotations_size, cudaMemcpyHostToDevice);
@@ -113,7 +113,7 @@ GPUScatter::GPUScatter (int bpg_,      // <-- defines the number of rotations
 
 void GPUScatter::run() {
     // execute the kernel
-    kernel<tpb> <<<bpg, tpb>>> (d_qx, d_qy, d_qz, d_outQ, nQ, d_rx, d_ry, d_rz, d_id, nAtoms, d_rand1, d_rand2, d_rand3);
+    kernel<tpb> <<<bpg, tpb>>> (d_qx, d_qy, d_qz, d_outQ, nQ, d_rx, d_ry, d_rz, d_frmfacts, nAtoms, d_rand1, d_rand2, d_rand3);
     cudaThreadSynchronize();
     cudaError_t err = cudaGetLastError();
     assert(err == 0);

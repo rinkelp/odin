@@ -18,7 +18,7 @@ class GPUScatter {
     float* h_rx;    // size: nAtoms
     float* h_ry;    // size: nAtoms
     float* h_rz;    // size: nAtoms
-    int* h_id;    // size: nAtoms
+    float* h_frmfcts;    // size: nAtoms
 
     float* h_rand1; // size: nRotations
     float* h_rand2; // size: nRotations
@@ -55,26 +55,28 @@ public:
        %apply (int* ARGOUT_ARRAY1, int DIM1) {(int* myarray, int length)}
    */
 
-  GPUScatter( int bpg_,      // <-- defines the number of rotations
+  GPUScatter(   int bpg_,      // <-- defines the number of rotations
             
-            int nQ_,
-            float* h_qx_,    // size: nQ
-            float* h_qy_,    // size: nQ
-            float* h_qz_,    // size: nQ
+                int nQ_,
+                float* h_qx_,    // size: nQ
+                float* h_qy_,    // size: nQ
+                float* h_qz_,    // size: nQ
 
-            int nAtoms_,
-            float* h_rx_,    // size: nAtoms
-            float* h_ry_,    // size: nAtoms
-            float* h_rz_,    // size: nAtoms
-            int* h_id_,      // size: nAtoms
+                int nAtoms_,
+                float* h_rx_,    // size: nAtoms
+                float* h_ry_,    // size: nAtoms
+                float* h_rz_,    // size: nAtoms
+                float* h_frmfcts_,// size: nAtoms
 
-            float* h_rand1_, // size: nRotations
-            float* h_rand2_, // size: nRotations
-            float* h_rand3_, // size: nRotations
+                float* h_rand1_, // size: nRotations
+                float* h_rand2_, // size: nRotations
+                float* h_rand3_, // size: nRotations
 
-            float* h_outQ_  // size: nQ (OUTPUT)
+                float* h_outQ_  // size: nQ (OUTPUT)
            );
+           
   void run();                              // does operation inplace on the GPU
   void retreive();                         // gets results back from GPU
-  ~GPUScatter();                             // destructor
+  ~GPUScatter();                           // destructor
+  
 };

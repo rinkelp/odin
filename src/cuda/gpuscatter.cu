@@ -82,10 +82,10 @@ void __global__ kernel(float const * const __restrict__ q_x,
                        float const * const __restrict__ q_z, 
                        float *outQ, // <-- not const 
                        int   const nQ,
-		       float const * const __restrict__ r_x, 
+		               float const * const __restrict__ r_x, 
                        float const * const __restrict__ r_y, 
                        float const * const __restrict__ r_z,
-		       int   const * const __restrict__ atomicIdentities, 
+		               float const * const __restrict__ frmfcts, 
                        int   const numAtoms, 
                        float const * const __restrict__ randN1, 
                        float const * const __restrict__ randN2, 
@@ -113,65 +113,19 @@ void __global__ kernel(float const * const __restrict__ q_x,
         float qz = q_z[iq];
         float mq = qx*qx+qy*qy+qz*qz;
         float qo = mq / (4*4*M_PI*M_PI);
+
         //accumulant
         float2 Qsum;
         Qsum.x = 0;
         Qsum.y = 0;
+
         // for each atom in molecule
-
-        // precompute fis
-        float fi1, fi79;
-        fi1=fi79=0;
-
-        // if H
-        fi1  = 0.493002*exp(-10.5109*qo);
-        fi1 += 0.322912*exp(-26.1257*qo);
-        fi1 += 0.140191*exp(-3.14236*qo);
-        fi1 += 0.040810*exp(-57.7997*qo);
-        fi1 += 0.003038;
-        // if Au
-        fi79  = 16.8819*exp(-0.4611*qo);
-        fi79 += 18.5913*exp(-8.6216*qo);
-        fi79 += 25.5582*exp(-1.4826*qo);
-        fi79 += 5.86*exp(-36.3956*qo);
-        fi79 += 12.0658; 
-        /*
-        // if C
-        fi8  = 3.04850*exp(-13.2771*qo);
-        fi8 += 2.28680*exp(-5.70110*qo);
-        fi8 += 1.54630*exp(-0.323900*qo);
-        fi8 += 0.867000*exp(-32.9089*qo);
-        fi8 += 0.2508;
-        // if N 
-        fi7  = 12.2126*exp(-0.005700*qo);
-        fi7 += 3.13220*exp(-9.89330*qo);
-        fi7 += 2.01250*exp(-28.9975*qo);
-        fi7 += 1.16630*exp(-0.582600*qo);
-        fi7 += -11.529;
-         // if Fe
-        fi26  = 11.7695*exp(-4.7611*qo);
-        fi26 += 7.35730*exp(-0.307200*qo);
-        fi26 += 3.52220*exp(-15.3535*qo);
-        fi26 += 2.30450*exp(-76.8805*qo);
-        fi26 += 1.03690;
-        // else default to N
-        fid  = 12.2126*exp(-0.005700*qo);
-        fid += 3.13220*exp(-9.89330*qo);
-        fid += 2.01250*exp(-28.9975*qo);
-        fid += 1.16630*exp(-0.582600*qo);
-        fid += -11.529;
-        */
-
         for(int a = 0; a < numAtoms; a++) {
-            // calculate fi
-            float fi = 0;
-            int atomicNumber = atomicIdentities[a];
-            if(atomicNumber == 1) {
-                fi = fi1;
-            } else if(atomicNumber == 79) {
-                fi = fi79;
-            // else default to N
-            } 
+
+            // retrieve the atomic form factor
+            // TJL modified this to pass in the atomic form factors from python
+            fi = frmfcts[a];
+
             // get the current positions
             float rx = r_x[a];
             float ry = r_y[a];
