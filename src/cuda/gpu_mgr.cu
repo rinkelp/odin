@@ -36,7 +36,7 @@ GPUScatter::GPUScatter (int bpg_,      // <-- defines the number of rotations
                         float* h_rx_,    // size: nAtoms
                         float* h_ry_,    // size: nAtoms
                         float* h_rz_,    // size: nAtoms
-                        float* h_id_,    // size: nAtoms
+                        int* h_id_,      // size: nAtoms
                         
                         float* h_rand1_, // size: nRotations
                         float* h_rand2_, // size: nRotations

@@ -35,11 +35,10 @@
                                      (int nAtoms_, float* h_rx_),
                                      (int nAtoms1, float* h_ry_),
                                      (int nAtoms2, float* h_rz_),
-                                     (int nAtoms3, float* h_id_),
                                      (int nRot0, float* h_rand1_),
                                      (int nRot1, float* h_rand2_),
                                      (int nRot2, float* h_rand3_)}
-
+%apply (int DIM1, int* IN_ARRAY1) {(int nAtoms3, int* h_id_)}
 %apply (int DIM1, float* ARGOUT_ARRAY1) {(int nQ3, float* h_outQ_)}
 
 /* if instead the names of the pointers were not the standard ones, this
