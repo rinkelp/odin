@@ -111,8 +111,8 @@ void __global__ kernel(float const * const __restrict__ q_x,
         float qx = q_x[iq];
         float qy = q_y[iq];
         float qz = q_z[iq];
-        float mq = qx*qx+qy*qy+qz*qz;
-        float qo = mq / (4*4*M_PI*M_PI);
+        //float mq = qx*qx+qy*qy+qz*qz;
+        //float qo = mq / (4*4*M_PI*M_PI);
 
         //accumulant
         float2 Qsum;
@@ -124,7 +124,7 @@ void __global__ kernel(float const * const __restrict__ q_x,
 
             // retrieve the atomic form factor
             // TJL modified this to pass in the atomic form factors from python
-            fi = frmfcts[a];
+            float fi = frmfcts[a];
 
             // get the current positions
             float rx = r_x[a];

@@ -1,5 +1,5 @@
 
-/* Header file for gpu_mgr.cu, GPUScatter class */
+/* Header file for gpuscatter_mgr.cu, GPUScatter class */
 
 class GPUScatter {
     
@@ -34,7 +34,7 @@ class GPUScatter {
     float* d_rx;    // size: nAtoms
     float* d_ry;    // size: nAtoms
     float* d_rz;    // size: nAtoms
-    int* d_id;    // size: nAtoms
+    float* d_frmfcts;
 
     float* d_rand1; // size: nRotations
     float* d_rand2; // size: nRotations

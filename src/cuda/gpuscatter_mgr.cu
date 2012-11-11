@@ -14,7 +14,7 @@ This class will get translated into python via swig
 #include <sstream>
 
 #include <gpuscatter.cu>
-#include <gpu_mgr.hh>
+#include <gpuscatter_mgr.hh>
 
 using namespace std;
 
@@ -88,7 +88,7 @@ GPUScatter::GPUScatter (int bpg_,      // <-- defines the number of rotations
     float *d_rx;        deviceMalloc( (void **) &d_rx, nAtoms_size);
     float *d_ry;        deviceMalloc( (void **) &d_ry, nAtoms_size);
     float *d_rz;        deviceMalloc( (void **) &d_rz, nAtoms_size);
-    float *d_frmfacts;  deviceMalloc( (void **) &d_id, nAtoms_idsize);
+    float *d_frmfcts;  deviceMalloc( (void **) &d_frmfcts, nAtoms_idsize);
     float *d_rand1;     deviceMalloc( (void **) &d_rand1, nRotations_size);
     float *d_rand2;     deviceMalloc( (void **) &d_rand2, nRotations_size);
     float *d_rand3;     deviceMalloc( (void **) &d_rand3, nRotations_size);
@@ -101,7 +101,7 @@ GPUScatter::GPUScatter (int bpg_,      // <-- defines the number of rotations
     cudaMemcpy(d_rx, &h_rx[0], nAtoms_size, cudaMemcpyHostToDevice);
     cudaMemcpy(d_ry, &h_ry[0], nAtoms_size, cudaMemcpyHostToDevice);
     cudaMemcpy(d_rz, &h_rz[0], nAtoms_size, cudaMemcpyHostToDevice);
-    cudaMemcpy(d_frmfacts, &h_frmfacts[0], nAtoms_idsize, cudaMemcpyHostToDevice);
+    cudaMemcpy(d_frmfcts, &h_frmfcts[0], nAtoms_idsize, cudaMemcpyHostToDevice);
     cudaMemcpy(d_rand1, &h_rand1[0], nRotations_size, cudaMemcpyHostToDevice);
     cudaMemcpy(d_rand2, &h_rand2[0], nRotations_size, cudaMemcpyHostToDevice);
     cudaMemcpy(d_rand3, &h_rand3[0], nRotations_size, cudaMemcpyHostToDevice);
@@ -113,7 +113,7 @@ GPUScatter::GPUScatter (int bpg_,      // <-- defines the number of rotations
 
 void GPUScatter::run() {
     // execute the kernel
-    kernel<tpb> <<<bpg, tpb>>> (d_qx, d_qy, d_qz, d_outQ, nQ, d_rx, d_ry, d_rz, d_frmfacts, nAtoms, d_rand1, d_rand2, d_rand3);
+    kernel<tpb> <<<bpg, tpb>>> (d_qx, d_qy, d_qz, d_outQ, nQ, d_rx, d_ry, d_rz, d_frmfcts, nAtoms, d_rand1, d_rand2, d_rand3);
     cudaThreadSynchronize();
     cudaError_t err = cudaGetLastError();
     assert(err == 0);
@@ -136,7 +136,7 @@ GPUScatter::~GPUScatter() {
     cudaFree(d_rx);
     cudaFree(d_ry);
     cudaFree(d_rz);
-    cudaFree(d_id);
+    cudaFree(d_frmfcts);
     cudaFree(d_rand1);
     cudaFree(d_rand2);
     cudaFree(d_rand3);
