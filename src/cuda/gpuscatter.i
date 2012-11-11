@@ -14,7 +14,7 @@
 
 %{
     #define SWIG_FILE_WITH_INIT
-    #include "gpu_mgr.hh"    
+    #include "gpu_manager.hh"    
 %}
 
 // swig doesn't know about numpy by default, so we need to give it an extra numpy interface

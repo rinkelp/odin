@@ -9,8 +9,9 @@ Todo:
 
 """
 
-from bisect import bisect_left
 import numpy as np
+from odin.data import cromer_mann_params
+from bisect import bisect_left
 
 from odin import utils
 
@@ -845,10 +846,10 @@ class Shotset(Shot):
         correlation_ring[:,1] /= float(self.num_shots)
         
         return correlation_ring
-    
+
     
 def simulate_shot(traj, num_molecules, beam, detector,
-                  traj_weights=None, gpu=False):
+                  traj_weights=None, force_no_gpu=False):
     """
     Simulate a scattering 'shot', i.e. one exposure of x-rays to a sample.
     
@@ -873,7 +874,7 @@ def simulate_shot(traj, num_molecules, beam, detector,
         A detector object the shot will be projected onto.
         
     beam : odin.xray.beam
-        
+        A descriptor of the beam used in the 'experiment'.
         
     num_molecules : int
         The number of molecules estimated to be in the `beam`'s focus.
@@ -883,8 +884,8 @@ def simulate_shot(traj, num_molecules, beam, detector,
         weight of each structure. Default: if traj_weights == None, weights
         each structure equally.
         
-    gpu : bool
-        Try to run the computation on a local GPU.
+    force_no_gpu : bool
+        Run the (slow) CPU version of this function.
         
     Returns
     -------
@@ -899,12 +900,9 @@ def simulate_shot(traj, num_molecules, beam, detector,
         results into the Shot and Shotset classes, respectively.
     """
     
-    # extract form factors for each atom in the molecule
+
     
-    
-    # generate 
-    
-    
+    pass
     
     
     

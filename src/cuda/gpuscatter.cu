@@ -85,8 +85,10 @@ void __global__ kernel(float const * const __restrict__ q_x,
 		               float const * const __restrict__ r_x, 
                        float const * const __restrict__ r_y, 
                        float const * const __restrict__ r_z,
-		               float const * const __restrict__ frmfcts, 
+		               int   const * const __restrict__ r_id, 
                        int   const numAtoms, 
+                       int   const numAtomTypes,
+                       float const * const __restrict__ cromermann,
                        float const * const __restrict__ randN1, 
                        float const * const __restrict__ randN2, 
                        float const * const __restrict__ randN3) {
@@ -111,34 +113,52 @@ void __global__ kernel(float const * const __restrict__ q_x,
         float qx = q_x[iq];
         float qy = q_y[iq];
         float qz = q_z[iq];
-        float mq = qx*qx+qy*qy+qz*qz;
-        float qo = mq / (4*4*M_PI*M_PI);
+        float formfactors[9*numAtomTypes]; // workspace for cromer-mann calcs.
 
         //accumulant
         float2 Qsum;
         Qsum.x = 0;
         Qsum.y = 0;
+        
+        // Cromer-Mann computation, precompute for this value of q
+        real mq = qx*qx + qy*qy + qz*qz;
+        real qo = mq / (16*M_PI*M_PI); // qo is (sin(theta)/lambda)^2
+        real fi;
+        
+        // for each atom type, compute the atomic form factor f_i(q)
+        for (int type = 0; type < numAtomTypes; type++) {
+        
+            // scan through cromermann in blocks of 9 parameters
+            int tind = type * 9;
+            fi =  cromermann[tind]   * exp(cromermann[tind+4]*qo);
+            fi += cromermann[tind+1] * exp(cromermann[tind+5]*qo);
+            fi += cromermann[tind+2] * exp(cromermann[tind+6]*qo);
+            fi += cromermann[tind+3] * exp(cromermann[tind+7]*qo);
+            fi += cromermann[tind+9];
+            
+            formfactors[type] = fi; // store for use in a second
+
+        }
 
         // for each atom in molecule
         for(int a = 0; a < numAtoms; a++) {
-
-            // retrieve the atomic form factor
-            // TJL modified this to pass in the atomic form factors from python
-            fi = frmfcts[a];
 
             // get the current positions
             float rx = r_x[a];
             float ry = r_y[a];
             float rz = r_z[a];
+            float rid = r_id[a];
             float ax, ay, az;
 
             rotate(rx, ry, rz, q0, q1, q2, q3, ax, ay, az);
             float qr = ax*qx + ay*qy + az*qz;
 
+            fi = formfactors[id];
             Qsum.x += fi*__sinf(qr);
             Qsum.y += fi*__cosf(qr);
             
         } // finished one molecule.
+        
         float fQ = Qsum.x*Qsum.x + Qsum.y*Qsum.y;  
         sdata[tid] = fQ;
         __syncthreads();
@@ -155,6 +175,8 @@ void __global__ kernel(float const * const __restrict__ q_x,
     }
 }
 
+
+// TJL to YTZ: do we need this?
 __global__ void randTest(float *a) {
     int gid = blockIdx.x*blockDim.x + threadIdx.x;
 
