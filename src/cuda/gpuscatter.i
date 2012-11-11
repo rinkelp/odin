@@ -14,7 +14,7 @@
 
 %{
     #define SWIG_FILE_WITH_INIT
-    #include "gpu_manager.hh"    
+    #include "gpuscatter_mgr.hh"
 %}
 
 // swig doesn't know about numpy by default, so we need to give it an extra numpy interface
@@ -46,4 +46,4 @@
    type of translation would be necessary.
    http://www.scipy.org/Cookbook/SWIG_NumPy_examples */
 
-%include "gpu_mgr.hh"
+%include "gpuscatter_mgr.hh"
