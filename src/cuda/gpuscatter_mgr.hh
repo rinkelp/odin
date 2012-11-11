@@ -19,6 +19,7 @@ class GPUScatter {
     float* h_rx;    // size: nAtoms
     float* h_ry;    // size: nAtoms
     float* h_rz;    // size: nAtoms
+    int*   h_id;
     float* h_cm;    // size: numAtomTypes*9
 
     float* h_rand1; // size: nRotations
@@ -35,6 +36,7 @@ class GPUScatter {
     float* d_rx;    // size: nAtoms
     float* d_ry;    // size: nAtoms
     float* d_rz;    // size: nAtoms
+    int*   d_id;
     float* d_cm;    // size: numAtomTypes*9
 
     float* d_rand1; // size: nRotations
