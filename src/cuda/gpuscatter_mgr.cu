@@ -33,13 +33,13 @@ GPUScatter::GPUScatter (int bpg_,        // <-- defines the number of rotations
                         float* h_qz_,    // size: nQ
 
                         int nAtoms_,
-                        int numAtomTypes,
+                        int numAtomTypes_,
                         float* h_rx_,    // size: nAtoms
                         float* h_ry_,    // size: nAtoms
                         float* h_rz_,    // size: nAtoms
                         int*   h_id_,    // size: nAtoms
                         
-                        float* cromermann_, //    9*numAtomTypes
+                        float* h_cm_,    // size: 9*numAtomTypes
                         
                         float* h_rand1_, // size: nRotations
                         float* h_rand2_, // size: nRotations
@@ -68,7 +68,7 @@ GPUScatter::GPUScatter (int bpg_,        // <-- defines the number of rotations
     h_rz = h_rz_;
     h_id = h_id_;
 
-    cromermann = cromermann_;
+    h_cm = h_cm;
 
     h_rand1 = h_rand1_;
     h_rand2 = h_rand2_;
@@ -85,7 +85,7 @@ GPUScatter::GPUScatter (int bpg_,        // <-- defines the number of rotations
     const unsigned int nAtoms_size = nAtoms*sizeof(float);
     const unsigned int nAtoms_idsize = nAtoms*sizeof(int);
     const unsigned int nRotations_size = nRotations*sizeof(float);
-    const unsigned int CM_size = 9*numAtomTypes*sizeof(float);
+    const unsigned int cm_size = 9*numAtomTypes*sizeof(float);
 
     // allocate memory on the board
     float *d_qx;        deviceMalloc( (void **) &d_qx, nQ_size);
@@ -96,7 +96,7 @@ GPUScatter::GPUScatter (int bpg_,        // <-- defines the number of rotations
     float *d_ry;        deviceMalloc( (void **) &d_ry, nAtoms_size);
     float *d_rz;        deviceMalloc( (void **) &d_rz, nAtoms_size);
     int   *d_id;        deviceMalloc( (void **) &d_id, nAtoms_idsize);
-    float *d_cromermann; deviceMalloc( (void **) &d_cromermann, CM_size);
+    float *d_cm;        deviceMalloc( (void **) &d_cm, cm_size);
     float *d_rand1;     deviceMalloc( (void **) &d_rand1, nRotations_size);
     float *d_rand2;     deviceMalloc( (void **) &d_rand2, nRotations_size);
     float *d_rand3;     deviceMalloc( (void **) &d_rand3, nRotations_size);
@@ -110,7 +110,7 @@ GPUScatter::GPUScatter (int bpg_,        // <-- defines the number of rotations
     cudaMemcpy(d_ry, &h_ry[0], nAtoms_size, cudaMemcpyHostToDevice);
     cudaMemcpy(d_rz, &h_rz[0], nAtoms_size, cudaMemcpyHostToDevice);
     cudaMemcpy(d_id, &h_id[0], nAtoms_idsize, cudaMemcpyHostToDevice);
-    cudaMemcpy(d_cromermann, &h_cromermann[0], CM_size, cudaMemcpyHostToDevice);
+    cudaMemcpy(d_cm, &h_cm[0], cm_size, cudaMemcpyHostToDevice);
     cudaMemcpy(d_rand1, &h_rand1[0], nRotations_size, cudaMemcpyHostToDevice);
     cudaMemcpy(d_rand2, &h_rand2[0], nRotations_size, cudaMemcpyHostToDevice);
     cudaMemcpy(d_rand3, &h_rand3[0], nRotations_size, cudaMemcpyHostToDevice);
@@ -122,7 +122,7 @@ GPUScatter::GPUScatter (int bpg_,        // <-- defines the number of rotations
 
 void GPUScatter::run() {
     // execute the kernel
-    kernel<tpb> <<<bpg, tpb>>> (d_qx, d_qy, d_qz, d_outQ, nQ, d_rx, d_ry, d_rz, d_id, nAtoms, numAtomTypes, d_cromermann, d_rand1, d_rand2, d_rand3);
+    kernel<tpb> <<<bpg, tpb>>> (d_qx, d_qy, d_qz, d_outQ, nQ, d_rx, d_ry, d_rz, d_id, nAtoms, numAtomTypes, d_cm, d_rand1, d_rand2, d_rand3);
     cudaThreadSynchronize();
     cudaError_t err = cudaGetLastError();
     assert(err == 0);
@@ -146,7 +146,7 @@ GPUScatter::~GPUScatter() {
     cudaFree(d_ry);
     cudaFree(d_rz);
     cudaFree(d_id);
-    cudaFree(d_cromermann);
+    cudaFree(d_cm);
     cudaFree(d_rand1);
     cudaFree(d_rand2);
     cudaFree(d_rand3);

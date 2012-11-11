@@ -35,7 +35,7 @@
                                      (int nAtoms_, float* h_rx_),
                                      (int nAtoms1, float* h_ry_),
                                      (int nAtoms2, float* h_rz_),
-                                     (int nAtoms3, float* h_frmfcts_),
+                                     (int ncm, float* h_cm_),
                                      (int nRot0, float* h_rand1_),
                                      (int nRot1, float* h_rand2_),
                                      (int nRot2, float* h_rand3_)}
