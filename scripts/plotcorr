@@ -1,0 +1,69 @@
+#!/usr/bin/env python
+
+"""
+Plot the intensity profile of a shot or shotset in an appealing manner.
+"""
+
+import argparse
+
+import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib.cm as cm
+
+
+def main(intput, output, n_maxima_cutoff=5):
+    
+    # load data
+    I = np.random.rand(1000,1000)
+    
+    # maxima = shotset.intensity_maxima()
+    # n_maxima = len(maxima)
+    # 
+    # if n_maxima > n_maxima_cutoff:
+    #     print "Found %d maxima in plot, trimming to largest %d" % (n_maxima, n_maxima)
+    #     maxima = np.sort(maxima)[-n_maxima_cutoff:]
+    #     n_maxima = n_maxima_cutoff
+    
+    # DELETE THIS LATER -----------
+    n_maxima = 3
+    # END DELETE ------------------
+    
+    plt.figure(figsize=(12,6))
+    plt.subplots_adjust(wspace=0.65, hspace=0.4)
+    
+    # plot the intensity profile on the lhs
+    prf_ax = plt.subplot2grid((n_maxima,5), (0,0), rowspan=n_maxima, colspan=2)
+    prf_ax.plot(np.arange(1000), I.sum(1), lw=2) 
+    prf_ax.set_xlabel(r'q / $\AA$')
+    prf_ax.set_ylabel(r'I(q)')
+    #prf_ax.vlines(maxima, I.min(), I.max(), lw=2)
+    
+    # plot the correlations on the rhs
+    for i in range(n_maxima):
+        ax = plt.subplot2grid((n_maxima,5), (i,2), colspan=3)    
+        ax.plot(np.arange(1000), I.sum(1), lw=2) # should call Shotset.correlate_ring(maxima[i], maxima[i]) here
+        ax.set_ylabel(r'$C(q, \Delta)$')
+    ax.set_xlabel(r'$\Delta$') # only the bottow plot
+    
+    plt.savefig(output, bbox_inches='tight')
+    print "Saved: %s" % output
+    
+    return
+    
+    
+if __name__ == '__main__':
+    
+    
+    parser = argparse.ArgumentParser(description='''Plot scattering autocorrelations.
+ Chooses points of maximal intensity to correlate automatically.''')
+    
+    parser.add_argument('-i', '--input', type=str, help='An hdf shotset file.')
+    parser.add_argument('-m', '--maxima', type=int, default=5,
+                        help='Maximum number of correlations to pick out. Default: 5')
+    parser.add_argument('-o', '--output', default='correlation_plot.pdf',
+                        help='Image file to write. Append .pdf, .png, .jpg, etc. Default: intensity_plot.pdf')
+
+    args = parser.parse_args()
+    
+    main(args.input, args.output, args.maxima)
+
