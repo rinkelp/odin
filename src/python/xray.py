@@ -283,7 +283,7 @@ class Detector(Beam):
         return polar
         
     @classmethod
-    def generic_detector(cls, spacing=0.02, lim=1.0, k=4.33, l=1.0):
+    def generic_detector(cls, spacing=0.02, lim=1.0, k=4.33, flux=100.0, l=1.0):
         """
         Generates a simple grid detector that can be used for testing.
         (Factory function.)
@@ -306,7 +306,7 @@ class Detector(Beam):
             parameters
         """
 
-        beam = Beam(wavenumber=k)
+        beam = Beam(flux, wavenumber=k)
 
         x = np.arange(-lim, lim, spacing)
         xx, yy = np.meshgrid(x, x)

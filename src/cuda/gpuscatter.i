@@ -19,7 +19,9 @@
 
 // swig doesn't know about numpy by default, so we need to give it an extra numpy interface
 // file that I downloaded from http://docs.scipy.org/doc/numpy/reference/swig.interface-file.html
+
 %include "numpy.i"
+%include <typemaps.i>
 
 %init %{
     import_array();
@@ -42,8 +44,9 @@
                                      (int nRot_, float* h_rand1_),
                                      (int nRot_, float* h_rand2_),
                                      (int nRot_, float* h_rand3_)}
+
                                      
-%apply (int DIM1, float* ARGOUT_ARRAY1) {(int nQ3, float* h_outQ_)}
+%apply (int DIM1, float* ARGOUT_ARRAY1) {(int nQ3, float* h_outQ_)};
 
 /* if instead the names of the pointers were not the standard ones, this
    type of translation would be necessary.
