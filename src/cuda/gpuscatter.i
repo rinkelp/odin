@@ -29,10 +29,12 @@
    passed to methods which are supposed to be interpreted as arrays,
    we don't need the following line: */
 
-%apply (int DIM1, float* IN_ARRAY1) {(int nQ_, float* h_qx_), 
+%apply int *INPUT {int* bpg_, int* nQ_, int* nAtoms_, int* numAtomTypes_}
+
+%apply (int DIM1, float* IN_ARRAY1) {(int nQ0, float* h_qx_), 
                                      (int nQ1, float* h_qy_),
                                      (int nQ2, float* h_qz_),
-                                     (int nAtoms_, float* h_rx_),
+                                     (int nAtoms0, float* h_rx_),
                                      (int nAtoms1, float* h_ry_),
                                      (int nAtoms2, float* h_rz_),
                                      (int ncm, float* h_cm_),
