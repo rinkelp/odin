@@ -33,20 +33,31 @@
 
 // %apply int *INPUT {int* bpg_, int* nQ_, int* nAtoms_, int* numAtomTypes_}
 
-%apply (int DIM1, float* IN_ARRAY1) {(int nQ_, float* h_qx_), 
+%apply (int DIM1, float* INPLACE_ARRAY1) {(int nQ_, float* h_qx_)}
+%apply (int DIM1, float* INPLACE_ARRAY1) {(int nAtoms_, float* h_rx_)}
+
+%apply (int DIM1, double* IN_ARRAY1) {(int len1, double* vec1), (int len2, double* vec2)}
+%inline %{
+  double my_dot(int len1, double* vec1, int len2, double* vec2) {
+    printf("len1 %d, len2%d", len1, len2);
+  }
+%}
+
+/*%apply (int DIM1, float* IN_ARRAY1) {(int nQ_, float* h_qx_), 
                                      (int nQ_, float* h_qy_),
                                      (int nQ_, float* h_qz_),
                                      (int nQ_, int* h_id_),
                                      (int nAtoms_, float* h_rx_),
                                      (int nAtoms_, float* h_ry_),
                                      (int nAtoms_, float* h_rz_),
-                                     (int ncm, float* h_cm_),
+     (int nQ_, float* h_cm_), // this is not right, just for swig testing
                                      (int nRot_, float* h_rand1_),
                                      (int nRot_, float* h_rand2_),
                                      (int nRot_, float* h_rand3_)}
 
-                                     
-%apply (int DIM1, float* ARGOUT_ARRAY1) {(int nQ3, float* h_outQ_)};
+*/
+                                   
+%apply (int DIM1, float* ARGOUT_ARRAY1) {(int nQ_, float* h_outQ_)};
 
 /* if instead the names of the pointers were not the standard ones, this
    type of translation would be necessary.
