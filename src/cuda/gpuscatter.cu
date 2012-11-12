@@ -113,13 +113,16 @@ void __global__ kernel(float const * const __restrict__ q_x,
         float qx = q_x[iq];
         float qy = q_y[iq];
         float qz = q_z[iq];
-        float formfactors[numAtomTypes]; // workspace for cromer-mann calcs.
 
-        //accumulant
+        // workspace for cromer-mann calcs.
+        // set to static size of 25 for testing -- fix later -- todo tjl
+        float formfactors[25];
+
+        // accumulant
         float2 Qsum;
         Qsum.x = 0;
         Qsum.y = 0;
-        
+ 
         // Cromer-Mann computation, precompute for this value of q
         float mq = qx*qx + qy*qy + qz*qz;
         float qo = mq / (16*M_PI*M_PI); // qo is (sin(theta)/lambda)^2
@@ -146,7 +149,7 @@ void __global__ kernel(float const * const __restrict__ q_x,
             float rx = r_x[a];
             float ry = r_y[a];
             float rz = r_z[a];
-            float id = r_id[a];
+            int id = r_id[a];
             float ax, ay, az;
 
             rotate(rx, ry, rz, q0, q1, q2, q3, ax, ay, az);
