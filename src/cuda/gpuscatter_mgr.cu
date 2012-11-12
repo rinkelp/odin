@@ -25,15 +25,15 @@ void deviceMalloc( void ** ptr, int bytes) {
 }
 
 
-GPUScatter::GPUScatter (int bpg_,        // <-- defines the number of rotations
+GPUScatter::GPUScatter (int* bpg_,        // <-- defines the number of rotations
 
-                        int nQ_,
+                        int* nQ_,
                         float* h_qx_,    // size: nQ
                         float* h_qy_,    // size: nQ
                         float* h_qz_,    // size: nQ
 
-                        int nAtoms_,
-                        int numAtomTypes_,
+                        int* nAtoms_,
+                        int* numAtomTypes_,
                         float* h_rx_,    // size: nAtoms
                         float* h_ry_,    // size: nAtoms
                         float* h_rz_,    // size: nAtoms

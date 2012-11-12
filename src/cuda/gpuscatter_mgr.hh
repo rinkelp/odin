@@ -5,17 +5,17 @@ class GPUScatter {
     
     // declare variables
     // in CPU memory
-    int bpg;      // <-- defines the number of rotations
+    int* bpg;      // <-- defines the number of rotations
     static const int tpb = 512;      // always = 512
-    unsigned int nQ_size;
+    int* nQ_size;
 
-    int nQ;
+    int* nQ;
     float* h_qx;    // size: nQ
     float* h_qy;    // size: nQ
     float* h_qz;    // size: nQ
 
-    int nAtoms;
-    int numAtomTypes;
+    int* nAtoms;
+    int* numAtomTypes;
     float* h_rx;    // size: nAtoms
     float* h_ry;    // size: nAtoms
     float* h_rz;    // size: nAtoms
@@ -58,15 +58,15 @@ public:
        %apply (int* ARGOUT_ARRAY1, int DIM1) {(int* myarray, int length)}
    */
 
-  GPUScatter(   int bpg_,      // <-- defines the number of rotations
+  GPUScatter(   int* bpg_,      // <-- defines the number of rotations
             
-                int nQ_,
+                int* nQ_,
                 float* h_qx_,    // size: nQ
                 float* h_qy_,    // size: nQ
                 float* h_qz_,    // size: nQ
 
-                int nAtoms_,
-                int numAtomTypes_,
+                int* nAtoms_,
+                int* numAtomTypes_,
                 float* h_rx_,    // size: nAtoms
                 float* h_ry_,    // size: nAtoms
                 float* h_rz_,    // size: nAtoms
