@@ -70,6 +70,8 @@ public:
                 float* h_rx_,    // size: nAtoms
                 float* h_ry_,    // size: nAtoms
                 float* h_rz_,    // size: nAtoms
+                int*   h_id_,
+
                 float* h_cm_,    // size: numAtomTypes*9
 
                 float* h_rand1_, // size: nRotations
