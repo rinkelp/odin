@@ -60,25 +60,38 @@ public:
 
   GPUScatter(   int bpg_,      // <-- defines the number of rotations
             
-                int nQ_,
-                float* h_qx_,    // size: nQ
-                float* h_qy_,    // size: nQ
-                float* h_qz_,    // size: nQ
-
-                int nAtoms_,
-                int numAtomTypes_,
-                float* h_rx_,    // size: nAtoms
-                float* h_ry_,    // size: nAtoms
-                float* h_rz_,    // size: nAtoms
+                // scattering q-vectors
+                int    nQx_,
+                int    nQy_,
+                int    nQz_,
+                float* h_qx_,
+                float* h_qy_,
+                float* h_qz_,
+                
+                // atomic positions, ids
+                int    nAtomsx_,
+                int    nAtomsy_,
+                int    nAtomsz_,
+                float* h_rx_,
+                float* h_ry_,
+                float* h_rz_,
                 int*   h_id_,
 
-                float* h_cm_,    // size: numAtomTypes*9
+                // cromer-mann parameters
+                int    nCM_,
+                float* h_cm_,
 
-                float* h_rand1_, // size: nRotations
-                float* h_rand2_, // size: nRotations
-                float* h_rand3_, // size: nRotations
+                // random numbers for rotations
+                int    nRot1_,
+                int    nRot2_,
+                int    nRot3_,
+                float* h_rand1_,
+                float* h_rand2_,
+                float* h_rand3_,
 
-                float* h_outQ_  // size: nQ (OUTPUT)
+                // output
+                int nQout_,
+                float* h_outQ_
            );
            
   void run();                              // does operation inplace on the GPU

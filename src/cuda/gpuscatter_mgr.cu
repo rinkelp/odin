@@ -25,50 +25,81 @@ void deviceMalloc( void ** ptr, int bytes) {
 }
 
 
-GPUScatter::GPUScatter (int bpg_,        // <-- defines the number of rotations
+GPUScatter::GPUScatter (int bpg_,      // <-- defines the number of rotations
+            
+                        // scattering q-vectors
+                        int    nQx_,
+                        int    nQy_,
+                        int    nQz_,
+                        float* h_qx_,
+                        float* h_qy_,
+                        float* h_qz_,
+                
+                        // atomic positions, ids
+                        int    nAtomsx_,
+                        int    nAtomsy_,
+                        int    nAtomsz_,
+                        float* h_rx_,
+                        float* h_ry_,
+                        float* h_rz_,
+                        int*   h_id_,
 
-                        int nQ_,
-                        float* h_qx_,    // size: nQ
-                        float* h_qy_,    // size: nQ
-                        float* h_qz_,    // size: nQ
+                        // cromer-mann parameters
+                        int    nCM_,
+                        float* h_cm_,
 
-                        int nAtoms_,
-                        int numAtomTypes_,
-                        float* h_rx_,    // size: nAtoms
-                        float* h_ry_,    // size: nAtoms
-                        float* h_rz_,    // size: nAtoms
-                        int*   h_id_,    // size: nAtoms
-                        
-                        float* h_cm_,    // size: 9*numAtomTypes
-                        
-                        float* h_rand1_, // size: nRotations
-                        float* h_rand2_, // size: nRotations
-                        float* h_rand3_, // size: nRotations
-                        
-                        float* h_outQ_   // size: nQ (OUTPUT)
+                        // random numbers for rotations
+                        int    nRot1_,
+                        int    nRot2_,
+                        int    nRot3_,
+                        float* h_rand1_,
+                        float* h_rand2_,
+                        float* h_rand3_,
+
+                        // output
+                        int    nQout_,
+                        float* h_outQ_
                         ) {
                             
     /* All arguments consist of 
      *   (1) a float pointer to the beginning of the array to be passed
      *   (2) ints representing the size of each array
      */
+     
+    // many of the arrays above are 1D arrays that should be the same len
+    // due to the SWIG wrapping, however, we had to pass each individually
+    // so now check that they are, in fact, the correct dimension
+    assert( nQx_ == nQy_ )
+    assert( nQx_ == nQz_ )
+    assert( nQx_ == nQout_ )
+    
+    assert( nAtomsx_ == nAtomsy_ )
+    assert( nAtomsx_ == nAtomsz_ )
+    
+    assert( nRot1_ == nRot2_ )
+    assert( nRot1_ == nRot3_ )
+    
+    assert( bpg_ / 512 == nRot1_ )
+    assert( nRot1_ == nRot2_ )
+    assert( nRot1_ == nRot3_ )
+    
     
     // unpack arguments
     bpg = bpg_;
 
-    nQ = nQ_;
+    nQ = nQx_;
     h_qx = h_qx_;
     h_qy = h_qy_;
     h_qz = h_qz_;
 
-    nAtoms = nAtoms_;
-    numAtomTypes = numAtomTypes_;
+    nAtoms = nAtomsx_;
+    numAtomTypes = nCM_ / 9;
     h_rx = h_rx_;
     h_ry = h_ry_;
     h_rz = h_rz_;
     h_id = h_id_;
 
-    h_cm = h_cm;
+    h_cm = h_cm_;
 
     h_rand1 = h_rand1_;
     h_rand2 = h_rand2_;
