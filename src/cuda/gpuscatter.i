@@ -29,18 +29,19 @@
    passed to methods which are supposed to be interpreted as arrays,
    we don't need the following line: */
 
-%apply int *INPUT {int* bpg_, int* nQ_, int* nAtoms_, int* numAtomTypes_}
+// %apply int *INPUT {int* bpg_, int* nQ_, int* nAtoms_, int* numAtomTypes_}
 
-%apply (int DIM1, float* IN_ARRAY1) {(int nQ0, float* h_qx_), 
-                                     (int nQ1, float* h_qy_),
-                                     (int nQ2, float* h_qz_),
-                                     (int nAtoms0, float* h_rx_),
-                                     (int nAtoms1, float* h_ry_),
-                                     (int nAtoms2, float* h_rz_),
+%apply (int DIM1, float* IN_ARRAY1) {(int nQ_, float* h_qx_), 
+                                     (int nQ_, float* h_qy_),
+                                     (int nQ_, float* h_qz_),
+                                     (int nQ_, int* h_id_),
+                                     (int nAtoms_, float* h_rx_),
+                                     (int nAtoms_, float* h_ry_),
+                                     (int nAtoms_, float* h_rz_),
                                      (int ncm, float* h_cm_),
-                                     (int nRot0, float* h_rand1_),
-                                     (int nRot1, float* h_rand2_),
-                                     (int nRot2, float* h_rand3_)}
+                                     (int nRot_, float* h_rand1_),
+                                     (int nRot_, float* h_rand2_),
+                                     (int nRot_, float* h_rand3_)}
                                      
 %apply (int DIM1, float* ARGOUT_ARRAY1) {(int nQ3, float* h_outQ_)}
 
