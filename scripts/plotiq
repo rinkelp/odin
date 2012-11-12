@@ -1,0 +1,49 @@
+#!/usr/bin/env python
+
+"""
+Plot the intensity profile of a shot or shotset in an appealing manner.
+"""
+
+import argparse
+
+import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib.cm as cm
+
+
+def main(intput, output):
+    
+    # assume we loaded the data - should be a one liner
+    I = np.random.rand(1000,1000)
+    
+    
+    fig, ax = plt.subplots(nrows=1, ncols=2, figsize=(8,3.5))
+    fig.tight_layout()
+    
+    ax[0].plot(np.arange(1000), I.sum(1), lw=2) # should call Shotset.intensity() here
+    ax[0].set_xlabel(r'q / $\AA$')
+    ax[0].set_ylabel(r'I(q)')
+    
+    ax[1].imshow(np.transpose(I), cmap=cm.jet)
+    ax[1].set_xlabel('x')
+    ax[1].set_ylabel('y')
+    
+    plt.savefig(output, bbox_inches='tight')
+    print "Saved: %s" % output
+    
+    return
+    
+    
+if __name__ == '__main__':
+    
+    
+    parser = argparse.ArgumentParser(description='Plot intensity profile of a shotset.')
+    
+    parser.add_argument('-i', '--input', type=str, help='An hdf shotset file.')
+    parser.add_argument('-o', '--output', default='intensity_plot.pdf',
+                        help='Image file to write. Append .pdf, .png, .jpg, etc. Default: intensity_plot.pdf')
+
+    args = parser.parse_args()
+    
+    main(args.input, args.output)
+
