@@ -1,8 +1,9 @@
 
-import _gpuscatter
-from numpy import np
+import gpuscatter
+import numpy as np
 
 from odin.data import cromer_mann_params
+from odin.xray import Detector
 
 
 
@@ -61,7 +62,7 @@ def scatter():
     output = np.zeros(num_q)
     
     # run dat shit
-    sobj = _gpuscatter.GPUScatter(bpg, num_q, qx, qy, qz,
+    sobj = gpuscatter.GPUScatter(bpg, num_q, qx, qy, qz,
                                   num_atoms, num_atom_types, rx, ry, rz, aid,
                                   cromermann, rand1, rand2, rand3,
                                   output)

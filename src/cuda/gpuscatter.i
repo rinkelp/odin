@@ -19,17 +19,15 @@
 
 // swig doesn't know about numpy by default, so we need to give it an extra numpy interface
 // file that I downloaded from http://docs.scipy.org/doc/numpy/reference/swig.interface-file.html
+
 %include "numpy.i"
+%include <typemaps.i>
 
 %init %{
     import_array();
 %}
 
-/* Because gpuadder.hh uses the swig default names for variables being
-   passed to methods which are supposed to be interpreted as arrays,
-   we don't need the following line: */
-
-%apply int *INPUT {int* bpg_, int* nQ_, int* nAtoms_, int* numAtomTypes_}
+// %apply int* INPUT {int* bpg_, int* nQ_, int* nAtoms_, int* numAtomTypes_};
 
 %apply (int DIM1, float* IN_ARRAY1) {(int nQ0, float* h_qx_), 
                                      (int nQ1, float* h_qy_),
@@ -40,9 +38,9 @@
                                      (int ncm, float* h_cm_),
                                      (int nRot0, float* h_rand1_),
                                      (int nRot1, float* h_rand2_),
-                                     (int nRot2, float* h_rand3_)}
+                                     (int nRot2, float* h_rand3_)};
                                      
-%apply (int DIM1, float* ARGOUT_ARRAY1) {(int nQ3, float* h_outQ_)}
+%apply (int DIM1, float* ARGOUT_ARRAY1) {(int nQ3, float* h_outQ_)};
 
 /* if instead the names of the pointers were not the standard ones, this
    type of translation would be necessary.
