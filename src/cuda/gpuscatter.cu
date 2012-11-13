@@ -2,6 +2,8 @@
 #include <stdio.h>
 #include <stdint.h>
 
+#define int FFSIZE=10
+
 // warning: this code is not safe due to reduction if total # of threads != multiple of
 // blockSize ... too lazy to add in ifs for now 
 // todo: add in ifs and while loops for > 67million
@@ -106,7 +108,7 @@ void __global__ kernel(float const * const __restrict__ q_x,
 
     // rotation quaternions
     float q0, q1, q2, q3;
-    generate_random_quaternion(rand1, rand2, rand3, q0, q1, q2,q3);
+    generate_random_quaternion(rand1, rand2, rand3, q0, q1, q2, q3);
 
     // for each q vector
     for(int iq = 0; iq < nQ; iq++) {
@@ -114,9 +116,8 @@ void __global__ kernel(float const * const __restrict__ q_x,
         float qy = q_y[iq];
         float qz = q_z[iq];
 
-        // workspace for cromer-mann calcs.
-        // set to static size of 10 for testing -- fix later -- todo tjl
-        float formfactors[10];
+        // workspace for cm calcs -- static size, but hopefully big enough
+        float formfactors[FFSIZE];
 
         // accumulant
         float2 Qsum;
@@ -178,12 +179,12 @@ void __global__ kernel(float const * const __restrict__ q_x,
 
 
 // TJL to YTZ: do we need this?
-__global__ void randTest(float *a) {
-    int gid = blockIdx.x*blockDim.x + threadIdx.x;
-
-    int tt = __cosf(gid);
-    int yy = __sinf(gid);
-
-    a[gid] = tt;
-    a[gid/2] = yy;
-}
+// __global__ void randTest(float *a) {
+//     int gid = blockIdx.x*blockDim.x + threadIdx.x;
+// 
+//     int tt = __cosf(gid);
+//     int yy = __sinf(gid);
+// 
+//     a[gid] = tt;
+//     a[gid/2] = yy;
+// }
