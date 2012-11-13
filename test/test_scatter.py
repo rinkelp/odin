@@ -148,7 +148,6 @@ def rand_rotate_molecule(xyzlist, rfloat=None):
 
     # get a random quaternion vector
     q = rquaternion(rfloat)
-    print "quaternion:", q
     
     # take the quaternion conjugated
     qconj = np.zeros(4)
@@ -206,7 +205,6 @@ def ref_simulate_shot(xyzlist, atomic_numbers, num_molecules, q_grid, rfloats=No
     I = np.zeros(q_grid.shape[0])
     
     for n in range(num_molecules):
-        print "shooting molecule %d of %d" % (n+1, num_molecules)
         
         if rfloats == None:
             rotated_xyzlist = rand_rotate_molecule(xyzlist)
@@ -290,6 +288,7 @@ def call_gpuscatter(xyzlist, atomic_numbers, num_molecules, qgrid, rfloats):
         ind = i * 9
         cromermann[ind:ind+9] = cromer_mann_params[(a,0)]
         aid[ aid == a ] = i # make the atom index 0, 1, 2, ...
+    print cromermann
  
     # get random numbers
     rand1 = rfloats[:,0].astype(np.float32)
@@ -303,7 +302,6 @@ def call_gpuscatter(xyzlist, atomic_numbers, num_molecules, qgrid, rfloats):
                                     rand1, rand2, rand3, num_q)
     
     output = out_obj.this[1].astype(np.float64)
-
     return output
 
 # ------------------------------------------------------------------------------
@@ -322,17 +320,15 @@ class TestScatter():
         xyzlist = xyzQ[:,:3]
         atomic_numbers = xyzQ[:,3].flatten()
     
-        q_grid = np.loadtxt('reference/512_q.xyz')[:1]
+        q_grid = np.loadtxt('reference/512_q.xyz')[:3] # do just 3 qs for speed
     
-        rfloats = np.loadtxt('reference/512_x_3_random_floats.txt')[:1]
+        rfloats = np.loadtxt('reference/512_x_3_random_floats.txt')
         num_molecules = rfloats.shape[0]
     
+        gpu_I = call_gpuscatter(xyzlist, atomic_numbers, num_molecules, q_grid, rfloats)
         ref_I = ref_simulate_shot(xyzlist, atomic_numbers, num_molecules, q_grid, rfloats)
-        gpu_I = call_gpuscatter(xyzlist, atomic_numbers, num_molecules, qgrid, rfloats)
-    
+
+        print "GPU", gpu_I
+        print "CPU", ref_I
+        
         assert_almost_equal(ref_I, gpu_I)
-
-
-    
-    
-    
