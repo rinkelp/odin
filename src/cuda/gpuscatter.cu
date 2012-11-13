@@ -2,7 +2,7 @@
 #include <stdio.h>
 #include <stdint.h>
 
-#define int FFSIZE=10
+#define FFSIZE 10
 
 // warning: this code is not safe due to reduction if total # of threads != multiple of
 // blockSize ... too lazy to add in ifs for now 

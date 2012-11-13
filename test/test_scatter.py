@@ -7,7 +7,7 @@ Reference implementation & unit test for the GPU scattering simulation code
 
 import numpy as np
 from numpy.linalg import norm
-from numpy.testing import assert_almost_equal
+from numpy.testing import assert_almost_equal, assert_allclose
 
 import gpuscatter
 from odin.data import cromer_mann_params
@@ -274,9 +274,10 @@ def call_gpuscatter(xyzlist, atomic_numbers, num_molecules, qgrid, rfloats):
     
     # get atomic positions
     rx = xyzlist[:,0].astype(np.float32)
-    ry = xyzlist[:,0].astype(np.float32)
-    rz = xyzlist[:,0].astype(np.float32)
+    ry = xyzlist[:,1].astype(np.float32)
+    rz = xyzlist[:,2].astype(np.float32)
     num_atoms = len(rx)
+    assert( num_atoms == 512 )
     
     aid = atomic_numbers.astype(np.int32)
     atom_types = np.unique(aid)
@@ -288,7 +289,6 @@ def call_gpuscatter(xyzlist, atomic_numbers, num_molecules, qgrid, rfloats):
         ind = i * 9
         cromermann[ind:ind+9] = cromer_mann_params[(a,0)]
         aid[ aid == a ] = i # make the atom index 0, 1, 2, ...
-    print cromermann
  
     # get random numbers
     rand1 = rfloats[:,0].astype(np.float32)
@@ -316,13 +316,15 @@ class TestScatter():
     
     def test_gpu_scatter(self):
         
-        xyzQ = np.loadtxt('reference/512_atom_benchmark.xyz')
+        refdir = '/home/tjlane/programs/odin/test/reference/' # TJL todo generalize
+
+        xyzQ = np.loadtxt(refdir + '512_atom_benchmark.xyz')
         xyzlist = xyzQ[:,:3]
         atomic_numbers = xyzQ[:,3].flatten()
     
-        q_grid = np.loadtxt('reference/512_q.xyz')[:3] # do just 3 qs for speed
+        q_grid = np.loadtxt(refdir + '512_q.xyz')[:1] # do just 3 qs for speed
     
-        rfloats = np.loadtxt('reference/512_x_3_random_floats.txt')
+        rfloats = np.loadtxt(refdir + '512_x_3_random_floats.txt')
         num_molecules = rfloats.shape[0]
     
         gpu_I = call_gpuscatter(xyzlist, atomic_numbers, num_molecules, q_grid, rfloats)
@@ -331,4 +333,5 @@ class TestScatter():
         print "GPU", gpu_I
         print "CPU", ref_I
         
-        assert_almost_equal(ref_I, gpu_I)
+        assert_allclose(gpu_I, ref_I, rtol=1e-03,
+                            err_msg='scatter: gpu/cpu reference mismatch')
