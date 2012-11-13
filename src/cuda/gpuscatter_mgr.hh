@@ -58,40 +58,41 @@ public:
        %apply (int* ARGOUT_ARRAY1, int DIM1) {(int* myarray, int length)}
    */
 
-  GPUScatter(   int bpg_,      // <-- defines the number of rotations
-            
-                // scattering q-vectors
-                int    nQx_,
-                int    nQy_,
-                int    nQz_,
-                float* h_qx_,
-                float* h_qy_,
-                float* h_qz_,
-                
-                // atomic positions, ids
-                int    nAtomsx_,
-                int    nAtomsy_,
-                int    nAtomsz_,
-                float* h_rx_,
-                float* h_ry_,
-                float* h_rz_,
-                int*   h_id_,
+  GPUScatter(           int bpg_,      // <-- defines the number of rotations
 
-                // cromer-mann parameters
-                int    nCM_,
-                float* h_cm_,
+                        // scattering q-vectors
+                        int    nQx_,
+                        float* h_qx_,
+                        int    nQy_,
+                        float* h_qy_,
+                        int    nQz_,
+                        float* h_qz_,
 
-                // random numbers for rotations
-                int    nRot1_,
-                int    nRot2_,
-                int    nRot3_,
-                float* h_rand1_,
-                float* h_rand2_,
-                float* h_rand3_,
+                        // atomic positions, ids
+                        int    nAtomsx_,
+                        float* h_rx_,
+                        int    nAtomsy_,
+                        float* h_ry_,
+                        int    nAtomsz_,
+                        float* h_rz_,
+                        int    nAtomsid_,
+                        int*   h_id_,
 
-                // output
-                int nQout_,
-                float* h_outQ_
+                        // cromer-mann parameters
+                        int    nCM_,
+                        float* h_cm_,
+
+                        // random numbers for rotations
+                        int    nRot1_,
+                        float* h_rand1_,
+                        int    nRot2_,
+                        float* h_rand2_,
+                        int    nRot3_,
+                        float* h_rand3_,
+
+                        // output
+                        int    nQout_,
+                        float* h_outQ_ 
            );
            
   void run();                              // does operation inplace on the GPU

@@ -29,19 +29,20 @@ GPUScatter::GPUScatter (int bpg_,      // <-- defines the number of rotations
             
                         // scattering q-vectors
                         int    nQx_,
-                        int    nQy_,
-                        int    nQz_,
                         float* h_qx_,
+                        int    nQy_,
                         float* h_qy_,
+                        int    nQz_,
                         float* h_qz_,
                 
                         // atomic positions, ids
                         int    nAtomsx_,
-                        int    nAtomsy_,
-                        int    nAtomsz_,
                         float* h_rx_,
+                        int    nAtomsy_,
                         float* h_ry_,
+                        int    nAtomsz_,
                         float* h_rz_,
+                        int    nAtomsid_,
                         int*   h_id_,
 
                         // cromer-mann parameters
@@ -50,10 +51,10 @@ GPUScatter::GPUScatter (int bpg_,      // <-- defines the number of rotations
 
                         // random numbers for rotations
                         int    nRot1_,
-                        int    nRot2_,
-                        int    nRot3_,
                         float* h_rand1_,
+                        int    nRot2_,
                         float* h_rand2_,
+                        int    nRot3_,
                         float* h_rand3_,
 
                         // output
@@ -69,20 +70,20 @@ GPUScatter::GPUScatter (int bpg_,      // <-- defines the number of rotations
     // many of the arrays above are 1D arrays that should be the same len
     // due to the SWIG wrapping, however, we had to pass each individually
     // so now check that they are, in fact, the correct dimension
-    assert( nQx_ == nQy_ )
-    assert( nQx_ == nQz_ )
-    assert( nQx_ == nQout_ )
+    assert( nQx_ == nQy_ );
+    assert( nQx_ == nQz_ );
+    assert( nQx_ == nQout_ );
     
-    assert( nAtomsx_ == nAtomsy_ )
-    assert( nAtomsx_ == nAtomsz_ )
+    assert( nAtomsx_ == nAtomsy_ );
+    assert( nAtomsx_ == nAtomsz_ );
+    assert( nAtomsx_ == nAtomsid_ );
     
-    assert( nRot1_ == nRot2_ )
-    assert( nRot1_ == nRot3_ )
+    assert( nRot1_ == nRot2_ );
+    assert( nRot1_ == nRot3_ );
     
-    assert( bpg_ / 512 == nRot1_ )
-    assert( nRot1_ == nRot2_ )
-    assert( nRot1_ == nRot3_ )
-    
+    assert( bpg_ / 512 == nRot1_ );
+    assert( nRot1_ == nRot2_ );
+    assert( nRot1_ == nRot3_ );
     
     // unpack arguments
     bpg = bpg_;
