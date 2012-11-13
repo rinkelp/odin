@@ -81,7 +81,7 @@ GPUScatter::GPUScatter (int bpg_,      // <-- defines the number of rotations
     assert( nRot1_ == nRot2_ );
     assert( nRot1_ == nRot3_ );
     
-    assert( bpg_ / 512 == nRot1_ );
+    assert( bpg_ * 512 == nRot1_ );
     assert( nRot1_ == nRot2_ );
     assert( nRot1_ == nRot3_ );
     
@@ -150,8 +150,22 @@ GPUScatter::GPUScatter (int bpg_,      // <-- defines the number of rotations
     // check for errors
     cudaError_t err = cudaGetLastError();
     assert(err == 0);  
+
+    // execute the kernel
+    kernel<tpb> <<<bpg, tpb>>> (d_qx, d_qy, d_qz, d_outQ, nQ, d_rx, d_ry, d_rz, d_id, nAtoms, numAtomTypes, d_cm, d_rand1, d_rand2, d_rand3);
+    cudaThreadSynchronize();
+    err = cudaGetLastError(); // cudaError_t
+    assert(err == 0);
+
+    // retrieve the output off the board and back into CPU memory
+    // copys the array to the output array passed as input
+    cudaMemcpy(&h_outQ[0], d_outQ, nQ_size, cudaMemcpyDeviceToHost);
+    cudaThreadSynchronize();
+    err = cudaGetLastError(); // cudaError_t
+    assert(err == 0);
 }
 
+/*
 void GPUScatter::run() {
     // execute the kernel
     kernel<tpb> <<<bpg, tpb>>> (d_qx, d_qy, d_qz, d_outQ, nQ, d_rx, d_ry, d_rz, d_id, nAtoms, numAtomTypes, d_cm, d_rand1, d_rand2, d_rand3);
@@ -168,6 +182,7 @@ void GPUScatter::retreive() {
     cudaError_t err = cudaGetLastError();
     assert(err == 0);
 }
+*/
 
 GPUScatter::~GPUScatter() {
     // destroy the class

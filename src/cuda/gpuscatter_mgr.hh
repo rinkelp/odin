@@ -95,8 +95,8 @@ public:
                         float* h_outQ_ 
            );
            
-  void run();                              // does operation inplace on the GPU
-  void retreive();                         // gets results back from GPU
+  //void run();                              // does operation inplace on the GPU
+  //void retreive();                         // gets results back from GPU
   ~GPUScatter();                           // destructor
   
 };

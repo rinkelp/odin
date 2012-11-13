@@ -115,8 +115,8 @@ void __global__ kernel(float const * const __restrict__ q_x,
         float qz = q_z[iq];
 
         // workspace for cromer-mann calcs.
-        // set to static size of 25 for testing -- fix later -- todo tjl
-        float formfactors[25];
+        // set to static size of 10 for testing -- fix later -- todo tjl
+        float formfactors[10];
 
         // accumulant
         float2 Qsum;
@@ -133,10 +133,10 @@ void __global__ kernel(float const * const __restrict__ q_x,
         
             // scan through cromermann in blocks of 9 parameters
             int tind = type * 9;
-            fi =  cromermann[tind]   * exp(cromermann[tind+4]*qo);
-            fi += cromermann[tind+1] * exp(cromermann[tind+5]*qo);
-            fi += cromermann[tind+2] * exp(cromermann[tind+6]*qo);
-            fi += cromermann[tind+3] * exp(cromermann[tind+7]*qo);
+            fi =  cromermann[tind]   * exp(-cromermann[tind+4]*qo);
+            fi += cromermann[tind+1] * exp(-cromermann[tind+5]*qo);
+            fi += cromermann[tind+2] * exp(-cromermann[tind+6]*qo);
+            fi += cromermann[tind+3] * exp(-cromermann[tind+7]*qo);
             fi += cromermann[tind+8];
             
             formfactors[type] = fi; // store for use in a second
@@ -149,7 +149,7 @@ void __global__ kernel(float const * const __restrict__ q_x,
             float rx = r_x[a];
             float ry = r_y[a];
             float rz = r_z[a];
-            int id = r_id[a];
+            int   id = r_id[a];
             float ax, ay, az;
 
             rotate(rx, ry, rz, q0, q1, q2, q3, ax, ay, az);
