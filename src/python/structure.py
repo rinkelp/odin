@@ -145,16 +145,10 @@ class quaternion(object):
         qv[1:] = v.copy()
     
         # get a random quaternion vector
-        q = rquaternion()
+        q = quaternion.random()
+        qconj = quaterion.conjugate(q)
     
-        # take the quaternion conjugated
-        qconj = np.zeros(4)
-        qconj[0] = q[0]
-        qconj[1] = -q[1]
-        qconj[2] = -q[2]
-        qconj[3] = -q[3]
-    
-        q_prime = hprod( hprod(q, qv), qconj )
+        q_prime = quaternion.prod( quaternion.prod(q, qv), qconj )
     
         v_prime = q_prime[1:].copy() # want the last 3 elements...
     
@@ -201,7 +195,7 @@ def rand_rotate_molecule(xyzlist, remove_COM=False, rfloat=None):
     q = quaternion.random(rfloat)
     
     # take the quaternion conjugate
-    qconj = quaternion.conj(q)
+    qconj = quaternion.conjugate(q)
     
     # prepare data structures
     rotated_xyzlist = np.zeros(xyzlist.shape)

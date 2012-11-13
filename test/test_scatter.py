@@ -103,7 +103,7 @@ def ref_simulate_shot(xyzlist, atomic_numbers, num_molecules, q_grid, rfloats=No
         if rfloats == None:
             rotated_xyzlist = rand_rotate_molecule(xyzlist)
         else:
-            rotated_xyzlist = rand_rotate_molecule(xyzlist, rfloats[n,:])
+            rotated_xyzlist = rand_rotate_molecule(xyzlist, rfloat=rfloats[n,:])
         
         for i,qvector in enumerate(q_grid):
 
