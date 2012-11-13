@@ -12,6 +12,8 @@ from numpy.testing import assert_almost_equal, assert_allclose
 import gpuscatter
 from odin.data import cromer_mann_params
 from odin.xray import Detector
+from odin.structure import rand_rotate_molecule
+
 
 
 # ------------------------------------------------------------------------------
@@ -60,115 +62,7 @@ def form_factor(qvector, atomz):
         fi+= -11.529
         
     return fi
-    
-    
-def rquaternion(rfloat=None):
-    
-    if rfloat == None:
-        rfloat = np.random.rand(3)
-    
-    q = np.zeros(4)
-    
-    s = rfloat[0]
-    sig1 = np.sqrt(s)
-    sig2 = np.sqrt(1.0 - s)
-    
-    theta1 = 2.0 * np.pi * rfloat[1]
-    theta2 = 2.0 * np.pi * rfloat[2]
-    
-    w = np.cos(theta2) * sig2
-    x = np.sin(theta1) * sig1
-    y = np.cos(theta1) * sig1
-    z = np.sin(theta2) * sig2
-    
-    q[0] = w
-    q[1] = x
-    q[2] = y
-    q[3] = z
-    
-    return q
 
-
-def hprod(q1, q2):
-    """ Hamiltonian product of two quaternions """
-    
-    qprod = np.zeros(4)
-    
-    qprod[0] = q1[0]*q2[0] - q1[1]*q2[1] - q1[2]*q2[2] - q1[3]*q2[3]
-    qprod[1] = q1[0]*q2[1] + q1[1]*q2[0] + q1[2]*q2[3] - q1[3]*q2[2]
-    qprod[2] = q1[0]*q2[2] - q1[1]*q2[3] + q1[2]*q2[0] + q1[3]*q2[1]
-    qprod[3] = q1[0]*q2[3] + q1[1]*q2[2] - q1[2]*q2[1] + q1[3]*q2[0]
-    
-    return qprod
-    
-    
-def qconj(q):
-    """ quaternion conjugate of q """
-    
-    qconj = np.zeros(4)
-    qconj[0] = q[0]
-    qconj[1] = -q[1]
-    qconj[2] = -q[2]
-    qconj[3] = -q[3]
-    
-    return qconj
-
-
-def rand_rotate_vector(v):
-    """
-    Here the argument is v, a 3-vector in x,y,z space (e.g. the atomic positions
-    of one of our atoms)
-    
-    The output is v_prime, another 3-vector, which is the rotated version of v
-    """
-    
-    # generate a quaternion vector, with the first element zero
-    # the last there elements are from v
-    qv = np.zeros(4)
-    qv[1:] = v.copy()
-    
-    # get a random quaternion vector
-    q = rquaternion()
-    
-    # take the quaternion conjugated
-    qconj = np.zeros(4)
-    qconj[0] = q[0]
-    qconj[1] = -q[1]
-    qconj[2] = -q[2]
-    qconj[3] = -q[3]
-    
-    q_prime = hprod( hprod(q, qv), qconj )
-    
-    v_prime = q_prime[1:].copy() # want the last 3 elements...
-    
-    return v_prime
-
-
-def rand_rotate_molecule(xyzlist, rfloat=None):
-
-    # get a random quaternion vector
-    q = rquaternion(rfloat)
-    
-    # take the quaternion conjugated
-    qconj = np.zeros(4)
-    qconj[0] = q[0]
-    qconj[1] = -q[1]
-    qconj[2] = -q[2]
-    qconj[3] = -q[3]
-    
-    rotated_xyzlist = np.zeros(xyzlist.shape)
-    qv = np.zeros(4)
-    
-    for i in range(xyzlist.shape[0]):
-        
-        qv[1:] = xyzlist[i,:].copy()
-    
-        q_prime = hprod( hprod(q, qv), qconj )
-    
-        rotated_xyzlist[i,:] = q_prime[1:].copy() # want the last 3 elements...
-    
-    return rotated_xyzlist
-    
     
 def ref_simulate_shot(xyzlist, atomic_numbers, num_molecules, q_grid, rfloats=None):
     """
