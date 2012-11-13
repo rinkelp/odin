@@ -1,11 +1,22 @@
 #!/usr/bin/env python
 
+"""
+Reference implementation & unit test for the GPU scattering simulation code
+(aka gpuscatter, in odin/src/cuda/gpuscatter.*).
+"""
 
 import numpy as np
-import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
-
 from numpy.linalg import norm
+from numpy.testing import assert_almost_equal
+
+import gpuscatter
+from odin.data import cromer_mann_params
+from odin.xray import Detector
+
+
+# ------------------------------------------------------------------------------
+#                        BEGIN REFERENCE IMPLEMENTATION
+# ------------------------------------------------------------------------------
 
 def form_factor(qvector, atomz):
     
@@ -160,7 +171,7 @@ def rand_rotate_molecule(xyzlist, rfloat=None):
     return rotated_xyzlist
     
     
-def simulate_shot(xyzlist, atomic_numbers, num_molecules, q_grid, rfloats=None):
+def ref_simulate_shot(xyzlist, atomic_numbers, num_molecules, q_grid, rfloats=None):
     """
     Simulate a single x-ray scattering shot off an ensemble of identical
     molecules.
@@ -209,14 +220,8 @@ def simulate_shot(xyzlist, atomic_numbers, num_molecules, q_grid, rfloats=None):
             for j in range(xyzlist.shape[0]):
                 fi = form_factor(qvector, atomic_numbers[j])
                 r = rotated_xyzlist[j,:]
-                
-                #print "r:", r
-                
                 F1 = fi * np.exp( 1j * np.dot(qvector, r) )
-                
                 x = np.dot(qvector, r)
-                #print "qsum:", ( np.cos(x) + 1j*np.sin(x) )
-                
                 F += fi * np.exp( 1j * np.dot(qvector, r) )
     
             I[i] += F.real*F.real + F.imag*F.imag
@@ -224,52 +229,110 @@ def simulate_shot(xyzlist, atomic_numbers, num_molecules, q_grid, rfloats=None):
     return I
 
 
-def plot_rotations():
+# ------------------------------------------------------------------------------
+#                           END REFERENCE IMPLEMENTATION
+# ------------------------------------------------------------------------------
+#                           BEGIN INTERFACE TO gpuscatter
+# ------------------------------------------------------------------------------
 
-    N = 1000
+def call_gpuscatter(xyzlist, atomic_numbers, num_molecules, qgrid, rfloats):
+    """
+    Calls the GPU version of the scattering code. This is a simplified interface
+    with no random elements for unit testing purposes only.
+    
+    Parameters
+    ----------
+    xyzlist : ndarray, float, 2d
+        An n x 3 array of each atom's position in space
+        
+    atomic_numbers : ndarray, float, 1d
+        An n-length list of the atomic numbers of each atom
+        
+    num_molecules : int
+        The number of molecules to include in the ensemble.
+        
+    q_grid : ndarray, float, 2d
+        An m x 3 array of the q-vectors corresponding to each detector position.
 
-    # start with a unit vector in the x-directon
-    v = np.zeros(3)
-    v[0] = 1.0
+    rfloats : ndarray, float, n x 3
+        A bunch of random floats, uniform on [0,1] to be used to seed the 
+        quaternion computation.
+        
+    Returns
+    -------
+    I : ndarray, float
+        An array the same size as the first dimension of `q_grid` that gives
+        the value of the measured intensity at each point on the grid.
+    """
 
-    fig = plt.figure(figsize=(8,6), facecolor='w')
-    ax = fig.add_subplot(111, projection='3d')
+    assert(num_molecules % 512 == 0)
+    bpg = num_molecules / 512
+    
+    # get detector
+    qx = qgrid[:,0].astype(np.float32)
+    qy = qgrid[:,1].astype(np.float32)
+    qz = qgrid[:,2].astype(np.float32)
+    num_q = len(qx)
+    
+    # get atomic positions
+    rx = xyzlist[:,0].astype(np.float32)
+    ry = xyzlist[:,0].astype(np.float32)
+    rz = xyzlist[:,0].astype(np.float32)
+    num_atoms = len(rx)
+    
+    aid = atomic_numbers.astype(np.int32)
+    atom_types = np.unique(aid)
+    num_atom_types = len(atom_types)
+    
+    # get cromer-mann parameters for each atom type
+    cromermann = np.zeros(9*num_atom_types, dtype=np.float32)
+    for i,a in enumerate(atom_types):
+        ind = i * 9
+        cromermann[ind:ind+9] = cromer_mann_params[(a,0)]
+        aid[ aid == a ] = i # make the atom index 0, 1, 2, ...
+ 
+    # get random numbers
+    rand1 = rfloats[:,0].astype(np.float32)
+    rand2 = rfloats[:,1].astype(np.float32)
+    rand3 = rfloats[:,2].astype(np.float32)
+    
+    # run dat shit
+    out_obj = gpuscatter.GPUScatter(bpg, qx, qy, qz,
+                                    rx, ry, rz, aid,
+                                    cromermann,
+                                    rand1, rand2, rand3, num_q)
+    
+    output = out_obj.this[1].astype(np.float64)
 
-    for i in range(N):
+    return output
 
-        vp = rand_rotate_vector(v)
-
-        x = vp[0]
-        y = vp[1]
-        z = vp[2]
-
-        assert np.abs(norm(vp) - 1.0) < 0.00001
-
-        ax.scatter(x,y,z)
-
-    plt.show()
-
-    return
-
+# ------------------------------------------------------------------------------
+#                           END INTERFACE TO gpuscatter
+# ------------------------------------------------------------------------------
+#                              BEGIN nosetest CLASS
+# ------------------------------------------------------------------------------
 
     
-if __name__ == '__main__':
+class TestScatter():
+    """ test all the scattering simulation functionality """
     
-    # if main, lets produce a text file for the simulated shot
+    def test_gpu_scatter(self):
+        
+        xyzQ = np.loadtxt('reference/512_atom_benchmark.xyz')
+        xyzlist = xyzQ[:,:3]
+        atomic_numbers = xyzQ[:,3].flatten()
     
-    xyzQ = np.loadtxt('reference/512_atom_benchmark.xyz')
-    xyzlist = xyzQ[:,:3]
-    atomic_numbers = xyzQ[:,3].flatten()
+        q_grid = np.loadtxt('reference/512_q.xyz')[:1]
     
-    q_grid = np.loadtxt('reference/512_q.xyz')[:1]
+        rfloats = np.loadtxt('reference/512_x_3_random_floats.txt')[:1]
+        num_molecules = rfloats.shape[0]
     
-    rfloats = np.loadtxt('reference/512_x_3_random_floats.txt')[:1]
-    num_molecules = rfloats.shape[0]
+        ref_I = ref_simulate_shot(xyzlist, atomic_numbers, num_molecules, q_grid, rfloats)
+        gpu_I = call_gpuscatter(xyzlist, atomic_numbers, num_molecules, qgrid, rfloats)
     
-    I = simulate_shot(xyzlist, atomic_numbers, num_molecules, q_grid, rfloats=rfloats)
-    np.savetxt('simulated_shot_reference.dat', I)
-    
-    print 'SAVED: simulated_shot_reference.dat'
+        assert_almost_equal(ref_I, gpu_I)
+
+
     
     
     

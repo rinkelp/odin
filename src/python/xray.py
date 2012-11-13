@@ -10,10 +10,11 @@ Todo:
 """
 
 import numpy as np
-from odin.data import cromer_mann_params
 from bisect import bisect_left
 
 from odin import utils
+from odin.data import cromer_mann_params
+import gpuscatter
 
 import logging
 logger = logging.getLogger(__name__)
@@ -849,7 +850,7 @@ class Shotset(Shot):
 
     
 def simulate_shot(traj, num_molecules, beam, detector,
-                  traj_weights=None, force_no_gpu=False):
+                  traj_weights=None, force_no_gpu=False, verbose=False):
     """
     Simulate a scattering 'shot', i.e. one exposure of x-rays to a sample.
     
@@ -900,9 +901,62 @@ def simulate_shot(traj, num_molecules, beam, detector,
         results into the Shot and Shotset classes, respectively.
     """
     
+    if verbose:
+        logger.info('Performing scattering simulation...')
+        logger.info('Simulating %d copies in the dilute limit' % num_molecules)
+        
+    # typecast xyz positions / atom ID to float
+    rx = xyz[:,0].astype(np.float32)
+    ry = xyz[:,1].astype(np.float32)
+    rz = xyz[:,2].astype(np.float32)
+    aid = traj.xyz[:,3].astype(np.int32)
+    num_atoms = len(rx)
 
+    # generate random numbers for the rotations in python (much easier)
+    rand1 = np.random.rand(num_molecules).astype(np.float32)
+    rand2 = np.random.rand(num_molecules).astype(np.float32)
+    rand3 = np.random.rand(num_molecules).astype(np.float32)
+
+    # choose the number of molecules (must be multiple of 512)
+    num_molecules = num_molecules - (num_molecules % 512)
+    bpg = num_molecules / 512
+
+    # get detector
+    qx = detector.reciprocal[:,0].astype(np.float32)
+    qy = detector.reciprocal[:,1].astype(np.float32)
+    qz = detector.reciprocal[:,2].astype(np.float32)
+    num_q = len(qx)
+
+    # get cromer-mann parameters for each atom type
+    # renumber the atom types 0, 1, 2, ... to point to their CM params
+    atom_types = np.unique(aid)
+    num_atom_types = len(atom_types)
     
-    pass
+    cromermann = np.zeros(9*num_atom_types, dtype=np.float32)
+    
+    for i,a in enumerate(atom_types):
+        ind = i * 9
+        cromermann[ind:ind+9] = cromer_mann_params[(a,0)]
+        aid[ aid == a ] = i
+
+    # get random numbers
+    rand1, rand2, rand3 = generate_rands(num_molecules)
+
+    # run dat shit
+    if force_no_gpu:
+        if verbose: logger.info('Running CPU computation')
+        raise NotImplementedError('')
+        
+    else:
+        if verbose: logger.info('Sending calculation to GPU device...')
+        out_obj = gpuscatter.GPUScatter(bpg, qx, qy, qz,
+                                        rx, ry, rz, aid,
+                                        cromermann,
+                                        rand1, rand2, rand3, num_q)
+        if verbose: logger.info('Retrived data from GPU.')
+        output = out_obj.this[1].astype(np.float64)
+
+    return output
     
     
     
