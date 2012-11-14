@@ -7,7 +7,7 @@ Functions/classes for manipulating structures.
 """
 
 import numpy as np
-
+from scipy.special import cbrt
 
 
 class quaternion(object):
@@ -166,7 +166,8 @@ def remove_COM():
     Remove the center of mass from a structure.
     """
     raise NotImplementedError()
-
+    #xyzlist -= np.average(xyzlist, axis=0, weights=mass)
+    
 
 def rand_rotate_molecule(xyzlist, remove_COM=False, rfloat=None):
     """
@@ -216,10 +217,100 @@ def rand_rotate_molecule(xyzlist, remove_COM=False, rfloat=None):
     return rotated_xyzlist
 
 
-def multiply_conformations(xyzlist, num_replicas, concentration):
+def multiply_conformations(traj, num_replicas, density, traj_weights=None):
     """
-    Take a structure and generate a template 
+    Take a structure and generate a system of many conformations, such that they
+    are randomly distributed & rotated in space with a given `density`.
+    
+    This function is useful for approximating a subset of a homogenous solution,
+    gas, slurry, etc. composed of the structures indicated by `trajectory`.
+    These structures can be given e.g. Boltzmann weights by using the
+    `traj_weights` argument.
+    
+    Parameters
+    ----------
+    traj : mdtraj
+        The structures to use to generate the system. Note this can be a single
+        conformation, in which case each molecule in the system is identical,
+        just translated & rotated.
+    
+    num_replicas : int
+        The total number of molecules to include in the system. The total volume
+        of the system depends on this parameter and `density`.
+        
+    density : float
+        The number density of species, MICROMOLAR UNITS. That is, umol/L. (This
+        software was written by a chemist!).
+    
+    Optional Parameters
+    -------------------
+    traj_weights : ndarray, float
+        The weights at which to include members of trajectory in the final
+        system. Default is to assign equal weight to all members of trajectory.
+    
+    Returns
+    -------
+    system_structure : mdtraj
+        Length-one trajectory representing the coordinates of the molecular
+        system.
     """
+
+    raise NotImplementedError()
+    # TODO: 
+    #   -- remove center of mass from all frames
     
+    # read out some stuff from the trajectory
+    # todo: trajlen =
+    #       initialize system_structure
+
     
+    # check traj_weights
+    if traj_weights != None:
+        if len(traj_weights) != trajlen:
+            raise ValueError('Length of `traj_weights` is not the same as `traj`')
+    else:
+        traj_weights = np.ones(trajlen)
+    traj_weights /= traj_weights.sum() # normalize
+        
+    # generate a random ensemble, defined by a list of indices of `traj`
+    num_per_shapshot = np.random.multinomial(num_replicas, traj_weights, size=1)
+    
+    # determine the box size
+    boxvol  = (num_replicas * 1.0e24) / (density * 6.02e17) # in nm^3
+    boxsize = cbrt(boxvol)            # one dim of a cubic box, in nm
+    
+    # find the maximal radius of each snapshot in traj
+    # TJL todo: below syntax will depend on mdtraj
+    max_radius = np.zeros( len(traj) )
+    for i,snapshot in enumerate(traj):
+        max_radius[i] = np.max( np.sqrt(np.sum(np.power(xyzlist, 2), axis=1 )) )
+        
+    # place in space
+    snapshots = traj[num_per_shapshot]
+    centers_of_mass = np.zeros((num_replicas, 3)) # to store these and use later
+    
+    for i in range(snapshots):
+        molecule_overlapping = True # initial cond.
+        
+        while molecule_overlapping:
+        
+            # do a random translation & rotation
+            R = np.random.uniform(low=0, high=boxsize, size=3)
+            centers_of_mass[i,:] = R
+            for x in range(3):
+                snapshot.xyzlist[i,:] += R[i]
+            snapshot = rand_rotate_molecule(snapshot)
+            
+            # check to see if we're overlapping another molecule already placed
+            for j in range(i):
+                molec_dist = np.linalg.norm(centers_of_mass[i] - centers_of_mass[j])
+                max_allowable_dist = max_radius[i] + max_radius[j]
+                if molec_dist > max_allowable_dist:
+                    molecule_overlapping = False
+                else:
+                    molecule_overlapping = True
+                    
+        system_structure[i] = snapshot
+
     return
+    
