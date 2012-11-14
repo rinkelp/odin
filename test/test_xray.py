@@ -22,7 +22,7 @@ class TestBeam():
         
         assert_allclose(beam.wavelength, 12.398, rtol=1e-3)
         assert_allclose(beam.frequency, 2.4190e17, rtol=1e-3)
-        assert_allclose(beam.wavenumber, (2.0 * np.pi)/1.2398e4, rtol=1e-3)
+        assert_allclose(beam.wavenumber, (2.0 * np.pi)/12.398, rtol=1e-3)
     
         
 class TestDetector():
