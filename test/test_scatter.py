@@ -14,6 +14,8 @@ from odin.data import cromer_mann_params
 from odin.xray import Detector
 from odin.structure import rand_rotate_molecule
 
+from mdtraj import trajectory
+
 
 
 # ------------------------------------------------------------------------------
@@ -208,24 +210,41 @@ def call_gpuscatter(xyzlist, atomic_numbers, num_molecules, qgrid, rfloats):
 class TestScatter():
     """ test all the scattering simulation functionality """
     
+    def setup(self):
+        
+        self.refdir = '/home/tjlane/programs/odin/test/reference/' # TJL todo generalize
+        self.nq = 1 # number of detector vectors to do
+        
+    
     def test_gpu_scatter(self):
         
-        refdir = '/home/tjlane/programs/odin/test/reference/' # TJL todo generalize
-
-        xyzQ = np.loadtxt(refdir + '512_atom_benchmark.xyz')
+        xyzQ = np.loadtxt(self.refdir + '512_atom_benchmark.xyz')
         xyzlist = xyzQ[:,:3]
         atomic_numbers = xyzQ[:,3].flatten()
     
-        q_grid = np.loadtxt(refdir + '512_q.xyz')[:1] # do just 3 qs for speed
+        q_grid = np.loadtxt(self.refdir + '512_q.xyz')[:self.nq]
     
-        rfloats = np.loadtxt(refdir + '512_x_3_random_floats.txt')
+        rfloats = np.loadtxt(self.refdir + '512_x_3_random_floats.txt')
         num_molecules = rfloats.shape[0]
     
         gpu_I = call_gpuscatter(xyzlist, atomic_numbers, num_molecules, q_grid, rfloats)
-        ref_I = ref_simulate_shot(xyzlist, atomic_numbers, num_molecules, q_grid, rfloats)
+        self.ref_I = ref_simulate_shot(xyzlist, atomic_numbers, num_molecules, q_grid, rfloats)
 
         print "GPU", gpu_I
-        print "CPU", ref_I
+        print "CPU", self.ref_I
         
-        assert_allclose(gpu_I, ref_I, rtol=1e-03,
-                            err_msg='scatter: gpu/cpu reference mismatch')
+        assert_allclose(gpu_I, self.ref_I, rtol=1e-03,
+                        err_msg='scatter: gpu/cpu reference mismatch')
+        
+                            
+    def test_python_call(self):
+        
+        traj = trajectory.load(self.refdir + 'ala2.pdb')
+        num_molecules = 512
+        detector = xray.Detector.generic()
+        py_I = simulate_shot(traj, num_molecules, detector)[:self.nq]
+        
+        # this won't be equal because it's random....
+        assert_allclose(py_I, self.ref_I, rtol=1e1,
+                        err_msg='scatter: python interface in xray.py broke')
+        

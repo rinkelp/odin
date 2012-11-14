@@ -671,6 +671,53 @@ class Shot(object):
         
         return correlation_ring
         
+    @classmethod
+    def simulate(cls, traj, num_molecules, detector, traj_weights=None, 
+                 force_no_gpu=False):
+    """
+    Simulate a scattering 'shot', i.e. one exposure of x-rays to a sample, and
+    return that as a Shot object (factory function).
+
+    Assumes we have a Boltzmann distribution of `num_molecules` identical  
+    molecules (`trajectory`), exposed to a beam defined by `beam` and projected
+    onto `detector`.
+
+    Each conformation is randomly rotated before the scattering simulation is
+    performed. Atomic form factors from X, finite photon statistics, and the 
+    dilute-sample (no scattering interference from adjacent molecules) 
+    approximation are employed.
+
+    Parameters
+    ----------
+    traj : mdtraj.trajectory
+        A trajectory object that contains a set of structures, representing
+        the Boltzmann ensemble of the sample. If len(traj) == 1, then we assume
+        the sample consists of a single homogenous structure, replecated 
+        `num_molecules` times.
+    
+    detector : odin.xray.Detector
+        A detector object the shot will be projected onto.
+    
+    num_molecules : int
+        The number of molecules estimated to be in the `beam`'s focus.
+    
+    traj_weights : ndarray, float
+        If `traj` contains many structures, an array that provides the Boltzmann
+        weight of each structure. Default: if traj_weights == None, weights
+        each structure equally.
+    
+    force_no_gpu : bool
+        Run the (slow) CPU version of this function.
+    
+    Returns
+    -------
+    shot : odin.xray.Shot
+        A shot instance, containing the simulated shot.
+    """
+    I = simulate_shot(traj, num_molecules, detector, traj_weights, force_no_gpu)
+    shot = Shot(I, detector)
+    return shot
+        
     
 class Shotset(Shot):
     """
@@ -852,10 +899,65 @@ class Shotset(Shot):
         correlation_ring[:,1] /= float(self.num_shots)
         
         return correlation_ring
+        
+    @classmethod
+    def simulate(cls, traj, num_molecules, detector, num_shots,
+                 traj_weights=None, force_no_gpu=False):
+        """
+        Simulate many scattering 'shot's, i.e. one exposure of x-rays to a sample, and
+        return that as a Shot object (factory function).
+
+        Assumes we have a Boltzmann distribution of `num_molecules` identical  
+        molecules (`trajectory`), exposed to a beam defined by `beam` and projected
+        onto `detector`.
+
+        Each conformation is randomly rotated before the scattering simulation is
+        performed. Atomic form factors from X, finite photon statistics, and the 
+        dilute-sample (no scattering interference from adjacent molecules) 
+        approximation are employed.
+
+        Parameters
+        ----------
+        traj : mdtraj.trajectory
+            A trajectory object that contains a set of structures, representing
+            the Boltzmann ensemble of the sample. If len(traj) == 1, then we assume
+            the sample consists of a single homogenous structure, replecated 
+            `num_molecules` times.
+
+        detector : odin.xray.Detector
+            A detector object the shot will be projected onto.
+
+        num_molecules : int
+            The number of molecules estimated to be in the `beam`'s focus.
+        
+        num_shots : int
+            The number of shots to perform and include in the ShotSet.
+
+        traj_weights : ndarray, float
+            If `traj` contains many structures, an array that provides the Boltzmann
+            weight of each structure. Default: if traj_weights == None, weights
+            each structure equally.
+
+        force_no_gpu : bool
+            Run the (slow) CPU version of this function.
+
+        Returns
+        -------
+        shotset : odin.xray.ShotSet
+            A ShotSet instance, containing the simulated shots.
+        """
+    
+        shotlist = []
+        for i in range(num_shots):
+            I = simulate_shot(traj, num_molecules, detector, traj_weights, force_no_gpu)
+            shot = Shot(I, detector)
+            shotlist.append(shot)
+        
+        return ShotSet(shotlist)
 
     
-def simulate_shot(traj, num_molecules, beam, detector,
-                  traj_weights=None, force_no_gpu=False, verbose=False):
+def simulate_shot(traj, num_molecules, detector, traj_weights=None, 
+                  force_no_gpu=False, verbose=False):
     """
     Simulate a scattering 'shot', i.e. one exposure of x-rays to a sample.
     
@@ -870,7 +972,7 @@ def simulate_shot(traj, num_molecules, beam, detector,
     
     Parameters
     ----------
-    traj : odin.mdtraj
+    traj : mdtraj.trajectory
         A trajectory object that contains a set of structures, representing
         the Boltzmann ensemble of the sample. If len(traj) == 1, then we assume
         the sample consists of a single homogenous structure, replecated 
@@ -878,9 +980,6 @@ def simulate_shot(traj, num_molecules, beam, detector,
         
     detector : odin.xray.Detector
         A detector object the shot will be projected onto.
-        
-    beam : odin.xray.beam
-        A descriptor of the beam used in the 'experiment'.
         
     num_molecules : int
         The number of molecules estimated to be in the `beam`'s focus.
