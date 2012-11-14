@@ -103,7 +103,7 @@ class Detector(Beam):
     setup. Also provides loading and saving of detector geometries.
     """
     
-    def __init__(self, xyz_file, path_length, *args):
+    def __init__(self, xyz, path_length, *args):
         """
         Instantiate a Detector object.
         
@@ -117,9 +117,10 @@ class Detector(Beam):
         
         Parameters
         ----------
-        xyz_file : str
-            A string pointing to a file containing the x,y,z coordinates of each
-            pixel of the detector. File should be in X format.
+        xyz_file : {str, ndarray}
+            EITHER A string pointing to a file containing the x,y,z coordinates 
+            of each pixel of the detector, OR an n x 3 array of floats 
+            representing the coordinates.
             
         path_length : float
             The distance between the sample and the detector, in the same units
@@ -136,7 +137,6 @@ class Detector(Beam):
             passed.
         """
         
-        self.file_path = xyz_file
         self.path_length = path_length
         
         # parse the wavenumber
@@ -151,9 +151,11 @@ class Detector(Beam):
                 else:
                     raise ValueError('Must pass `beam` or `k` argument')
                     
-        # load the real space representation, origin at the middle of the
-        # detector (presumably)
-        self.xyz = self.loadf(self.file_path)
+        # load the real space representation, origin at the middle of detector
+        if type(xyz) == str:
+            self.xyz = self.loadf(xyz)
+        else:
+            self.xyz = xyz
         
         # convert to other reps
         self.real = self.xyz
@@ -164,30 +166,9 @@ class Detector(Beam):
         self.recpolar   = self.real_to_recpolar(self.xyz)
         
         
-    def loadf(self, filename):
-        """
-        Loads a file specifying a detector geometry and returns an array of the
-        xyz corrdinates of each of the pixel positions on the detector.
-        
-        Parameters
-        ----------
-        filename : str
-            The filename of file containing the detector geometry in X format.
-            
-        Returns
-        -------
-        xyz : ndarray, float
-            An n x 3 array, specifing the x,y,z positions of n detector pixels.
-        """
-        
-        try:
-            xyz = np.genfromtxt(filename)
-        except:
-            logger.error('Could not find method capable of loading %s' % filename)
-        
-        assert xyz.shape[1] == 3 # 3 coordinates for each pixel
-        
-        return xyz
+    def save():
+        # todo
+        raise NotImplementedError()
         
             
     def real_to_polar(self, xyz):
@@ -265,7 +246,9 @@ class Detector(Beam):
 
     def _to_polar(self, vector):
         """
-        Converts an n m-dimensional `vector`s to polar coordinates
+        Converts an n m-dimensional `vector`s to polar coordinates. By polar
+        coordinates, I mean the cannonical physicist's (r, theta, phi), no
+        2-theta business.
         """
         
         polar = np.zeros( vector.shape )
@@ -284,10 +267,12 @@ class Detector(Beam):
         return polar
         
     @classmethod
-    def generic_detector(cls, spacing=0.02, lim=1.0, k=4.33, flux=100.0, l=1.0):
+    def generic(cls, spacing=0.05, lim=10.0, energy=0.7293, flux=100.0, l=50.0):
         """
-        Generates a simple grid detector that can be used for testing.
-        (Factory function.)
+        Generates a simple grid detector that can be used for testing
+        (factory function).
+        
+        The grid has a q-spacing of 0.02 inv. angstroms, from 
 
         Optional Parameters
         -------------------
@@ -298,7 +283,8 @@ class Detector(Beam):
         k : float
             Wavenumber of the beam
         l : float
-            The path length from the sample to the detector
+            The path length from the sample to the detector, in the same units
+            as the detector dimensions.
 
         Returns
         -------
@@ -306,8 +292,8 @@ class Detector(Beam):
             An instance of the detector that meets the specifications of the 
             parameters
         """
-
-        beam = Beam(flux, wavenumber=k)
+        
+        beam = Beam(flux, energy=energy)
 
         x = np.arange(-lim, lim, spacing)
         xx, yy = np.meshgrid(x, x)
@@ -316,11 +302,30 @@ class Detector(Beam):
         xyz[:,0] = xx.flatten()
         xyz[:,1] = yy.flatten()
 
-        np.savetxt('test_detector.dat', xyz)
-
-        detector = Detector('test_detector.dat', l, beam)
+        detector = Detector(xyz, l, beam)
 
         return detector
+        
+        
+    @classmethod
+    def loadf(cls, filename):
+        """
+        Loads a file specifying a detector geometry and returns an array of the
+        xyz corrdinates of each of the pixel positions on the detector.
+
+        Parameters
+        ----------
+        filename : str
+            The filename of file containing the detector geometry in X format.
+
+        Returns
+        -------
+        xyz : ndarray, float
+            An n x 3 array, specifing the x,y,z positions of n detector pixels.
+        """
+
+        raise NotImplementedError()
+        return Detector(xyz, l, beam)
         
         
 class Shot(object):
@@ -467,7 +472,7 @@ class Shot(object):
         if (delta % self.phi_spacing == 0.0):
             pass
         else:
-            pdeltahi = self.phi_values[ bisect_left(self.phi_values, delta) ]
+            delta = self.phi_values[ bisect_left(self.phi_values, delta) ]
             logger.warning('Passed value `delta` not on grid -- using closest '
                            'possible value')
         return delta
@@ -906,11 +911,10 @@ def simulate_shot(traj, num_molecules, beam, detector,
         logger.info('Simulating %d copies in the dilute limit' % num_molecules)
         
     # typecast xyz positions / atom ID to float
-    rx = xyz[:,0].astype(np.float32)
-    ry = xyz[:,1].astype(np.float32)
-    rz = xyz[:,2].astype(np.float32)
-    aid = traj.xyz[:,3].astype(np.int32)
-    num_atoms = len(rx)
+    rx = traj.xyz[:,0].astype(np.float32)
+    ry = traj.xyz[:,1].astype(np.float32)
+    rz = traj.xyz[:,2].astype(np.float32)
+    aid = np.array([ a.element.atomic_number for a in traj.topology.atoms() ]).astype(np.int32)
 
     # generate random numbers for the rotations in python (much easier)
     rand1 = np.random.rand(num_molecules).astype(np.float32)
