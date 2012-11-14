@@ -155,15 +155,29 @@ class quaternion(object):
         return v_prime
 
 
-def remove_COM():
+def remove_COM(traj):
     """
-    Remove the center of mass from a structure.
+    Remove the center of mass from all frames in a trajectory.
+    
+    Parameters
+    ----------
+    traj : mdtraj.trajectory
+        A trajectory object.
+        
+    Returns
+    -------
+    centered_traj : mdtraj.trajectory
+        A trajectory with the center of mass removed
     """
-    raise NotImplementedError()
-    #xyzlist -= np.average(xyzlist, axis=0, weights=mass)
+    
+    for i in range(traj.n_frames):
+        masses = [ a.element.mass for a in traj.topology.atoms() ]
+        traj.xyz[i,:,:] -= np.average(traj.xyz[i,:,:], axis=0, weights=masses)
+        
+    return traj
     
 
-def rand_rotate_molecule(xyzlist, remove_COM=False, rfloat=None):
+def rand_rotate_molecule(xyzlist, rfloat=None):
     """
     Randomly rotate the molecule defined by xyzlist.
     
@@ -171,12 +185,6 @@ def rand_rotate_molecule(xyzlist, remove_COM=False, rfloat=None):
     ----------
     xyzlist : ndarray, float, 3D
         An n x 3 array representing the x,y,z positions of n atoms.
-    
-    Optional Parameters
-    -------------------
-    remove_COM : bool
-        Whether or not to translate the center of mass of the molecule to the
-        origin before rotation.
         
     rfloat : ndarray, float, len 3
         A 3-vector of random numbers in [0,1) that acts as a random seed. If
@@ -187,10 +195,6 @@ def rand_rotate_molecule(xyzlist, remove_COM=False, rfloat=None):
     rotated_xyzlist : ndarray, float, 3D
         A rotated version of the input `xyzlist`.
     """
-    
-    # TJL todo
-    if remove_COM:
-        raise NotImplementedError()
 
     # get a random quaternion vector
     q = quaternion.random(rfloat)
@@ -209,6 +213,33 @@ def rand_rotate_molecule(xyzlist, remove_COM=False, rfloat=None):
         rotated_xyzlist[i,:] = q_prime[1:].copy() # want the last 3 elements...
     
     return rotated_xyzlist
+    
+    
+def rand_rotate_traj(traj, remove_COM=False):
+    """
+    Randomly rotate all the members of a trajectory.
+    
+    Parameters
+    ----------
+    xyzlist : ndarray, float, 3D
+        An n x 3 array representing the x,y,z positions of n atoms.
+    
+    Optional Parameters
+    -------------------
+    remove_COM : bool
+        Whether or not to translate the center of mass of the molecule to the
+        origin before rotation.
+        
+    
+    """
+    
+    if remove_COM:
+        traj = remove_COM(traj)
+        
+    for i in range(traj.n_frames):
+        traj.xyz = rand_rotate_molecule(traj.xyz)
+    
+    return traj
 
 
 def multiply_conformations(traj, num_replicas, density, traj_weights=None):
@@ -249,21 +280,19 @@ def multiply_conformations(traj, num_replicas, density, traj_weights=None):
         system.
     """
 
-    raise NotImplementedError()
     # TODO: 
     #   -- remove center of mass from all frames
     
     # read out some stuff from the trajectory
-    # todo: trajlen =
     #       initialize system_structure
 
     
     # check traj_weights
     if traj_weights != None:
-        if len(traj_weights) != trajlen:
+        if len(traj_weights) != traj.n_frames:
             raise ValueError('Length of `traj_weights` is not the same as `traj`')
     else:
-        traj_weights = np.ones(trajlen)
+        traj_weights = np.ones(traj.n_frames)
     traj_weights /= traj_weights.sum() # normalize
         
     # generate a random ensemble, defined by a list of indices of `traj`
@@ -274,10 +303,9 @@ def multiply_conformations(traj, num_replicas, density, traj_weights=None):
     boxsize = cbrt(boxvol)            # one dim of a cubic box, in nm
 
     # find the maximal radius of each snapshot in traj
-    # TJL todo: below syntax will depend on mdtraj
     max_radius = np.zeros( len(traj) )
     for i,snapshot in enumerate(traj):
-        max_radius[i] = np.max( np.sqrt(np.sum(np.power(xyzlist, 2), axis=1 )) )
+        max_radius[i] = np.max( np.sqrt(np.sum(np.power(snapshot.xyz, 2), axis=3 )) )
         
     # place in space
     snapshots = traj[num_per_shapshot]
