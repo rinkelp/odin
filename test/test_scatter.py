@@ -11,6 +11,7 @@ from numpy.testing import assert_almost_equal, assert_allclose
 
 import gpuscatter
 from odin.data import cromer_mann_params
+from odin import xray
 from odin.xray import Detector
 from odin.structure import rand_rotate_molecule
 
@@ -241,8 +242,8 @@ class TestScatter():
         
         traj = trajectory.load(self.refdir + 'ala2.pdb')
         num_molecules = 512
-        detector = xray.Detector.generic()
-        py_I = simulate_shot(traj, num_molecules, detector)[:self.nq]
+        detector = Detector.generic()
+        py_I = xray.simulate_shot(traj, num_molecules, detector, verbose=True)[:self.nq]
         
         # this won't be equal because it's random....
         assert_allclose(py_I, self.ref_I, rtol=1e1,

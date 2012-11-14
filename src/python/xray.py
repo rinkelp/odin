@@ -674,7 +674,7 @@ class Shot(object):
     @classmethod
     def simulate(cls, traj, num_molecules, detector, traj_weights=None, 
                  force_no_gpu=False):
-    """
+        """
     Simulate a scattering 'shot', i.e. one exposure of x-rays to a sample, and
     return that as a Shot object (factory function).
 
@@ -714,9 +714,9 @@ class Shot(object):
     shot : odin.xray.Shot
         A shot instance, containing the simulated shot.
     """
-    I = simulate_shot(traj, num_molecules, detector, traj_weights, force_no_gpu)
-    shot = Shot(I, detector)
-    return shot
+        I = simulate_shot(traj, num_molecules, detector, traj_weights, force_no_gpu)
+        shot = Shot(I, detector)
+        return shot
         
     
 class Shotset(Shot):
@@ -956,7 +956,7 @@ class Shotset(Shot):
         return ShotSet(shotlist)
 
     
-def simulate_shot(traj, num_molecules, detector, traj_weights=None, 
+def simulate_shot(traj, num_molecules, detector, traj_weights=None,
                   force_no_gpu=False, verbose=False):
     """
     Simulate a scattering 'shot', i.e. one exposure of x-rays to a sample.
@@ -1010,9 +1010,9 @@ def simulate_shot(traj, num_molecules, detector, traj_weights=None,
         logger.info('Simulating %d copies in the dilute limit' % num_molecules)
         
     # typecast xyz positions / atom ID to float
-    rx = traj.xyz[:,0].astype(np.float32)
-    ry = traj.xyz[:,1].astype(np.float32)
-    rz = traj.xyz[:,2].astype(np.float32)
+    rx = traj.xyz[i,:,0].flatten().astype(np.float32)
+    ry = traj.xyz[i,:,1].flatten().astype(np.float32)
+    rz = traj.xyz[i,:,2].flatten().astype(np.float32)
     aid = np.array([ a.element.atomic_number for a in traj.topology.atoms() ]).astype(np.int32)
 
     # generate random numbers for the rotations in python (much easier)
@@ -1042,9 +1042,6 @@ def simulate_shot(traj, num_molecules, detector, traj_weights=None,
         cromermann[ind:ind+9] = cromer_mann_params[(a,0)]
         aid[ aid == a ] = i
 
-    # get random numbers
-    rand1, rand2, rand3 = generate_rands(num_molecules)
-
     # run dat shit
     if force_no_gpu:
         if verbose: logger.info('Running CPU computation')
@@ -1060,7 +1057,4 @@ def simulate_shot(traj, num_molecules, detector, traj_weights=None,
         output = out_obj.this[1].astype(np.float64)
 
     return output
-    
-    
-    
     
