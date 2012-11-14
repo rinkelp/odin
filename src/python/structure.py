@@ -145,16 +145,10 @@ class quaternion(object):
         qv[1:] = v.copy()
     
         # get a random quaternion vector
-        q = rquaternion()
+        q = quaternion.random()
+        qconj = quaterion.conjugate(q)
     
-        # take the quaternion conjugated
-        qconj = np.zeros(4)
-        qconj[0] = q[0]
-        qconj[1] = -q[1]
-        qconj[2] = -q[2]
-        qconj[3] = -q[3]
-    
-        q_prime = hprod( hprod(q, qv), qconj )
+        q_prime = quaternion.prod( quaternion.prod(q, qv), qconj )
     
         v_prime = q_prime[1:].copy() # want the last 3 elements...
     
@@ -202,7 +196,7 @@ def rand_rotate_molecule(xyzlist, remove_COM=False, rfloat=None):
     q = quaternion.random(rfloat)
     
     # take the quaternion conjugate
-    qconj = quaternion.conj(q)
+    qconj = quaternion.conjugate(q)
     
     # prepare data structures
     rotated_xyzlist = np.zeros(xyzlist.shape)
@@ -278,7 +272,7 @@ def multiply_conformations(traj, num_replicas, density, traj_weights=None):
     # determine the box size
     boxvol  = (num_replicas * 1.0e24) / (density * 6.02e17) # in nm^3
     boxsize = cbrt(boxvol)            # one dim of a cubic box, in nm
-    
+
     # find the maximal radius of each snapshot in traj
     # TJL todo: below syntax will depend on mdtraj
     max_radius = np.zeros( len(traj) )
