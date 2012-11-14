@@ -138,6 +138,7 @@ class Detector(Beam):
         """
         
         self.path_length = path_length
+        self.num_q = xyz.shape[0]
         
         # parse the wavenumber
         if len(args) != 1:
@@ -1009,52 +1010,59 @@ def simulate_shot(traj, num_molecules, detector, traj_weights=None,
         logger.info('Performing scattering simulation...')
         logger.info('Simulating %d copies in the dilute limit' % num_molecules)
         
-    # typecast xyz positions / atom ID to float
-    rx = traj.xyz[i,:,0].flatten().astype(np.float32)
-    ry = traj.xyz[i,:,1].flatten().astype(np.float32)
-    rz = traj.xyz[i,:,2].flatten().astype(np.float32)
-    aid = np.array([ a.element.atomic_number for a in traj.topology.atoms() ]).astype(np.int32)
-
-    # generate random numbers for the rotations in python (much easier)
-    rand1 = np.random.rand(num_molecules).astype(np.float32)
-    rand2 = np.random.rand(num_molecules).astype(np.float32)
-    rand3 = np.random.rand(num_molecules).astype(np.float32)
-
-    # choose the number of molecules (must be multiple of 512)
-    num_molecules = num_molecules - (num_molecules % 512)
-    bpg = num_molecules / 512
-
-    # get detector
-    qx = detector.reciprocal[:,0].astype(np.float32)
-    qy = detector.reciprocal[:,1].astype(np.float32)
-    qz = detector.reciprocal[:,2].astype(np.float32)
-    num_q = len(qx)
-
-    # get cromer-mann parameters for each atom type
-    # renumber the atom types 0, 1, 2, ... to point to their CM params
-    atom_types = np.unique(aid)
-    num_atom_types = len(atom_types)
+    num_per_shapshot = np.random.multinomial(num_molecules, traj_weights, size=1)
     
-    cromermann = np.zeros(9*num_atom_types, dtype=np.float32)
+    intensities = np.zeros(detector.num_q)
     
-    for i,a in enumerate(atom_types):
-        ind = i * 9
-        cromermann[ind:ind+9] = cromer_mann_params[(a,0)]
-        aid[ aid == a ] = i
-
-    # run dat shit
-    if force_no_gpu:
-        if verbose: logger.info('Running CPU computation')
-        raise NotImplementedError('')
-        
-    else:
-        if verbose: logger.info('Sending calculation to GPU device...')
-        out_obj = gpuscatter.GPUScatter(bpg, qx, qy, qz,
-                                        rx, ry, rz, aid,
-                                        cromermann,
-                                        rand1, rand2, rand3, num_q)
-        if verbose: logger.info('Retrived data from GPU.')
-        output = out_obj.this[1].astype(np.float64)
-
-    return output
+    for i,num in enumerate(num_per_shapshot):
+        if num > 0:
     
+            rx = traj.xyz[i,:,0].flatten().astype(np.float32)
+            ry = traj.xyz[i,:,1].flatten().astype(np.float32)
+            rz = traj.xyz[i,:,2].flatten().astype(np.float32)
+            aid = np.array([ a.element.atomic_number for a in traj.topology.atoms() ]).astype(np.int32)
+
+            # generate random numbers for the rotations in python (much easier)
+            rand1 = np.random.rand(num).astype(np.float32)
+            rand2 = np.random.rand(num).astype(np.float32)
+            rand3 = np.random.rand(num).astype(np.float32)
+
+            # choose the number of molecules (must be multiple of 512)
+            num_molecules = num_molecules - (num_molecules % 512)
+            bpg = num_molecules / 512
+
+            # get detector
+            qx = detector.reciprocal[:,0].astype(np.float32)
+            qy = detector.reciprocal[:,1].astype(np.float32)
+            qz = detector.reciprocal[:,2].astype(np.float32)
+            num_q = len(qx)
+            assert( detector.num_q == num_q )
+
+            # get cromer-mann parameters for each atom type
+            # renumber the atom types 0, 1, 2, ... to point to their CM params
+            atom_types = np.unique(aid)
+            num_atom_types = len(atom_types)
+
+            cromermann = np.zeros(9*num_atom_types, dtype=np.float32)
+
+            for i,a in enumerate(atom_types):
+                ind = i * 9
+                cromermann[ind:ind+9] = cromer_mann_params[(a,0)]
+                aid[ aid == a ] = i
+
+            # run dat shit
+            if force_no_gpu:
+                if verbose: logger.info('Running CPU computation')
+                raise NotImplementedError('')
+
+            else:
+                if verbose: logger.info('Sending calculation to GPU device...')
+                out_obj = gpuscatter.GPUScatter(bpg, qx, qy, qz,
+                                                rx, ry, rz, aid,
+                                                cromermann,
+                                                rand1, rand2, rand3, num_q)
+                if verbose: logger.info('Retrived data from GPU.')
+                assert( out_obj.this[1] == num_q )
+                intensities += out_obj.this[1].astype(np.float64)
+                
+    return intensities
