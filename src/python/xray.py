@@ -75,21 +75,21 @@ class Beam(object):
             
             elif key == 'wavenumber':
                 self.wavenumber = float(kwargs[key])
-                self.energy = self.wavenumber * h * c * 10.**10. / (2.0 * np.pi)
+                self.energy = self.wavenumber * h * c * 10.**7. / (2.0 * np.pi)
                 
             elif key == 'wavelength':
                 self.wavelength = float(kwargs[key])
-                self.energy = h * c * 10.**10. / self.wavelength
+                self.energy = h * c * 10.**7. / self.wavelength
                 
             elif key == 'frequency':
                 self.frequency = float(kwargs[key])
-                self.energy = self.frequency * h / 1000.
+                self.energy = self.frequency * h
                 
             else:
                 raise ValueError('%s not a recognized kwarg' % key)
         
         # perform the rest of the conversions
-        self.wavelength = h * c * 10.**10. / self.energy
+        self.wavelength = h * c * 10.**7. / self.energy
         self.wavenumber = 2.0 * np.pi / self.wavelength
         self.frequency = self.energy * (1000. / h)
         
