@@ -200,11 +200,8 @@ GPUScatter::GPUScatter (int device_id_,
         printf("Error in memcpy from device --> host. CUDA error: %s\n", cudaGetErrorString(err));
         exit(-1);
     }
-}
 
-GPUScatter::~GPUScatter() {
-    // destroy the class
-    printf("destroyed\n");
+    // free memory
     cudaFree(d_qx);
     cudaFree(d_qy);
     cudaFree(d_qz);
@@ -217,4 +214,15 @@ GPUScatter::~GPUScatter() {
     cudaFree(d_rand2);
     cudaFree(d_rand3);
     cudaFree(d_outQ);
+
+    err = cudaGetLastError();
+    if (err != cudaSuccess) {
+        printf("Error freeing memory. CUDA error: %s\n", cudaGetErrorString(err));
+        exit(-1);
+    }
+
+}
+
+GPUScatter::~GPUScatter() {
+    // destroy the class
 }
