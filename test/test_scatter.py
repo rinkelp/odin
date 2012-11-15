@@ -160,6 +160,8 @@ def call_gpuscatter(xyzlist, atomic_numbers, num_molecules, qgrid, rfloats):
         the value of the measured intensity at each point on the grid.
     """
 
+    device_id = 0
+
     assert(num_molecules % 512 == 0)
     bpg = num_molecules / 512
     
@@ -193,7 +195,8 @@ def call_gpuscatter(xyzlist, atomic_numbers, num_molecules, qgrid, rfloats):
     rand3 = rfloats[:,2].astype(np.float32)
     
     # run dat shit
-    out_obj = gpuscatter.GPUScatter(bpg, qx, qy, qz,
+    out_obj = gpuscatter.GPUScatter(device_id,
+                                    bpg, qx, qy, qz,
                                     rx, ry, rz, aid,
                                     cromermann,
                                     rand1, rand2, rand3, num_q)
