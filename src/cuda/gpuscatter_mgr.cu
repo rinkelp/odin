@@ -125,7 +125,7 @@ GPUScatter::GPUScatter (int device_id_,
     
     // set some size parameters
     static const int tpb = 512;
-    int nRotations = tpb*bpg;
+    unsigned int nRotations = tpb*bpg;
     
     // compute the memory necessary to hold input/output
     const unsigned int nQ_size = nQ*sizeof(float);
@@ -183,7 +183,7 @@ GPUScatter::GPUScatter (int device_id_,
     }
 
     // execute the kernel
-    kernel<tpb> <<<bpg, tpb>>> (d_qx, d_qy, d_qz, d_outQ, nQ, d_rx, d_ry, d_rz, d_id, nAtoms, numAtomTypes, d_cm, d_rand1, d_rand2, d_rand3);
+    kernel<tpb> <<<bpg, tpb>>> (d_qx, d_qy, d_qz, d_outQ, nQ, d_rx, d_ry, d_rz, d_id, nAtoms, numAtomTypes, d_cm, d_rand1, d_rand2, d_rand3, nRotations);
     cudaThreadSynchronize();
     err = cudaGetLastError();
     if (err != cudaSuccess) {

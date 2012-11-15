@@ -685,7 +685,7 @@ class Shot(object):
         
     @classmethod
     def simulate(cls, traj, num_molecules, detector, traj_weights=None, 
-                 force_no_gpu=False):
+                 force_no_gpu=False, device_id=0):
         """
     Simulate a scattering 'shot', i.e. one exposure of x-rays to a sample, and
     return that as a Shot object (factory function).
@@ -726,7 +726,8 @@ class Shot(object):
     shot : odin.xray.Shot
         A shot instance, containing the simulated shot.
     """
-        I = simulate_shot(traj, num_molecules, detector, traj_weights, force_no_gpu)
+        I = simulate_shot(traj, num_molecules, detector, traj_weights, 
+                          force_no_gpu, device_id=device_id)
         shot = Shot(I, detector)
         return shot
         
