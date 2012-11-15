@@ -218,6 +218,7 @@ class TestScatter():
         
     
     def test_gpu_scatter(self):
+        print "testing c code..."
         
         xyzQ = np.loadtxt(self.refdir + '512_atom_benchmark.xyz')
         xyzlist = xyzQ[:,:3]
@@ -239,6 +240,7 @@ class TestScatter():
         
                             
     def test_python_call(self):
+        print "testing python wrapper fxn..."
         
         traj = trajectory.load(self.refdir + 'ala2.pdb')
         num_molecules = 512
@@ -248,4 +250,10 @@ class TestScatter():
         # this won't be equal because it's random....
         assert_allclose(py_I, self.ref_I, rtol=1e1,
                         err_msg='scatter: python interface in xray.py broke')
-        
+       
+
+if __name__ == '__main__':
+    t = TestScatter()
+    t.setup()
+    t.test_gpu_scatter()
+    t.test_python_call()
