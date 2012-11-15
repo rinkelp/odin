@@ -10,6 +10,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 
+from odin import xray
+
 
 def main(input_file, output_file, n_maxima_cutoff=5):
     
