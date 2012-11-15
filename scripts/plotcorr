@@ -61,7 +61,7 @@ if __name__ == '__main__':
                         help='Image file to write. Append .pdf, .png, .jpg, etc. Default: intensity_plot.pdf')
 
     args = parser.parse_args()
-    print args
+    print args.__dict__
     
     main(args.input, args.output, args.maxima)
 

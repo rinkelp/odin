@@ -780,13 +780,13 @@ class Shot(object):
             The path to the shotset file to save.
         """
         
-        if filename[-4:] != '.shot':
+        if not filename.endswith('.shot'):
             filename += '.shot'
         
         shotdata = {'shot1' : self.intensities}
         
         io.saveh(filename, 
-                 num_shots    = np.array([num_shots])
+                 num_shots    = np.array([1]), # just one shot :)
                  dxyz         = self.detector.xyz,
                  dpath_length = np.array([self.detector.path_length]), 
                  dk           = np.array([self.detector.k]),
@@ -810,7 +810,7 @@ class Shot(object):
         shotset : odin.xray.Shotset
             A shotset object
         """
-        if filename[-4:] != '.shot':
+        if not filename.endswith('.shot'):
             raise ValueError('Must load a detector file (.shot extension)')
         
         hdf = io.loadh(filename)
@@ -873,7 +873,8 @@ class Shotset(Shot):
         q-phi grids in the shots are the same. If some are different, here
         we recalculate them.
         """
-        raise NotImplementedError()
+        pass # todo
+        #raise NotImplementedError()
     
     
     def I(self, q, phi):
@@ -1043,7 +1044,7 @@ class Shotset(Shot):
             The number of molecules estimated to be in the `beam`'s focus.
         
         num_shots : int
-            The number of shots to perform and include in the ShotSet.
+            The number of shots to perform and include in the Shotset.
 
         traj_weights : ndarray, float
             If `traj` contains many structures, an array that provides the Boltzmann
@@ -1055,8 +1056,8 @@ class Shotset(Shot):
 
         Returns
         -------
-        shotset : odin.xray.ShotSet
-            A ShotSet instance, containing the simulated shots.
+        shotset : odin.xray.Shotset
+            A Shotset instance, containing the simulated shots.
         """
     
         shotlist = []
@@ -1065,7 +1066,7 @@ class Shotset(Shot):
             shot = Shot(I, detector)
             shotlist.append(shot)
         
-        return ShotSet(shotlist)
+        return Shotset(shotlist)
         
         
     def save(self, filename):
@@ -1078,7 +1079,7 @@ class Shotset(Shot):
             The path to the shotset file to save.
         """
 
-        if filename[-4:] != '.shot':
+        if not filename.endswith('.shot'):
             filename += '.shot'
 
         shotdata = {}
@@ -1086,10 +1087,10 @@ class Shotset(Shot):
             shotdata[('shot%d' % i)] = self.shots[i].intensities
 
         io.saveh(filename, 
-                 num_shots    = np.array([num_shots])
-                 dxyz         = self.detector.xyz,
-                 dpath_length = np.array([self.detector.path_length]), 
-                 dk           = np.array([self.detector.k]),
+                 num_shots    = np.array([self.num_shots]),
+                 dxyz         = self.shots[0].detector.xyz,
+                 dpath_length = np.array([self.shots[0].detector.path_length]), 
+                 dk           = np.array([self.shots[0].detector.k]),
                  **shotdata)
 
         logger.info('Wrote %s to disk.' % filename)
@@ -1110,7 +1111,7 @@ class Shotset(Shot):
         shotset : odin.xray.Shotset
             A shotset object
         """
-        if filename[-4:] != '.shot':
+        if not filename.endswith('.shot'):
             raise ValueError('Must load a detector file (.shot extension)')
 
         hdf = io.loadh(filename)
