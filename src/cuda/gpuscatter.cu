@@ -82,7 +82,8 @@ void __device__ rotate(float x, float y, float z,
 
 }
 
-
+// blockSize = tpb, templated in case we need to use a faster reduction
+// method later. 
 template<unsigned int blockSize>
 void __global__ kernel(float const * const __restrict__ q_x, 
                        float const * const __restrict__ q_y, 
@@ -98,7 +99,8 @@ void __global__ kernel(float const * const __restrict__ q_x,
                        float const * const __restrict__ cromermann,
                        float const * const __restrict__ randN1, 
                        float const * const __restrict__ randN2, 
-                       float const * const __restrict__ randN3) {
+                       float const * const __restrict__ randN3,
+                       unsigned int numRotations) {
 
     // shared array for block-wise reduction
     __shared__ float sdata[blockSize];
@@ -106,80 +108,99 @@ void __global__ kernel(float const * const __restrict__ q_x,
     int tid = threadIdx.x;
     int gid = blockIdx.x*blockDim.x + threadIdx.x;
 
-    // determine the rotated locations
-    float rand1 = randN1[gid]; 
-    float rand2 = randN2[gid]; 
-    float rand3 = randN3[gid]; 
+    // blank-out reduction buffer. 
+    sdata[tid] = 0;
+    __syncthreads();
+    
+    while(gid < numRotations) {
+       
+        // determine the rotated locations
+        float rand1 = randN1[gid]; 
+        float rand2 = randN2[gid]; 
+        float rand3 = randN3[gid]; 
 
-    // rotation quaternions
-    float q0, q1, q2, q3;
-    generate_random_quaternion(rand1, rand2, rand3, q0, q1, q2, q3);
+        // rotation quaternions
+        float q0, q1, q2, q3;
+        generate_random_quaternion(rand1, rand2, rand3, q0, q1, q2, q3);
 
-    // for each q vector
-    for(int iq = 0; iq < nQ; iq++) {
-        float qx = q_x[iq];
-        float qy = q_y[iq];
-        float qz = q_z[iq];
+        // for each q vector
+        for(int iq = 0; iq < nQ; iq++) {
+            float qx = q_x[iq];
+            float qy = q_y[iq];
+            float qz = q_z[iq];
 
-        // workspace for cm calcs -- static size, but hopefully big enough
-        float formfactors[MAX_NUM_TYPES];
+            // workspace for cm calcs -- static size, but hopefully big enough
+            float formfactors[MAX_NUM_TYPES];
 
-        // accumulant
-        float2 Qsum;
-        Qsum.x = 0;
-        Qsum.y = 0;
- 
-        // Cromer-Mann computation, precompute for this value of q
-        float mq = qx*qx + qy*qy + qz*qz;
-        float qo = mq / (16*M_PI*M_PI); // qo is (sin(theta)/lambda)^2
-        float fi;
+            // accumulant
+            float2 Qsum;
+            Qsum.x = 0;
+            Qsum.y = 0;
+     
+            // Cromer-Mann computation, precompute for this value of q
+            float mq = qx*qx + qy*qy + qz*qz;
+            float qo = mq / (16*M_PI*M_PI); // qo is (sin(theta)/lambda)^2
+            float fi;
 
-        // for each atom type, compute the atomic form factor f_i(q)
-        for (int type = 0; type < numAtomTypes; type++) {
-        
-            // scan through cromermann in blocks of 9 parameters
-            int tind = type * 9;
-            fi =  cromermann[tind]   * exp(-cromermann[tind+4]*qo);
-            fi += cromermann[tind+1] * exp(-cromermann[tind+5]*qo);
-            fi += cromermann[tind+2] * exp(-cromermann[tind+6]*qo);
-            fi += cromermann[tind+3] * exp(-cromermann[tind+7]*qo);
-            fi += cromermann[tind+8];
+            // for each atom type, compute the atomic form factor f_i(q)
+            for (int type = 0; type < numAtomTypes; type++) {
             
-            formfactors[type] = fi; // store for use in a second
-        }
-
-        // for each atom in molecule
-        for(int a = 0; a < numAtoms; a++) {
-
-            // get the current positions
-            float rx = r_x[a];
-            float ry = r_y[a];
-            float rz = r_z[a];
-            int   id = r_id[a];
-            float ax, ay, az;
-
-            rotate(rx, ry, rz, q0, q1, q2, q3, ax, ay, az);
-            float qr = ax*qx + ay*qy + az*qz;
-
-            fi = formfactors[id];
-            Qsum.x += fi*__sinf(qr);
-            Qsum.y += fi*__cosf(qr);
-        } // finished one molecule.
-        
-        float fQ = Qsum.x*Qsum.x + Qsum.y*Qsum.y;  
-        sdata[tid] = fQ;
-        __syncthreads();
-        // Todo: quite slow but correct, speed up reduction later if becomes bottleneck!
-        for(unsigned int s=1; s < blockDim.x; s *= 2) {
-            if(tid % (2*s) == 0) {
-                sdata[tid] += sdata[tid+s];
+                // scan through cromermann in blocks of 9 parameters
+                int tind = type * 9;
+                fi =  cromermann[tind]   * exp(-cromermann[tind+4]*qo);
+                fi += cromermann[tind+1] * exp(-cromermann[tind+5]*qo);
+                fi += cromermann[tind+2] * exp(-cromermann[tind+6]*qo);
+                fi += cromermann[tind+3] * exp(-cromermann[tind+7]*qo);
+                fi += cromermann[tind+8];
+                
+                formfactors[type] = fi; // store for use in a second
             }
+
+            // for each atom in molecule
+            // bottle-necked by this currently. 
+            for(int a = 0; a < numAtoms; a++) {
+
+                // get the current positions
+                float rx = r_x[a];
+                float ry = r_y[a];
+                float rz = r_z[a];
+                int   id = r_id[a];
+                float ax, ay, az;
+
+                rotate(rx, ry, rz, q0, q1, q2, q3, ax, ay, az);
+                float qr = ax*qx + ay*qy + az*qz;
+
+                fi = formfactors[id];
+                Qsum.x += fi*__sinf(qr);
+                Qsum.y += fi*__cosf(qr);
+            } // finished one molecule.
+            
+            float fQ = Qsum.x*Qsum.x + Qsum.y*Qsum.y;  
+            sdata[tid] = fQ;
             __syncthreads();
+
+            // Todo: quite slow reduction but correct, speed up reduction later if becomes bottleneck!
+            for(unsigned int s=1; s < blockDim.x; s *= 2) {
+                if(tid % (2*s) == 0) {
+                    sdata[tid] += sdata[tid+s];
+                }
+                __syncthreads();
+            }
+            if(tid == 0) {
+                atomicAdd(outQ+iq, sdata[0]); 
+            } 
         }
-        if(tid == 0) {
-            atomicAdd(outQ+iq, sdata[0]); 
-        } 
+
+        // blank out reduction buffer.
+        sdata[tid] = 0;
+
+        // syncthreads are important here!
+        __syncthreads();
+
+        // offset by total working threads across all blocks. 
+        gid += gridDim.x * blockDim.x;
     }
+
 }
 
 
