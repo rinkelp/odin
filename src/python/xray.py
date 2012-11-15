@@ -10,6 +10,7 @@ Todo:
 """
 
 import numpy as np
+from scipy import interpolate
 from bisect import bisect_left
 
 from odin import utils
@@ -402,7 +403,7 @@ class Shot(object):
         self.q_values = np.arange(self.q_min, self.q_max, self.q_spacing)
         self.num_q = len(self.q_values)
                 
-        self.num_datapoints = num_phi * num_q
+        self.num_datapoints = self.num_phi * self.num_q
         
         # generate the polar grid to interpolate onto
         interpoldata = np.zeros((self.num_datapoints, 3))
@@ -412,7 +413,7 @@ class Shot(object):
         # generate a cubic interpolation from the measured intensities
         x = detector.real[:,0]
         y = detector.real[:,1]
-        interpf = interpolate.interp2d(x, y, intensities, kind='cubic')
+        interpf = interpolate.interp2d(x, y, intensities, kind='linear')
         
         # evaluate the interpolation on our polar grid
         polar_x = interpoldata[:,0] * np.cos(interpoldata[:,1])
@@ -1025,7 +1026,37 @@ def simulate_shot(traj, num_molecules, detector, traj_weights=None,
     traj_weights /= traj_weights.sum()
         
     num_per_shapshot = np.random.multinomial(num_molecules, traj_weights, size=1)
+
+    # get detector
+    qx = detector.reciprocal[:,0].astype(np.float32)
+    qy = detector.reciprocal[:,1].astype(np.float32)
+    qz = detector.reciprocal[:,2].astype(np.float32)
+    num_q = len(qx)
+    assert( detector.num_q == num_q )
+
+    # get cromer-mann parameters for each atom type
+    # renumber the atom types 0, 1, 2, ... to point to their CM params
+    aid = np.array([ a.element.atomic_number for a in traj.topology.atoms() ]).astype(np.int32)
+    atom_types = np.unique(aid)
+    num_atom_types = len(atom_types)
+
+    # if `num_atom_types` > 10, we're in trouble
+    if num_atom_types > 10:
+        raise Exception('Fatal Error. Your molecule has >10 unique atom types '
+                        'but the GPU code cannot handle more than 10 due to '
+                        'code requirements. You can recompile the GPU kernel '
+                        'to fix this -- see file odin/src/cuda/gpuscatter.cu')
+
+    cromermann = np.zeros(9*num_atom_types, dtype=np.float32)
+
+    for i,a in enumerate(atom_types):
+        ind = i * 9
+        cromermann[ind:ind+9] = cromer_mann_params[(a,0)]
+        aid[ aid == a ] = i
+    if verbose:
+        logger.debug('Atom IDs:', aid)
     
+    # do the simulation, scan over confs., store in `intensities`
     intensities = np.zeros(detector.num_q)
     
     for i,num in enumerate(num_per_shapshot):
@@ -1033,40 +1064,19 @@ def simulate_shot(traj, num_molecules, detector, traj_weights=None,
     
             num = int(num)
 
+            # pull xyz coords
             rx = traj.xyz[i,:,0].flatten().astype(np.float32)
             ry = traj.xyz[i,:,1].flatten().astype(np.float32)
             rz = traj.xyz[i,:,2].flatten().astype(np.float32)
-            aid = np.array([ a.element.atomic_number for a in traj.topology.atoms() ]).astype(np.int32)
-
-            # generate random numbers for the rotations in python (much easier)
-            rand1 = np.random.rand(num).astype(np.float32)
-            rand2 = np.random.rand(num).astype(np.float32)
-            rand3 = np.random.rand(num).astype(np.float32)
 
             # choose the number of molecules (must be multiple of 512)
             num = num - (num % 512)
             bpg = num / 512
 
-            # get detector
-            qx = detector.reciprocal[:,0].astype(np.float32)
-            qy = detector.reciprocal[:,1].astype(np.float32)
-            qz = detector.reciprocal[:,2].astype(np.float32)
-            num_q = len(qx)
-            assert( detector.num_q == num_q )
-
-            # get cromer-mann parameters for each atom type
-            # renumber the atom types 0, 1, 2, ... to point to their CM params
-            atom_types = np.unique(aid)
-            num_atom_types = len(atom_types)
-
-            cromermann = np.zeros(9*num_atom_types, dtype=np.float32)
-
-            for i,a in enumerate(atom_types):
-                ind = i * 9
-                cromermann[ind:ind+9] = cromer_mann_params[(a,0)]
-                aid[ aid == a ] = i
-            if verbose:
-                logger.debug('Atom IDs:', aid)
+            # generate random numbers for the rotations in python (much easier)
+            rand1 = np.random.rand(num).astype(np.float32)
+            rand2 = np.random.rand(num).astype(np.float32)
+            rand3 = np.random.rand(num).astype(np.float32)
 
             # run dat shit
             if force_no_gpu:

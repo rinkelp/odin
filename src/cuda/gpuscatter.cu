@@ -2,7 +2,12 @@
 #include <stdio.h>
 #include <stdint.h>
 
-#define FFSIZE 10
+// ============================================================================
+// IF YOU ARE HERE BECAUSE YOUR num_atom_types WAS TOO BIG...
+// then increment the number below according to your needs. 
+#define MAX_NUM_TYPES 10
+// ============================================================================
+
 
 // warning: this code is not safe due to reduction if total # of threads != multiple of
 // blockSize ... too lazy to add in ifs for now 
@@ -117,7 +122,7 @@ void __global__ kernel(float const * const __restrict__ q_x,
         float qz = q_z[iq];
 
         // workspace for cm calcs -- static size, but hopefully big enough
-        float formfactors[FFSIZE];
+        float formfactors[MAX_NUM_TYPES];
 
         // accumulant
         float2 Qsum;
