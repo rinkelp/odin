@@ -3,8 +3,12 @@
 Tests: src/python/xray.py
 """
 
+import os
+
 from odin import xray
 from odin.testing import skip, ref_file
+
+from mdtraj import trajectory, io
 
 import numpy as np
 from numpy.testing import assert_almost_equal, assert_array_almost_equal, assert_allclose
@@ -63,10 +67,11 @@ class TestDetector():
         assert_array_almost_equal(x, h)
         
     def test_io(self):
+        if os.path.exists('r.dtc'): os.system('rm r.dtc')
         self.d.save('r.dtc')
-        d = Detector.load('r.dtc')
+        d = xray.Detector.load('r.dtc')
         assert_array_almost_equal(d.xyz, self.d.xyz)
-        
+        if os.path.exists('r.dtc'): os.system('rm r.dtc') 
         
 class TestShot():
     
@@ -74,8 +79,8 @@ class TestShot():
         self.d = xray.Detector.generic(spacing=0.3)
         self.t = trajectory.load(ref_file('ala2.pdb'))
     
-    def test_sim():
-        self.shot = xray.Shot.simulate(t, 512, d)
+    def test_sim(self):
+        self.shot = xray.Shot.simulate(self.t, 512, self.d)
         
         
 

@@ -20,6 +20,8 @@ from matplotlib.mlab import griddata
 from odin import utils
 from odin.data import cromer_mann_params
 
+from mdtraj import trajectory, io
+
 # try to import the gpuscatter module
 GPU = True
 try:
@@ -154,12 +156,12 @@ class Detector(Beam):
         
         # parse the wavenumber
         if len(args) != 1:
-            raise ValueError('Expected exactly two arguments, got %d' % (len(args)+1) )
+            raise ValueError('Expected exactly 3 arguments, got %d' % (len(args)+2) )
         else:
             for arg in args:
                 if isinstance(arg, Beam):
                     self.k = arg.wavenumber
-                elif type(arg) == float:
+                elif type(arg) in [float, np.float64, np.float32]:
                     self.k = arg
                 else:
                     raise ValueError('Must pass `beam` or `k` argument')
@@ -328,8 +330,8 @@ class Detector(Beam):
         if filename[-4:] != '.dtc':
             filename += '.dtc'
         
-        io.saveh(filename, xyz=self.xyz, path_length=np.array(self.path_length), 
-                 k=np.array(self.k))
+        io.saveh(filename, xyz=self.xyz, path_length=np.array([self.path_length]), 
+                 k=np.array([self.k]))
         logger.info('Wrote %s to disk.' % filename)
 
         return
@@ -358,7 +360,7 @@ class Detector(Beam):
         
         xyz = hdf['xyz']
         path_length = hdf['path_length'][0]
-        k = hdf['k'][0]
+        k = float(hdf['k'][0])
         
         return Detector(xyz, path_length, k)
         
@@ -787,9 +789,9 @@ class Shot(object):
             filename += '.shot'
         
         io.saveh(filename, 
-                 dxyz=self.detector.xyz, 
-                 dpath_length=np.array(self.detector.path_length), 
-                 dk=np.array(self.detector.k)
+                 dxyz=self.detector.xyz,
+                 dpath_length=np.array([self.detector.path_length]), 
+                 dk=np.array([self.detector.k]),
                  intensities=self.intensities)
                  
         logger.info('Wrote %s to disk.' % filename)

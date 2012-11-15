@@ -14,7 +14,7 @@ from odin.data import cromer_mann_params
 from odin import xray
 from odin.xray import Detector
 from odin.structure import rand_rotate_molecule
-from odin.testing import skip
+from odin.testing import skip, ref_file
 
 from mdtraj import trajectory
 
@@ -217,19 +217,18 @@ class TestScatter():
     
     def setup(self):
         
-        self.refdir = '/home/tjlane/programs/odin/test/reference/' # TJL todo generalize
         self.nq = 1 # number of detector vectors to do
         
     def test_gpu_scatter(self):
         print "testing c code..."
         
-        xyzQ = np.loadtxt(self.refdir + '512_atom_benchmark.xyz')
+        xyzQ = np.loadtxt(ref_file('512_atom_benchmark.xyz'))
         xyzlist = xyzQ[:,:3]
         atomic_numbers = xyzQ[:,3].flatten()
     
-        q_grid = np.loadtxt(self.refdir + '512_q.xyz')[:self.nq]
+        q_grid = np.loadtxt(ref_file('512_q.xyz'))[:self.nq]
     
-        rfloats = np.loadtxt(self.refdir + '512_x_3_random_floats.txt')
+        rfloats = np.loadtxt(ref_file('512_x_3_random_floats.txt'))
         num_molecules = rfloats.shape[0]
     
         gpu_I = call_gpuscatter(xyzlist, atomic_numbers, num_molecules, q_grid, rfloats)
@@ -245,7 +244,7 @@ class TestScatter():
     def test_python_call(self):
         print "testing python wrapper fxn..."
         
-        traj = trajectory.load(self.refdir + 'ala2.pdb')
+        traj = trajectory.load(ref_file('ala2.pdb'))
         num_molecules = 512
         detector = Detector.generic()
 
