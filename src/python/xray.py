@@ -8,16 +8,26 @@ Todo:
 -- add simulate_shot factor functions to Shot and Shotset
 
 """
+import logging
+logging.basicConfig()
+logger = logging.getLogger(__name__)
 
 import numpy as np
 from bisect import bisect_left
 
 from odin import utils
 from odin.data import cromer_mann_params
-import gpuscatter
 
-import logging
-logger = logging.getLogger(__name__)
+# try to import the gpuscatter module
+GPU = True
+try:
+    import gpuscatter
+except ImportError as e:
+    logger.warning('Could not find `gpuscatter` module, proceeding without it.'
+                   ' Note that this may break some functionality!')
+    GPU = False
+
+
 
 # ------------------------------------------------------------------------------
 # FUNDAMENTAL CONSTANTS
