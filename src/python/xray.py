@@ -15,6 +15,7 @@ logger = logging.getLogger(__name__)
 import numpy as np
 from scipy import interpolate
 from bisect import bisect_left
+from matplotlib.mlab import griddata
 
 from odin import utils
 from odin.data import cromer_mann_params
@@ -424,12 +425,28 @@ class Shot(object):
         # generate a cubic interpolation from the measured intensities
         x = detector.real[:,0]
         y = detector.real[:,1]
-        interpf = interpolate.interp2d(x, y, intensities, kind='linear')
         
-        # evaluate the interpolation on our polar grid
+        # find out what our polar coordinates are in x,y space
         polar_x = interpoldata[:,0] * np.cos(interpoldata[:,1])
         polar_y = interpoldata[:,0] * np.sin(interpoldata[:,1])
-        interpoldata[:,2] = ( interpf(polar_x, polar_y) ).flatten()
+        
+        # TJL testing methods below --------------------------------------------
+        
+        # -- MATPLOTLIB/GRIDDATA -- delauny triangulation + nearest neighbour
+        Ztri = griddata( x, y, intensities, polar_x, polar_y )
+                # 1d x y z -> 2d Ztri on meshgrid(xnew,ynew)
+
+        nmask = np.ma.count_masked(Ztri)
+        if nmask > 0:
+            logger.info("griddata: %d of %d points are masked, not interpolated" % (
+                nmask, Ztri.size))
+            interpoldata[:,2] = Ztri.data  # Nans outside convex hull
+        
+        # -- SCIPY/LINEAR INTERP evaluate the interpolation on our polar grid
+        # interpf = interpolate.interp2d(x, y, intensities, kind='linear')
+        # interpoldata[:,2] = ( interpf(polar_x, polar_y) ).flatten()
+        
+        # ----------------------------------------------------------------------
         
         return interpoldata
         
