@@ -958,7 +958,7 @@ class Shotset(Shot):
 
     
 def simulate_shot(traj, num_molecules, detector, traj_weights=None,
-                  force_no_gpu=False, verbose=False):
+                  force_no_gpu=False, verbose=False, device_id=0):
     """
     Simulate a scattering 'shot', i.e. one exposure of x-rays to a sample.
     
@@ -985,6 +985,9 @@ def simulate_shot(traj, num_molecules, detector, traj_weights=None,
     num_molecules : int
         The number of molecules estimated to be in the `beam`'s focus.
         
+
+    Optional Parameters
+    -------------------
     traj_weights : ndarray, float
         If `traj` contains many structures, an array that provides the Boltzmann
         weight of each structure. Default: if traj_weights == None, weights
@@ -993,6 +996,13 @@ def simulate_shot(traj, num_molecules, detector, traj_weights=None,
     force_no_gpu : bool
         Run the (slow) CPU version of this function.
         
+    verbose : bool
+        Be noisy and loud
+        
+    device_id : int
+        The index of the GPU device to run on.
+        
+
     Returns
     -------
     intensities : ndarray, float
@@ -1057,7 +1067,8 @@ def simulate_shot(traj, num_molecules, detector, traj_weights=None,
 
             else:
                 if verbose: logger.info('Sending calculation to GPU device...')
-                out_obj = gpuscatter.GPUScatter(bpg, qx, qy, qz,
+                out_obj = gpuscatter.GPUScatter(device_id,
+                                                bpg, qx, qy, qz,
                                                 rx, ry, rz, aid,
                                                 cromermann,
                                                 rand1, rand2, rand3, num_q)

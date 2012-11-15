@@ -5,6 +5,7 @@ class GPUScatter {
     
     // declare variables
     // in CPU memory
+    int device_id;
     int bpg;      // <-- defines the number of rotations
     static const int tpb = 512;      // always = 512
     unsigned int nQ_size;
@@ -47,56 +48,43 @@ class GPUScatter {
 
 
 public:
-  /* By using the swig default names INPLACE_ARRAY1, DIM1 in the header
-     file (these aren't the names in the implementation file), we're giving
-     swig the info it needs to cast to and from numpy arrays.
-     
-     If instead the constructor line said
-       GPUAdder(int* myarray, int length);
+    GPUScatter( int device_id,
+                int bpg_,      // <-- defines the number of rotations
 
-     We would need a line like this in the swig.i file
-       %apply (int* ARGOUT_ARRAY1, int DIM1) {(int* myarray, int length)}
-   */
+                // scattering q-vectors
+                int    nQx_,
+                float* h_qx_,
+                int    nQy_,
+                float* h_qy_,
+                int    nQz_,
+                float* h_qz_,
 
-  GPUScatter(           int bpg_,      // <-- defines the number of rotations
+                // atomic positions, ids
+                int    nAtomsx_,
+                float* h_rx_,
+                int    nAtomsy_,
+                float* h_ry_,
+                int    nAtomsz_,
+                float* h_rz_,
+                int    nAtomsid_,
+                int*   h_id_,
 
-                        // scattering q-vectors
-                        int    nQx_,
-                        float* h_qx_,
-                        int    nQy_,
-                        float* h_qy_,
-                        int    nQz_,
-                        float* h_qz_,
+                // cromer-mann parameters
+                int    nCM_,
+                float* h_cm_,
 
-                        // atomic positions, ids
-                        int    nAtomsx_,
-                        float* h_rx_,
-                        int    nAtomsy_,
-                        float* h_ry_,
-                        int    nAtomsz_,
-                        float* h_rz_,
-                        int    nAtomsid_,
-                        int*   h_id_,
+                // random numbers for rotations
+                int    nRot1_,
+                float* h_rand1_,
+                int    nRot2_,
+                float* h_rand2_,
+                int    nRot3_,
+                float* h_rand3_,
 
-                        // cromer-mann parameters
-                        int    nCM_,
-                        float* h_cm_,
-
-                        // random numbers for rotations
-                        int    nRot1_,
-                        float* h_rand1_,
-                        int    nRot2_,
-                        float* h_rand2_,
-                        int    nRot3_,
-                        float* h_rand3_,
-
-                        // output
-                        int    nQout_,
-                        float* h_outQ_ 
+                // output
+                int    nQout_,
+                float* h_outQ_ 
            );
            
-  //void run();                              // does operation inplace on the GPU
-  //void retreive();                         // gets results back from GPU
   ~GPUScatter();                           // destructor
-  
 };

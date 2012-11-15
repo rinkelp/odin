@@ -25,7 +25,9 @@ void deviceMalloc( void ** ptr, int bytes) {
 }
 
 
-GPUScatter::GPUScatter (int bpg_,      // <-- defines the number of rotations
+GPUScatter::GPUScatter (int device_id_,
+                        int bpg_,      // <-- defines the number of rotations
+                        
             
                         // scattering q-vectors
                         int    nQx_,
@@ -86,6 +88,7 @@ GPUScatter::GPUScatter (int bpg_,      // <-- defines the number of rotations
     assert( nRot1_ == nRot3_ );
     
     // unpack arguments
+    device_id = device_id;
     bpg = bpg_;
 
     nQ = nQx_;
@@ -107,6 +110,10 @@ GPUScatter::GPUScatter (int bpg_,      // <-- defines the number of rotations
     h_rand3 = h_rand3_;
 
     h_outQ = h_outQ_;
+    
+    // set the device
+    cudaError_t err = cudaSetDevice(device_id);
+    assert(err == 0);
     
     // set some size parameters
     static const int tpb = 512;
@@ -132,6 +139,10 @@ GPUScatter::GPUScatter (int bpg_,      // <-- defines the number of rotations
     float *d_rand1;     deviceMalloc( (void **) &d_rand1, nRotations_size);
     float *d_rand2;     deviceMalloc( (void **) &d_rand2, nRotations_size);
     float *d_rand3;     deviceMalloc( (void **) &d_rand3, nRotations_size);
+    
+    // check for errors
+    err = cudaGetLastError();
+    assert(err == 0);
 
     // copy input/output arrays to board memory
     cudaMemcpy(d_qx, &h_qx[0], nQ_size, cudaMemcpyHostToDevice);
@@ -154,35 +165,16 @@ GPUScatter::GPUScatter (int bpg_,      // <-- defines the number of rotations
     // execute the kernel
     kernel<tpb> <<<bpg, tpb>>> (d_qx, d_qy, d_qz, d_outQ, nQ, d_rx, d_ry, d_rz, d_id, nAtoms, numAtomTypes, d_cm, d_rand1, d_rand2, d_rand3);
     cudaThreadSynchronize();
-    err = cudaGetLastError(); // cudaError_t
+    err = cudaGetLastError();
     assert(err == 0);
 
     // retrieve the output off the board and back into CPU memory
     // copys the array to the output array passed as input
     cudaMemcpy(&h_outQ[0], d_outQ, nQ_size, cudaMemcpyDeviceToHost);
     cudaThreadSynchronize();
-    err = cudaGetLastError(); // cudaError_t
+    err = cudaGetLastError();
     assert(err == 0);
 }
-
-/*
-void GPUScatter::run() {
-    // execute the kernel
-    kernel<tpb> <<<bpg, tpb>>> (d_qx, d_qy, d_qz, d_outQ, nQ, d_rx, d_ry, d_rz, d_id, nAtoms, numAtomTypes, d_cm, d_rand1, d_rand2, d_rand3);
-    cudaThreadSynchronize();
-    cudaError_t err = cudaGetLastError();
-    assert(err == 0);
-}
-
-void GPUScatter::retreive() {
-    // retrieve the output off the board and back into CPU memory
-    // copys the array to the output array passed as input
-    cudaMemcpy(&h_outQ[0], d_outQ, nQ_size, cudaMemcpyDeviceToHost);
-    cudaThreadSynchronize();
-    cudaError_t err = cudaGetLastError();
-    assert(err == 0);
-}
-*/
 
 GPUScatter::~GPUScatter() {
     // destroy the class
