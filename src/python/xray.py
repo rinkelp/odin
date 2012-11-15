@@ -1019,6 +1019,10 @@ def simulate_shot(traj, num_molecules, detector, traj_weights=None,
     if verbose:
         logger.info('Performing scattering simulation...')
         logger.info('Simulating %d copies in the dilute limit' % num_molecules)
+
+    if traj_weights == None:
+        traj_weights = np.ones( traj.n_frames )
+    traj_weights /= traj_weights.sum()
         
     num_per_shapshot = np.random.multinomial(num_molecules, traj_weights, size=1)
     
@@ -1027,6 +1031,8 @@ def simulate_shot(traj, num_molecules, detector, traj_weights=None,
     for i,num in enumerate(num_per_shapshot):
         if num > 0:
     
+            num = int(num)
+
             rx = traj.xyz[i,:,0].flatten().astype(np.float32)
             ry = traj.xyz[i,:,1].flatten().astype(np.float32)
             rz = traj.xyz[i,:,2].flatten().astype(np.float32)
@@ -1038,8 +1044,9 @@ def simulate_shot(traj, num_molecules, detector, traj_weights=None,
             rand3 = np.random.rand(num).astype(np.float32)
 
             # choose the number of molecules (must be multiple of 512)
-            num_molecules = num_molecules - (num_molecules % 512)
-            bpg = num_molecules / 512
+            num = num - (num % 512)
+            bpg = num / 512
+            if verbose: logger.debug('bpg: %d' % bpg)
 
             # get detector
             qx = detector.reciprocal[:,0].astype(np.float32)
@@ -1059,6 +1066,8 @@ def simulate_shot(traj, num_molecules, detector, traj_weights=None,
                 ind = i * 9
                 cromermann[ind:ind+9] = cromer_mann_params[(a,0)]
                 aid[ aid == a ] = i
+            if verbose:
+                logger.debug('Atom IDs:', aid)
 
             # run dat shit
             if force_no_gpu:
