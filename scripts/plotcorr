@@ -11,22 +11,18 @@ import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 
 
-def main(intput, output, n_maxima_cutoff=5):
+def main(input_file, output_file, n_maxima_cutoff=5):
     
     # load data
-    I = np.random.rand(1000,1000)
+    shotset = xray.Shotset.load(input_file)
     
-    # maxima = shotset.intensity_maxima()
-    # n_maxima = len(maxima)
-    # 
-    # if n_maxima > n_maxima_cutoff:
-    #     print "Found %d maxima in plot, trimming to largest %d" % (n_maxima, n_maxima)
-    #     maxima = np.sort(maxima)[-n_maxima_cutoff:]
-    #     n_maxima = n_maxima_cutoff
+    maxima = shotset.intensity_maxima()
+    n_maxima = len(maxima)
     
-    # DELETE THIS LATER -----------
-    n_maxima = 3
-    # END DELETE ------------------
+    if n_maxima > n_maxima_cutoff:
+        print "Found %d maxima in plot, trimming to largest %d" % (n_maxima, n_maxima)
+        maxima = np.sort(maxima)[-n_maxima_cutoff:]
+        n_maxima = n_maxima_cutoff
     
     plt.figure(figsize=(12,6))
     plt.subplots_adjust(wspace=0.65, hspace=0.4)
@@ -40,13 +36,14 @@ def main(intput, output, n_maxima_cutoff=5):
     
     # plot the correlations on the rhs
     for i in range(n_maxima):
-        ax = plt.subplot2grid((n_maxima,5), (i,2), colspan=3)    
-        ax.plot(np.arange(1000), I.sum(1), lw=2) # should call Shotset.correlate_ring(maxima[i], maxima[i]) here
+        ax = plt.subplot2grid((n_maxima,5), (i,2), colspan=3)
+        ring = Shotset.correlate_ring(maxima[i], maxima[i])
+        ax.plot(ring[:,0],  ring[:,1], lw=2) # should call here
         ax.set_ylabel(r'$C(q, \Delta)$')
     ax.set_xlabel(r'$\Delta$') # only the bottow plot
     
-    plt.savefig(output, bbox_inches='tight')
-    print "Saved: %s" % output
+    plt.savefig(output_file, bbox_inches='tight')
+    print "Saved: %s" % output_file
     
     return
     

@@ -151,6 +151,7 @@ class Detector(Beam):
             passed.
         """
         
+        self.xyz = xyz
         self.path_length = path_length
         self.num_q = xyz.shape[0]
         
@@ -165,15 +166,9 @@ class Detector(Beam):
                     self.k = arg
                 else:
                     raise ValueError('Must pass `beam` or `k` argument')
-                    
-        # load the real space representation, origin at the middle of detector
-        if type(xyz) == str:
-            self.xyz = self.loadf(xyz)
-        else:
-            self.xyz = xyz
         
         # convert to other reps
-        self.real = self.xyz
+        self.real = self.xyz.copy()
         self.real[:,2] += self.path_length # set origin to sample
         
         self.polar      = self.real_to_polar(self.xyz)
@@ -788,11 +783,14 @@ class Shot(object):
         if filename[-4:] != '.shot':
             filename += '.shot'
         
+        shotdata = {'shot1' : self.intensities}
+        
         io.saveh(filename, 
-                 dxyz=self.detector.xyz,
-                 dpath_length=np.array([self.detector.path_length]), 
-                 dk=np.array([self.detector.k]),
-                 intensities=self.intensities)
+                 num_shots    = np.array([num_shots])
+                 dxyz         = self.detector.xyz,
+                 dpath_length = np.array([self.detector.path_length]), 
+                 dk           = np.array([self.detector.k]),
+                 **shotdata)
                  
         logger.info('Wrote %s to disk.' % filename)
 
@@ -817,10 +815,16 @@ class Shot(object):
         
         hdf = io.loadh(filename)
         
-        dxyz = hdf['xyz']
+        num_shots    = hdf['num_shots'][0]
+        dxyz         = hdf['xyz']
         dpath_length = hdf['path_length'][0]
-        dk = hdf['k'][0]
-        intensities = hdf['intensities']
+        dk           = hdf['k'][0]
+        intensities  = hdf['shot1']
+        
+        if len(num_shots) != 1:
+            logger.warning('You loaded a .shot file that contains multiple shots'
+                           ' into a single Shot instance... taking only the'
+                           ' first shot of the set (look into Shotset.load()).')
         
         d = Detector(xyz, path_length, k)
         
@@ -1066,32 +1070,63 @@ class Shotset(Shot):
         
     def save(self, filename):
         """
-        Writes the current Shotset data to disk.
-        
+        Writes the current Shot data to disk.
+
         Parameters
         ----------
         filename : str
             The path to the shotset file to save.
         """
-        pass
-        
-        
+
+        if filename[-4:] != '.shot':
+            filename += '.shot'
+
+        shotdata = {}
+        for i in range(self.num_shots):
+            shotdata[('shot%d' % i)] = self.shots[i].intensities
+
+        io.saveh(filename, 
+                 num_shots    = np.array([num_shots])
+                 dxyz         = self.detector.xyz,
+                 dpath_length = np.array([self.detector.path_length]), 
+                 dk           = np.array([self.detector.k]),
+                 **shotdata)
+
+        logger.info('Wrote %s to disk.' % filename)
+
+
     @classmethod
     def load(cls, filename):
         """
-        Loads the a Shotset from disk.
-        
+        Loads the a Shot from disk.
+
         Parameters
         ----------
         filename : str
             The path to the shotset file.
-            
+
         Returns
         -------
         shotset : odin.xray.Shotset
             A shotset object
         """
-        pass
+        if filename[-4:] != '.shot':
+            raise ValueError('Must load a detector file (.shot extension)')
+
+        hdf = io.loadh(filename)
+
+        num_shots    = hdf['num_shots'][0]
+        dxyz         = hdf['xyz']
+        dpath_length = hdf['path_length'][0]
+        dk           = hdf['k'][0]
+        
+        d = Detector(xyz, path_length, k)
+        
+        list_of_shots = []
+        for i in range(num_shots):
+            list_of_shots.append( Shot( hdf[('shot%d' % i)], d ) )
+
+        return Shotset(list_of_shots)
 
     
 def simulate_shot(traj, num_molecules, detector, traj_weights=None,
