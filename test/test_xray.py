@@ -4,7 +4,7 @@ Tests: src/python/xray.py
 """
 
 from odin import xray
-from odin.testing import skip
+from odin.testing import skip, ref_file
 
 import numpy as np
 from numpy.testing import assert_almost_equal, assert_array_almost_equal, assert_allclose
@@ -61,4 +61,21 @@ class TestDetector():
         q = self.d.reciprocal[:,0]
         h = self.l * np.tan( 2.0 * np.arcsin(q/self.d.k) )
         assert_array_almost_equal(x, h)
+        
+    def test_io(self):
+        self.d.save('r.dtc')
+        d = Detector.load('r.dtc')
+        assert_array_almost_equal(d.xyz, self.d.xyz)
+        
+        
+class TestShot():
+    
+    def setup(self):
+        self.d = xray.Detector.generic(spacing=0.3)
+        self.t = trajectory.load(ref_file('ala2.pdb'))
+    
+    def test_sim():
+        self.shot = xray.Shot.simulate(t, 512, d)
+        
+        
 

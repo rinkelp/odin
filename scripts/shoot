@@ -10,8 +10,6 @@ from mdtraj import trajectory
 from odin import xray
 
 import numpy as np
-import matplotlib.pyplot as plt
-import matplotlib.cm as cm
 
 
 def main(traj, num_shots, num_molecules, detector, output_file, traj_weights=None):
