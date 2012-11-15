@@ -366,7 +366,8 @@ class Shot(object):
             A detector object, containing the pixel positions in space.
         """
         
-        self.intensities = self._interpolate_to_polar(intensities, detector)
+        self.intensities = intensities
+        self.polar_intensities = self._interpolate_to_polar(intensities, detector)
         self._mask_missing()
         
         
@@ -522,7 +523,7 @@ class Shot(object):
         """
         Return the intensity a (q,phi).
         """
-        return self.intensities[self._intensity_index(q,phi),2]
+        return self.polar_intensities[self._intensity_index(q,phi),2]
         
         
     def qintensity(self, q):
@@ -542,8 +543,8 @@ class Shot(object):
         
         q = self._nearest_q(q)
         
-        ind = np.where(self.intensities[:,0] == q)
-        intensity = np.mean( self.intensities[ind,2] )
+        ind = np.where(self.polar_intensities[:,0] == q)
+        intensity = np.mean( self.polar_intensities[ind,2] )
         
         return intensity
         
