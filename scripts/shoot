@@ -1,0 +1,68 @@
+#!/usr/bin/env python
+
+"""
+Simulate the scattering experiment (SAXS, WAXS).
+"""
+
+import argparse
+
+from mdtraj import trajectory
+from odin import xray
+
+import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib.cm as cm
+
+
+def main(traj, num_shots, num_molecules, detector, output_file, traj_weights=None):
+
+    shotset = xray.ShotSet.simulate(traj, num_molecules, detector, num_shots, traj_weights=None)
+    shotset.save(output_file)
+    print "Wrote: output_file"
+    
+    return
+    
+    
+if __name__ == '__main__':
+    
+    
+    parser = argparse.ArgumentParser(description='''Plot scattering autocorrelations.
+ Chooses points of maximal intensity to correlate automatically.''')
+
+    parser.add_argument('-s', '--structures', type=str,
+                        help='A a PDB or trajectory file (.lh5 only right now), defining the molecular geometrie(s) to shoot.')
+    parser.add_argument('-n', '--numshots', type=int, default=1,
+                        help='Number of shots (experiments) to perform.')
+    parser.add_argument('-m', '--nummolec', type=int, default=1200,
+                        help='Number of molecules in each shot. Default: 1200')
+    parser.add_argument('-d', '--detector', type=str, default='NONE',
+                        help='''A Detector object, on disk. Default: generate a 
+                        generic detector.''')
+    parser.add_argument('-w', '--weights', type=str, default='NONE',
+                        help='''A flat text file specifing the ensemble weights 
+                        for each snapshot in the trajectory. Places snapshots in 
+                        to the `experiment` with the appropriate weight. Default:
+                        None (even weights). ''')
+    parser.add_argument('-o', '--output', default='shotset.h5',
+                        help='A Shotset object, written to disk in h5 format. Default: shotset.h5')
+
+    args = parser.parse_args()
+    print args
+    
+    # load up filenames
+    traj = trajectory.load(args.structures)
+    
+    if args.detector != 'NONE':
+        detector = xray.Detector.load(args.detector)
+    else:
+        detector = xray.Detector.generic()
+        
+    if args.weights == 'NONE':
+        weights = None
+    else:
+        if traj.n_frames == 1:
+            raise ValueError('You can\'t weight a single snapshot, silly!')
+        
+        
+    main(traj, args.numshots, args.nummolec, detector, args.output_file, weights)
+
