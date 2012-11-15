@@ -482,10 +482,10 @@ class Shot(object):
         poor/absent signal, or interpolate the data inside them.
         """
         
-        #self._masked_coords = []
+        self._masked_coords = []
         #self.intensities = np.ma(self.intensities, mask=mask)
         
-        pass # for now...
+        return # for now...
        
         
     def _unmask_missing(self):
@@ -499,7 +499,7 @@ class Shot(object):
         if (q % self.q_spacing == 0.0) and (q > self.q_min) and (q < self.q_max):
             pass
         else:
-            q = self.q_values[ bisect_left(self.q_values, q) ]
+            q = self.q_values[ bisect_left(self.q_values, q, hi=len(self.q_values)-1) ]
             logger.warning('Passed value `q` not on grid -- using closest '
                            'possible value')
         return q
@@ -512,7 +512,7 @@ class Shot(object):
         if (phi % self.phi_spacing == 0.0):
             pass
         else:
-            phi = self.phi_values[ bisect_left(self.phi_values, phi) ]
+            phi = self.phi_values[ bisect_left(self.phi_values, phi, hi=len(phi_values)-1) ]
             logger.warning('Passed value `phi` not on grid -- using closest '
                            'possible value')
         return phi
@@ -527,7 +527,7 @@ class Shot(object):
         if (delta % self.phi_spacing == 0.0):
             pass
         else:
-            delta = self.phi_values[ bisect_left(self.phi_values, delta) ]
+            delta = self.phi_values[ bisect_left(self.phi_values, delta, hi=len(self.phi_values)-1) ]
             logger.warning('Passed value `delta` not on grid -- using closest '
                            'possible value')
         return delta
@@ -668,7 +668,7 @@ class Shot(object):
         
         # we need to assume that previously the interpolation function gave
         # us a regular spaced azimuthal angular coordinate
-        delta = self._closest_delta(delta)
+        delta = self._nearest_delta(delta)
         
         correlation = 0.0
         mean1 = 0.0
