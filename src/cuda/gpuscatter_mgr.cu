@@ -27,7 +27,6 @@ void deviceMalloc( void ** ptr, int bytes) {
 
 GPUScatter::GPUScatter (int device_id_,
                         int bpg_,      // <-- defines the number of rotations
-                        
             
                         // scattering q-vectors
                         int    nQx_,
@@ -68,7 +67,7 @@ GPUScatter::GPUScatter (int device_id_,
      *   (1) a float pointer to the beginning of the array to be passed
      *   (2) ints representing the size of each array
      */
-     
+
     // many of the arrays above are 1D arrays that should be the same len
     // due to the SWIG wrapping, however, we had to pass each individually
     // so now check that they are, in fact, the correct dimension
@@ -88,7 +87,7 @@ GPUScatter::GPUScatter (int device_id_,
     assert( nRot1_ == nRot3_ );
     
     // unpack arguments
-    device_id = device_id;
+    device_id = device_id_;
     bpg = bpg_;
 
     nQ = nQx_;
@@ -113,7 +112,16 @@ GPUScatter::GPUScatter (int device_id_,
     
     // set the device
     cudaError_t err = cudaSetDevice(device_id);
-    assert(err == 0);
+    if (err != cudaSuccess) {
+        printf("Error setting device ID. CUDA error: %s\n", cudaGetErrorString(err));
+        exit(-1);
+    }
+
+    err = cudaDeviceSynchronize();
+    if (err != cudaSuccess) {
+        printf("Error synching device. CUDA error: %s\n", cudaGetErrorString(err));
+        exit(-1);
+    }
     
     // set some size parameters
     static const int tpb = 512;
@@ -125,6 +133,12 @@ GPUScatter::GPUScatter (int device_id_,
     const unsigned int nAtoms_idsize = nAtoms*sizeof(int);
     const unsigned int nRotations_size = nRotations*sizeof(float);
     const unsigned int cm_size = 9*numAtomTypes*sizeof(float);
+
+    err = cudaGetLastError();
+    if (err != cudaSuccess) {
+        printf("Error before device malloc. CUDA error: %s\n", cudaGetErrorString(err));
+        exit(-1);
+    }
 
     // allocate memory on the board
     float *d_qx;        deviceMalloc( (void **) &d_qx, nQ_size);
@@ -142,7 +156,10 @@ GPUScatter::GPUScatter (int device_id_,
     
     // check for errors
     err = cudaGetLastError();
-    assert(err == 0);
+    if (err != cudaSuccess) {
+        printf("Error in device malloc. CUDA error: %s\n", cudaGetErrorString(err));
+        exit(-1);
+    }
 
     // copy input/output arrays to board memory
     cudaMemcpy(d_qx, &h_qx[0], nQ_size, cudaMemcpyHostToDevice);
@@ -159,25 +176,35 @@ GPUScatter::GPUScatter (int device_id_,
     cudaMemcpy(d_rand3, &h_rand3[0], nRotations_size, cudaMemcpyHostToDevice);
 
     // check for errors
-    cudaError_t err = cudaGetLastError();
-    assert(err == 0);  
+    err = cudaGetLastError();
+    if (err != cudaSuccess) {
+        printf("Error in cuda memcpy. CUDA error: %s\n", cudaGetErrorString(err));
+        exit(-1);
+    }
 
     // execute the kernel
     kernel<tpb> <<<bpg, tpb>>> (d_qx, d_qy, d_qz, d_outQ, nQ, d_rx, d_ry, d_rz, d_id, nAtoms, numAtomTypes, d_cm, d_rand1, d_rand2, d_rand3);
     cudaThreadSynchronize();
     err = cudaGetLastError();
-    assert(err == 0);
+    if (err != cudaSuccess) {
+        printf("Error in kernel. CUDA error: %s\n", cudaGetErrorString(err));
+        exit(-1);
+    }
 
     // retrieve the output off the board and back into CPU memory
     // copys the array to the output array passed as input
     cudaMemcpy(&h_outQ[0], d_outQ, nQ_size, cudaMemcpyDeviceToHost);
     cudaThreadSynchronize();
     err = cudaGetLastError();
-    assert(err == 0);
+    if (err != cudaSuccess) {
+        printf("Error in memcpy from device --> host. CUDA error: %s\n", cudaGetErrorString(err));
+        exit(-1);
+    }
 }
 
 GPUScatter::~GPUScatter() {
     // destroy the class
+    printf("destroyed\n");
     cudaFree(d_qx);
     cudaFree(d_qy);
     cudaFree(d_qz);

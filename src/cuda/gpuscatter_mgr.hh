@@ -48,7 +48,7 @@ class GPUScatter {
 
 
 public:
-    GPUScatter( int device_id,
+    GPUScatter( int device_id_,
                 int bpg_,      // <-- defines the number of rotations
 
                 // scattering q-vectors
@@ -84,7 +84,7 @@ public:
                 // output
                 int    nQout_,
                 float* h_outQ_ 
-           );
+               );
            
   ~GPUScatter();                           // destructor
 };

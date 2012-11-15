@@ -14,6 +14,7 @@ from odin.data import cromer_mann_params
 from odin import xray
 from odin.xray import Detector
 from odin.structure import rand_rotate_molecule
+from odin.testing import skip
 
 from mdtraj import trajectory
 
@@ -163,7 +164,7 @@ def call_gpuscatter(xyzlist, atomic_numbers, num_molecules, qgrid, rfloats):
     device_id = 0
 
     assert(num_molecules % 512 == 0)
-    bpg = num_molecules / 512
+    bpg = int(num_molecules / 512)
     
     # get detector
     qx = qgrid[:,0].astype(np.float32)
@@ -195,6 +196,7 @@ def call_gpuscatter(xyzlist, atomic_numbers, num_molecules, qgrid, rfloats):
     rand3 = rfloats[:,2].astype(np.float32)
     
     # run dat shit
+    print "cm", cromermann
     out_obj = gpuscatter.GPUScatter(device_id,
                                     bpg, qx, qy, qz,
                                     rx, ry, rz, aid,
@@ -219,7 +221,6 @@ class TestScatter():
         self.refdir = '/home/tjlane/programs/odin/test/reference/' # TJL todo generalize
         self.nq = 1 # number of detector vectors to do
         
-    
     def test_gpu_scatter(self):
         print "testing c code..."
         
@@ -248,6 +249,7 @@ class TestScatter():
         traj = trajectory.load(self.refdir + 'ala2.pdb')
         num_molecules = 512
         detector = Detector.generic()
+
         py_I = xray.simulate_shot(traj, num_molecules, detector, verbose=True)[:self.nq]
         
         # this won't be equal because it's random....

@@ -1046,7 +1046,6 @@ def simulate_shot(traj, num_molecules, detector, traj_weights=None,
             # choose the number of molecules (must be multiple of 512)
             num = num - (num % 512)
             bpg = num / 512
-            if verbose: logger.debug('bpg: %d' % bpg)
 
             # get detector
             qx = detector.reciprocal[:,0].astype(np.float32)
@@ -1076,13 +1075,15 @@ def simulate_shot(traj, num_molecules, detector, traj_weights=None,
 
             else:
                 if verbose: logger.info('Sending calculation to GPU device...')
+                device_id = int(0)
+                bpg = int(bpg)
                 out_obj = gpuscatter.GPUScatter(device_id,
                                                 bpg, qx, qy, qz,
                                                 rx, ry, rz, aid,
                                                 cromermann,
                                                 rand1, rand2, rand3, num_q)
                 if verbose: logger.info('Retrived data from GPU.')
-                assert( out_obj.this[1] == num_q )
+                assert( len(out_obj.this[1]) == num_q )
                 intensities += out_obj.this[1].astype(np.float64)
                 
     return intensities
