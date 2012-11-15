@@ -178,11 +178,6 @@ class Detector(Beam):
         self.reciprocal = self.real_to_reciprocal(self.xyz)
         self.recpolar   = self.real_to_recpolar(self.xyz)
         
-        
-    def save():
-        # todo
-        raise NotImplementedError()
-        
             
     def real_to_polar(self, xyz):
         """
@@ -320,25 +315,52 @@ class Detector(Beam):
         return detector
         
         
-    @classmethod
-    def loadf(cls, filename):
+    def save(self, filename):
         """
-        Loads a file specifying a detector geometry and returns an array of the
-        xyz corrdinates of each of the pixel positions on the detector.
+        Writes the current Detector to disk.
 
         Parameters
         ----------
         filename : str
-            The filename of file containing the detector geometry in X format.
+            The path to the shotset file to save.
+        """
+        
+        if filename[-4:] != '.dtc':
+            filename += '.dtc'
+        
+        io.saveh(filename, xyz=self.xyz, path_length=np.array(self.path_length), 
+                 k=np.array(self.k))
+        logger.info('Wrote %s to disk.' % filename)
+
+        return
+        
+
+    @classmethod
+    def load(cls, filename):
+        """
+        Loads the a Detector from disk.
+
+        Parameters
+        ----------
+        filename : str
+            The path to the shotset file.
 
         Returns
         -------
-        xyz : ndarray, float
-            An n x 3 array, specifing the x,y,z positions of n detector pixels.
+        shotset : odin.xray.Shotset
+            A shotset object
         """
-
-        raise NotImplementedError()
-        return Detector(xyz, l, beam)
+        
+        if filename[-4:] != '.dtc':
+            raise ValueError('Must load a detector file (.dtc extension)')
+        
+        hdf = io.loadh(filename)
+        
+        xyz = hdf['xyz']
+        path_length = hdf['path_length'][0]
+        k = hdf['k'][0]
+        
+        return Detector(xyz, path_length, k)
         
         
 class Shot(object):
@@ -368,6 +390,7 @@ class Shot(object):
         """
         
         self.intensities = intensities
+        self.detector = detector
         self.polar_intensities = self._interpolate_to_polar(intensities, detector)
         self._mask_missing()
         
@@ -705,50 +728,102 @@ class Shot(object):
     def simulate(cls, traj, num_molecules, detector, traj_weights=None, 
                  force_no_gpu=False):
         """
-    Simulate a scattering 'shot', i.e. one exposure of x-rays to a sample, and
-    return that as a Shot object (factory function).
+        Simulate a scattering 'shot', i.e. one exposure of x-rays to a sample, and
+        return that as a Shot object (factory function).
 
-    Assumes we have a Boltzmann distribution of `num_molecules` identical  
-    molecules (`trajectory`), exposed to a beam defined by `beam` and projected
-    onto `detector`.
+        Assumes we have a Boltzmann distribution of `num_molecules` identical  
+        molecules (`trajectory`), exposed to a beam defined by `beam` and projected
+        onto `detector`.
 
-    Each conformation is randomly rotated before the scattering simulation is
-    performed. Atomic form factors from X, finite photon statistics, and the 
-    dilute-sample (no scattering interference from adjacent molecules) 
-    approximation are employed.
+        Each conformation is randomly rotated before the scattering simulation is
+        performed. Atomic form factors from X, finite photon statistics, and the 
+        dilute-sample (no scattering interference from adjacent molecules) 
+        approximation are employed.
 
-    Parameters
-    ----------
-    traj : mdtraj.trajectory
-        A trajectory object that contains a set of structures, representing
-        the Boltzmann ensemble of the sample. If len(traj) == 1, then we assume
-        the sample consists of a single homogenous structure, replecated 
-        `num_molecules` times.
+        Parameters
+        ----------
+        traj : mdtraj.trajectory
+            A trajectory object that contains a set of structures, representing
+            the Boltzmann ensemble of the sample. If len(traj) == 1, then we assume
+            the sample consists of a single homogenous structure, replecated 
+            `num_molecules` times.
     
-    detector : odin.xray.Detector
-        A detector object the shot will be projected onto.
+        detector : odin.xray.Detector
+            A detector object the shot will be projected onto.
     
-    num_molecules : int
-        The number of molecules estimated to be in the `beam`'s focus.
+        num_molecules : int
+            The number of molecules estimated to be in the `beam`'s focus.
     
-    traj_weights : ndarray, float
-        If `traj` contains many structures, an array that provides the Boltzmann
-        weight of each structure. Default: if traj_weights == None, weights
-        each structure equally.
+        traj_weights : ndarray, float
+            If `traj` contains many structures, an array that provides the Boltzmann
+            weight of each structure. Default: if traj_weights == None, weights
+            each structure equally.
     
-    force_no_gpu : bool
-        Run the (slow) CPU version of this function.
+        force_no_gpu : bool
+            Run the (slow) CPU version of this function.
     
-    Returns
-    -------
-    shot : odin.xray.Shot
-        A shot instance, containing the simulated shot.
-    """
+        Returns
+        -------
+        shot : odin.xray.Shot
+            A shot instance, containing the simulated shot.
+        """
         I = simulate_shot(traj, num_molecules, detector, traj_weights, force_no_gpu)
         shot = Shot(I, detector)
         return shot
         
-    
+        
+    def save(self, filename):
+        """
+        Writes the current Shot data to disk.
+
+        Parameters
+        ----------
+        filename : str
+            The path to the shotset file to save.
+        """
+        
+        if filename[-4:] != '.shot':
+            filename += '.shot'
+        
+        io.saveh(filename, 
+                 dxyz=self.detector.xyz, 
+                 dpath_length=np.array(self.detector.path_length), 
+                 dk=np.array(self.detector.k)
+                 intensities=self.intensities)
+                 
+        logger.info('Wrote %s to disk.' % filename)
+
+
+    @classmethod
+    def load(cls, filename):
+        """
+        Loads the a Shot from disk.
+
+        Parameters
+        ----------
+        filename : str
+            The path to the shotset file.
+
+        Returns
+        -------
+        shotset : odin.xray.Shotset
+            A shotset object
+        """
+        if filename[-4:] != '.shot':
+            raise ValueError('Must load a detector file (.shot extension)')
+        
+        hdf = io.loadh(filename)
+        
+        dxyz = hdf['xyz']
+        dpath_length = hdf['path_length'][0]
+        dk = hdf['k'][0]
+        intensities = hdf['intensities']
+        
+        d = Detector(xyz, path_length, k)
+        
+        return Shot(intensities, d)
+
+
 class Shotset(Shot):
     """
     A collection of xray 'shots', and methods for anaylzing statistical
@@ -984,6 +1059,36 @@ class Shotset(Shot):
             shotlist.append(shot)
         
         return ShotSet(shotlist)
+        
+        
+    def save(self, filename):
+        """
+        Writes the current Shotset data to disk.
+        
+        Parameters
+        ----------
+        filename : str
+            The path to the shotset file to save.
+        """
+        pass
+        
+        
+    @classmethod
+    def load(cls, filename):
+        """
+        Loads the a Shotset from disk.
+        
+        Parameters
+        ----------
+        filename : str
+            The path to the shotset file.
+            
+        Returns
+        -------
+        shotset : odin.xray.Shotset
+            A shotset object
+        """
+        pass
 
     
 def simulate_shot(traj, num_molecules, detector, traj_weights=None,
