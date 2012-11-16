@@ -8,6 +8,12 @@ import os
 from odin import xray
 from odin.testing import skip, ref_file
 
+try:
+    import gpuscatter
+    GPU = True
+except ImportError as e:
+    GPU = False
+
 from mdtraj import trajectory, io
 
 import numpy as np
@@ -80,6 +86,7 @@ class TestShot():
         self.t = trajectory.load(ref_file('ala2.pdb'))
     
     def test_sim(self):
+        if not GPU: raise SkipTest
         self.shot = xray.Shot.simulate(self.t, 512, self.d)
         
         

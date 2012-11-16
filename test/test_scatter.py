@@ -9,7 +9,12 @@ import numpy as np
 from numpy.linalg import norm
 from numpy.testing import assert_almost_equal, assert_allclose
 
-import gpuscatter
+try:
+    import gpuscatter
+    GPU = True
+except ImportError as e:
+    GPU = False
+
 from odin.data import cromer_mann_params
 from odin import xray
 from odin.xray import Detector
@@ -18,7 +23,7 @@ from odin.testing import skip, ref_file
 
 from mdtraj import trajectory
 
-
+from nose import SkipTest
 
 # ------------------------------------------------------------------------------
 #                        BEGIN REFERENCE IMPLEMENTATION
@@ -220,6 +225,8 @@ class TestScatter():
         self.nq = 1 # number of detector vectors to do
         
     def test_gpu_scatter(self):
+
+        if not GPU: raise SkipTest
         print "testing c code..."
         
         xyzQ = np.loadtxt(ref_file('512_atom_benchmark.xyz'))
@@ -242,6 +249,8 @@ class TestScatter():
         
                             
     def test_python_call(self):
+
+        if not GPU: raise SkipTest
         print "testing python wrapper fxn..."
         
         traj = trajectory.load(ref_file('ala2.pdb'))

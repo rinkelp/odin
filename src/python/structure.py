@@ -280,13 +280,8 @@ def multiply_conformations(traj, num_replicas, density, traj_weights=None):
         system.
     """
 
-    # TODO: 
-    #   -- remove center of mass from all frames
-    
-    # read out some stuff from the trajectory
-    #       initialize system_structure
+    traj = remove_COM(traj)
 
-    
     # check traj_weights
     if traj_weights != None:
         if len(traj_weights) != traj.n_frames:
@@ -303,25 +298,28 @@ def multiply_conformations(traj, num_replicas, density, traj_weights=None):
     boxsize = cbrt(boxvol)            # one dim of a cubic box, in nm
 
     # find the maximal radius of each snapshot in traj
-    max_radius = np.zeros( len(traj) )
-    for i,snapshot in enumerate(traj):
-        max_radius[i] = np.max( np.sqrt(np.sum(np.power(snapshot.xyz, 2), axis=3 )) )
+    max_radius = np.zeros(traj.n_frames)
+    for i in range(traj.n_frames):
+        max_radius[i] = np.max( np.sqrt( np.sum(np.power(traj.xyz[i,:,:], 2), axis=1) ) )
         
     # place in space
-    snapshots = traj[num_per_shapshot]
+    ind = []
+    for x in range( len(num_per_shapshot) ):
+        ind.extend( [x] * num_per_shapshot[x] )
+    xyz = traj.xyz[ind,:,:]
     centers_of_mass = np.zeros((num_replicas, 3)) # to store these and use later
     
-    for i in range(snapshots):
+    for i in range(xyz.shape[0]):
         molecule_overlapping = True # initial cond.
         
+        attempt = 0
         while molecule_overlapping:
+            
+            attempt += 1
         
             # do a random translation & rotation
             R = np.random.uniform(low=0, high=boxsize, size=3)
             centers_of_mass[i,:] = R
-            for x in range(3):
-                snapshot.xyzlist[i,:] += R[i]
-            snapshot = rand_rotate_molecule(snapshot)
             
             # check to see if we're overlapping another molecule already placed
             for j in range(i):
@@ -331,8 +329,43 @@ def multiply_conformations(traj, num_replicas, density, traj_weights=None):
                     molecule_overlapping = False
                 else:
                     molecule_overlapping = True
-                    
-        system_structure[i] = snapshot
 
+            # if not do a rotation
+            for x in range(3):
+                xyz[i,:,x] += R[x]
+            xyz[i,:,:] = rand_rotate_molecule(xyz[i,:,:])
+            
+            logger.debug('Attempt: %d' % attempt)
+                    
+    # store & return the results
+    out_traj = trajectory( xyz, traj.topology )
+
+    return out_traj
+    
+
+def load_coor(filename):
+    """
+    Load a simple coordinate file, formatted as:
+    
+    x   y   z   atomic_number
+    
+    Parameters
+    ----------
+    filename : str
+        The filename to load.
+        
+    Returns
+    -------
+    structure : mdtraj.trajectory
+        A meta-data minimal mdtraj instance
+    """
+    
+    pass
+    
+    
+    
     return
+    
+    
+    
     

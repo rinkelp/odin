@@ -171,18 +171,16 @@ class Detector(Beam):
         self.real = self.xyz.copy()
         self.real[:,2] += self.path_length # set origin to sample
         
-        self.polar      = self.real_to_polar(self.xyz)
-        self.reciprocal = self.real_to_reciprocal(self.xyz)
-        self.recpolar   = self.real_to_recpolar(self.xyz)
+        self.polar      = self.real_to_polar(self.real)
+        self.reciprocal = self.real_to_reciprocal(self.real)
+        self.recpolar   = self.real_to_recpolar(self.real)
         
             
     def real_to_polar(self, xyz):
         """
         Convert the real-space representation to polar coordinates.
         """
-        xyz[:,2] += self.path_length # set origin to sample
         polar = self._to_polar(xyz)
-        
         return polar
         
             
@@ -193,7 +191,6 @@ class Detector(Beam):
         
         # generate unit vectors in the pixel direction, origin at sample
         S = self.xyz.copy()
-        S[:,2] += self.path_length # set origin to sample
         S = self._unit_vector(S)
         
         # generate unit vectors in the z-direction
@@ -300,7 +297,7 @@ class Detector(Beam):
         
         beam = Beam(flux, energy=energy)
 
-        x = np.arange(-lim, lim, spacing)
+        x = np.arange(-lim, lim+spacing, spacing)
         xx, yy = np.meshgrid(x, x)
 
         xyz = np.zeros((len(x)**2, 3))
