@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 
 from odin import xray
-
+from odin.utils import graphic
 
 def main(input_file, output_file, n_maxima_cutoff=5):
     
@@ -19,6 +19,7 @@ def main(input_file, output_file, n_maxima_cutoff=5):
     shotset = xray.Shotset.load(input_file)
     
     maxima = shotset.intensity_maxima()
+    I = shotset.intensity_profile()
     n_maxima = len(maxima)
     
     if n_maxima > n_maxima_cutoff:
@@ -31,15 +32,15 @@ def main(input_file, output_file, n_maxima_cutoff=5):
     
     # plot the intensity profile on the lhs
     prf_ax = plt.subplot2grid((n_maxima,5), (0,0), rowspan=n_maxima, colspan=2)
-    prf_ax.plot(np.arange(1000), I.sum(1), lw=2) 
+    prf_ax.plot(I[:,0], I[:,1], lw=2) 
     prf_ax.set_xlabel(r'q / $\AA$')
     prf_ax.set_ylabel(r'I(q)')
-    #prf_ax.vlines(maxima, I.min(), I.max(), lw=2)
+    prf_ax.vlines(maxima, I[:,1].min(), I[:,1].max(), lw=2)
     
     # plot the correlations on the rhs
     for i in range(n_maxima):
         ax = plt.subplot2grid((n_maxima,5), (i,2), colspan=3)
-        ring = Shotset.correlate_ring(maxima[i], maxima[i])
+        ring = shotset.correlate_ring(maxima[i], maxima[i])
         ax.plot(ring[:,0],  ring[:,1], lw=2) # should call here
         ax.set_ylabel(r'$C(q, \Delta)$')
     ax.set_xlabel(r'$\Delta$') # only the bottow plot
@@ -52,6 +53,7 @@ def main(input_file, output_file, n_maxima_cutoff=5):
     
 if __name__ == '__main__':
     
+    print graphic
     
     parser = argparse.ArgumentParser(description='''Plot scattering autocorrelations.
  Chooses points of maximal intensity to correlate automatically.''')

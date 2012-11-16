@@ -325,8 +325,8 @@ class Detector(Beam):
         if filename[-4:] != '.dtc':
             filename += '.dtc'
         
-        io.saveh(filename, xyz=self.xyz, path_length=np.array([self.path_length]), 
-                 k=np.array([self.k]))
+        io.saveh(filename, dxyz=self.xyz, dpath_length=np.array([self.path_length]), 
+                 dk=np.array([self.k]))
         logger.info('Wrote %s to disk.' % filename)
 
         return
@@ -348,14 +348,14 @@ class Detector(Beam):
             A shotset object
         """
         
-        if filename[-4:] != '.dtc':
+        if not filename.endswith('.dtc'):
             raise ValueError('Must load a detector file (.dtc extension)')
         
         hdf = io.loadh(filename)
         
-        xyz = hdf['xyz']
-        path_length = hdf['path_length'][0]
-        k = float(hdf['k'][0])
+        xyz = hdf['dxyz']
+        path_length = hdf['dpath_length'][0]
+        k = float(hdf['dk'][0])
         
         return Detector(xyz, path_length, k)
         
@@ -626,7 +626,7 @@ class Shot(object):
         
         # first, smooth; then, find local maxima based on neighbors
         intensity = self.intensity_profile()
-        a = utils.smooth(intensity, beta=smooth_strength)
+        a = utils.smooth(intensity[:,1], beta=smooth_strength)
         maxima = np.where(np.r_[True, a[1:] > a[:-1]] & np.r_[a[:-1] > a[1:], True] == True)[0]
         
         return maxima
@@ -816,7 +816,7 @@ class Shot(object):
         hdf = io.loadh(filename)
         
         num_shots    = hdf['num_shots'][0]
-        dxyz         = hdf['xyz']
+        dxyz         = hdf['dxyz']
         dpath_length = hdf['path_length'][0]
         dk           = hdf['k'][0]
         intensities  = hdf['shot1']
@@ -884,7 +884,7 @@ class Shotset(Shot):
         
         intensity = 0.0
     
-        for shot in self.shot_list:
+        for shot in self.shots:
             intensity += shot.I(q,phi)
             
         intensity /= float(self.num_shots)
@@ -909,7 +909,7 @@ class Shotset(Shot):
         
         qintensity = 0.0
     
-        for shot in self.shot_list:
+        for shot in self.shots:
             qintensity += shot.qintensity(q)
             
         qintensity /= float(self.num_shots)
@@ -928,10 +928,10 @@ class Shotset(Shot):
             the second is the average intensity at that point < I(|q|) >_phi.
         """
         
-        intensity_profile = shot_list[0].intensity_profile()
+        intensity_profile = self.shots[0].intensity_profile()
     
-        for shot in self.shot_list[1:]:
-            intensity_profile[:,1] += shot.intensity_profile()
+        for shot in self.shots[1:]:
+            intensity_profile[:,1] += shot.intensity_profile()[:,1]
             
         intensity_profile[:,1] /= float(self.num_shots)
         
@@ -969,7 +969,7 @@ class Shotset(Shot):
         
         correlation = 0.0
     
-        for shot in self.shot_list:
+        for shot in self.shots:
             correlation += shot.correlate(q1, q2, delta)
             
         correlation /= float(self.num_shots)
@@ -1004,10 +1004,10 @@ class Shotset(Shot):
         """   
     
         # just average all the correlation_rings from each shot
-        correlation_ring = shot_list[0].correlate_ring(q1, q2)
+        correlation_ring = self.shots[0].correlate_ring(q1, q2)
     
-        for shot in self.shot_list[1:]:
-            correlation_ring[:,1] += shot.correlate_ring(q1, q2)
+        for shot in self.shots[1:]:
+            correlation_ring[:,1] += shot.correlate_ring(q1, q2)[:,1]
             
         correlation_ring[:,1] /= float(self.num_shots)
         
@@ -1116,10 +1116,10 @@ class Shotset(Shot):
 
         hdf = io.loadh(filename)
 
-        num_shots    = hdf['num_shots'][0]
-        dxyz         = hdf['xyz']
-        dpath_length = hdf['path_length'][0]
-        dk           = hdf['k'][0]
+        num_shots   = hdf['num_shots'][0]
+        xyz         = hdf['dxyz']
+        path_length = hdf['dpath_length'][0]
+        k           = hdf['dk'][0]
         
         d = Detector(xyz, path_length, k)
         

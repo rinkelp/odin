@@ -8,6 +8,7 @@ import argparse
 
 from mdtraj import trajectory
 from odin import xray
+from odin.utils import graphic
 
 import numpy as np
 
@@ -23,6 +24,7 @@ def main(traj, num_shots, num_molecules, detector, output_file, traj_weights=Non
     
 if __name__ == '__main__':
     
+    print graphic
     
     parser = argparse.ArgumentParser(description='''Simulate a scattering experiment, generating a `shot`.''')
 
