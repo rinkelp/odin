@@ -261,7 +261,7 @@ class Detector(Beam):
         # for the phi angle, use arctan2. If the value is in QII or QIII,
         # this returns a negative angle in [0,pi]. We probably want one in
         # [pi,2pi] so we adjust accordingly
-        polar[:,2] = np.arctan2(vector[:,1], vector[:,0]) # y coord first!
+        polar[:,2] = utils.arctan3(vector[:,1], vector[:,0]) # y coord first!
         
         neg_ind = np.where( polar[:,2] < 0 )
         polar[neg_ind,2] += 2 * np.pi
@@ -423,7 +423,7 @@ class Shot(object):
         # determine the bounds of the grid, and the discrete points to use
         self.phi_spacing = phi_spacing
         self.num_phi = int( 360. / self.phi_spacing )
-        self.phi_values = [ i*self.phi_spacing for i in range(self.num_phi) ]
+        self.phi_values = np.array([ i*self.phi_spacing for i in range(self.num_phi) ])
     
         self.q_spacing = q_spacing
         self.q_min = np.min( self.detector.recpolar[:,0] )
@@ -443,21 +443,24 @@ class Shot(object):
         y = self.detector.real[:,1]
         
         # find out what our polar coordinates are in x,y space
-        polar_x = interpoldata[:,0] * np.cos(interpoldata[:,1])
-        polar_y = interpoldata[:,0] * np.sin(interpoldata[:,1])
+        #polar_x = self.q_values * np.cos(self.phi_values)
+        #polar_y = self.q_values * np.sin(self.phi_values)
         
         # TJL testing methods below --------------------------------------------
-        
+       
         # -- MATPLOTLIB/GRIDDATA -- delauny triangulation + nearest neighbour
-        Ztri = griddata( x, y, self.intensities, polar_x, polar_y )
+       
+        xp = np.sqrt(x**2 + y**2)  # r
+        yp = utils.arctan3(y,x) # theta
 
-        nmask = np.ma.count_masked(Ztri)
+        z_interp = griddata( xp, yp, self.intensities, self.q_values, self.phi_values )
+
+        nmask = np.ma.count_masked(z_interp)
         if nmask > 0:
-            logger.info("griddata: %d of %d points are masked, not interpolated" % (
-                nmask, Ztri.size))
+            # then there are Nans outsize the convex hull...
+            logger.warning("griddata: %d of %d points are masked, not interpolated" % (nmask, z_interp.size))
                 
-        logger.debug('Ztri data: %s' % str(Ztri.data))
-        interpoldata[:,2] = Ztri.data  # Nans outside convex hull
+        interpoldata[:,2] = z_interp.flatten()
         
         # -- SCIPY/LINEAR INTERP evaluate the interpolation on our polar grid
         # interpf = interpolate.interp2d(x, y, intensities, kind='linear')

@@ -53,7 +53,6 @@ class TestDetector():
         assert_array_almost_equal(q1, q2)
         
     def test_polar_space(self):
-        """ try converting backwards """
         
         # this is the "generic" detector in real space
         x = np.arange(-self.lim, self.lim+self.spacing, self.spacing)
@@ -73,7 +72,6 @@ class TestDetector():
         #assert_array_almost_equal(np.ones(len(x)**2) * self.l, z)
    
     def test_reciprocal_space(self):
-        """ try converting backwards """
         qx = self.d.reciprocal[:,0]
         qy = self.d.reciprocal[:,1]
         
@@ -85,7 +83,6 @@ class TestDetector():
         assert_array_almost_equal(np.zeros(len(qy)), self.d.path_length)
    
     def test_recpolar_space(self):
-        """ try converting backwards """
         
         # this is the "generic" detector in real space
         x = np.arange(-self.lim, self.lim+self.spacing, self.spacing)
@@ -211,10 +208,14 @@ class TestShot():
             correlation_ring[i,1] = ref
         
         assert_array_almost_equal(correlation_ring, self.shot.correlate_ring(q1, q2))
+
+    def test_simulate(self):
+        if not GPU: raise SkipTest
+        d = xray.Detector.generic(spacing=0.4)
+        x = xray.Shot.simulate(self.t, 512, d)
         
         
 class TestShotset():
-    """ test the Shotset class by checking it gives the same results as above """
     
     def setup(self):
         self.shot = xray.Shot.load(ref_file('refshot.shot'))
@@ -267,6 +268,7 @@ class TestShotset():
         i2 = self.shotset.correlate_ring(q1, q2)
         assert_array_almost_equal(i1, i2)
 
-        
-    
-    
+if __name__ == '__main__':
+    test = TestShot()
+    test.setup()
+    test.test_simulate() 
