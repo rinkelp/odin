@@ -1,0 +1,51 @@
+#!/usr/bin/env python
+
+"""
+Randomly places molecules in space with a certain density, Boltzmann distribution.
+"""
+
+from odin.structure import multiply_conformations
+from odin.utils import odinparser
+from mdtraj import trajectory
+
+from numpy import loadtxt
+
+def main(input_traj, num_replicas, density, weights, output):
+    
+    tout = multiply_conformations(input_traj, num_replicas, density, traj_weights=weights)
+    tout.save(output)
+    print "Wrote: %s" % output
+    
+    return
+    
+    
+if __name__ == '__main__':
+    
+    parser = odinparser('Randomly places molecules in space with a certain density, Boltzmann distribution.')
+    
+    parser.add_argument('-i', '--input', type=str, 
+                        help='A trajectory/pdb file containing the molecular geometry.')
+    parser.add_argument('-n', '--number', type=int, 
+                        help='The number of molecules to include in the ensemble.')
+    parser.add_argument('-d', '--density', type=float, 
+                        help='The ensemble density, in micromolar.')
+    parser.add_argument('-w', '--weights', type=str, default='NONE',
+                        help='''A file specifing probability weights to draw the 
+                        replicated ensemble from. Default: even weights''')
+    parser.add_argument('-o', '--output', default='replicated.pdb',
+                        help='Trajectory/pdb to write output to. Default: replicated.pdb')
+
+    args = parser.parse_args()
+    
+    # load up files
+    input_traj = trajectory.load(args.input)
+    
+    if args.weights == 'NONE':
+        weights = None
+    else:
+        weights = loadtxt(args.weights)
+        if len(weights.shape) != 1:
+            raise ValueError('weights must be a one-dimensional array')
+        weights /= weights.sum()
+    
+    main(input_traj, args.number, args.density, weights, args.output)
