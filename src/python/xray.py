@@ -190,7 +190,7 @@ class Detector(Beam):
         """
         
         # generate unit vectors in the pixel direction, origin at sample
-        S = self.xyz.copy()
+        S = self.real.copy()
         S = self._unit_vector(S)
         
         # generate unit vectors in the z-direction
@@ -256,15 +256,8 @@ class Detector(Beam):
         polar = np.zeros( vector.shape )
         
         polar[:,0] = self._norm(vector)
-        polar[:,1] = np.arccos(vector[:,2] / polar[:,0]) # cos^{-1}(z/r)
-        
-        # for the phi angle, use arctan2. If the value is in QII or QIII,
-        # this returns a negative angle in [0,pi]. We probably want one in
-        # [pi,2pi] so we adjust accordingly
-        polar[:,2] = utils.arctan3(vector[:,1], vector[:,0]) # y coord first!
-        
-        neg_ind = np.where( polar[:,2] < 0 )
-        polar[neg_ind,2] += 2 * np.pi
+        polar[:,1] = np.arccos(vector[:,2] / polar[:,0])       # cos^{-1}(z/r)
+        polar[:,2] = utils.arctan3(vector[:,1], vector[:,0])   # y coord first!
         
         return polar
         
