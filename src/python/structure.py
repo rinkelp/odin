@@ -9,6 +9,12 @@ Functions/classes for manipulating structures.
 import numpy as np
 from scipy.special import cbrt
 
+from mdtraj import trajectory
+
+import logging
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+
 
 class quaternion(object):
     """
@@ -291,25 +297,33 @@ def multiply_conformations(traj, num_replicas, density, traj_weights=None):
     traj_weights /= traj_weights.sum() # normalize
         
     # generate a random ensemble, defined by a list of indices of `traj`
-    num_per_shapshot = np.random.multinomial(num_replicas, traj_weights, size=1)
+    num_per_shapshot = np.random.multinomial(num_replicas, traj_weights)
     
     # determine the box size
     boxvol  = (num_replicas * 1.0e24) / (density * 6.02e17) # in nm^3
     boxsize = cbrt(boxvol)            # one dim of a cubic box, in nm
+    logger.info('Set boxsize: %f nm' % boxsize)
 
     # find the maximal radius of each snapshot in traj
     max_radius = np.zeros(traj.n_frames)
     for i in range(traj.n_frames):
         max_radius[i] = np.max( np.sqrt( np.sum(np.power(traj.xyz[i,:,:], 2), axis=1) ) )
         
+    if boxsize < np.max(max_radius)*2:
+        raise RuntimeError('You solution is too concentrated for its constituent'
+                            ' matter! There is no way it will fit. Box: '
+                            '%f, Biggest Molecule: %f' % (boxsize, np.max(max_radius)))
+        
     # place in space
     ind = []
     for x in range( len(num_per_shapshot) ):
         ind.extend( [x] * num_per_shapshot[x] )
     xyz = traj.xyz[ind,:,:]
+    
     centers_of_mass = np.zeros((num_replicas, 3)) # to store these and use later
     
-    for i in range(xyz.shape[0]):
+    # we'll leave the first molecule at the origin...
+    for i in range(1, xyz.shape[0]):
         molecule_overlapping = True # initial cond.
         
         attempt = 0
@@ -318,13 +332,13 @@ def multiply_conformations(traj, num_replicas, density, traj_weights=None):
             attempt += 1
         
             # do a random translation & rotation
-            R = np.random.uniform(low=0, high=boxsize, size=3)
-            centers_of_mass[i,:] = R
+            centers_of_mass[i,:] = np.random.uniform(low=0, high=boxsize, size=3)
             
             # check to see if we're overlapping another molecule already placed
             for j in range(i):
-                molec_dist = np.linalg.norm(centers_of_mass[i] - centers_of_mass[j])
-                max_allowable_dist = max_radius[i] + max_radius[j]
+                molec_dist = np.linalg.norm(centers_of_mass[i,:] - centers_of_mass[j,:])
+                max_allowable_dist = max_radius[ind[i]] + max_radius[ind[j]]
+                
                 if molec_dist > max_allowable_dist:
                     molecule_overlapping = False
                 else:
@@ -332,13 +346,13 @@ def multiply_conformations(traj, num_replicas, density, traj_weights=None):
 
             # if not do a rotation
             for x in range(3):
-                xyz[i,:,x] += R[x]
+                xyz[i,:,x] += centers_of_mass[i,x]
             xyz[i,:,:] = rand_rotate_molecule(xyz[i,:,:])
             
-            logger.debug('Attempt: %d' % attempt)
+        logger.debug('Placed molecule, took %d attempts' % attempt)
                     
     # store & return the results
-    out_traj = trajectory( xyz, traj.topology )
+    out_traj = trajectory.Trajectory( xyz, traj.topology )
 
     return out_traj
     

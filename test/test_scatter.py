@@ -25,6 +25,11 @@ from mdtraj import trajectory
 
 from nose import SkipTest
 
+import logging
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+logging.basicConfig()
+
 # ------------------------------------------------------------------------------
 #                        BEGIN REFERENCE IMPLEMENTATION
 # ------------------------------------------------------------------------------

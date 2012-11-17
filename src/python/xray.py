@@ -248,7 +248,7 @@ class Detector(Beam):
 
     def _to_polar(self, vector):
         """
-        Converts an n m-dimensional `vector`s to polar coordinates. By polar
+        Converts n m-dimensional `vector`s to polar coordinates. By polar
         coordinates, I mean the cannonical physicist's (r, theta, phi), no
         2-theta business.
         """
@@ -385,12 +385,12 @@ class Shot(object):
         
         self.intensities = intensities
         self.detector = detector
-        self.polar_intensities = self._interpolate_to_polar(intensities, detector)
+        self.interpolate_to_polar(intensities, detector)
         self._mask_missing()
         
         
-    def _interpolate_to_polar(self, intensities, detector, 
-                              q_spacing=0.02, phi_spacing=1.0):
+    def interpolate_to_polar(self, intensities, detector, 
+                             q_spacing=0.02, phi_spacing=1.0):
         """
         Interpolate our (presumably) cartesian-based measurements into a binned
         polar coordiante system.
@@ -465,6 +465,7 @@ class Shot(object):
         
         # ----------------------------------------------------------------------
         
+        self.polar_intensities = interpoldata
         return interpoldata
         
         
@@ -812,13 +813,13 @@ class Shot(object):
         
         hdf = io.loadh(filename)
         
-        num_shots    = hdf['num_shots'][0]
-        dxyz         = hdf['dxyz']
-        dpath_length = hdf['path_length'][0]
-        dk           = hdf['k'][0]
-        intensities  = hdf['shot1']
+        num_shots   = hdf['num_shots'][0]
+        xyz         = hdf['dxyz']
+        path_length = hdf['dpath_length'][0]
+        k           = hdf['dk'][0]
+        intensities = hdf['shot1']
         
-        if len(num_shots) != 1:
+        if num_shots != 1:
             logger.warning('You loaded a .shot file that contains multiple shots'
                            ' into a single Shot instance... taking only the'
                            ' first shot of the set (look into Shotset.load()).')
@@ -864,14 +865,19 @@ class Shotset(Shot):
         self._check_qvectors_same()
         
         
-    def _check_qvectors_same(self):
+    def _check_qvectors_same(self, epsilon=1e-6):
         """
         For a lot of the below to work, we need to make sure that all of the 
         q-phi grids in the shots are the same. If some are different, here
         we recalculate them.
         """
-        pass # todo
-        #raise NotImplementedError()
+        q_phis = self.shots[0].polar_intensities[:,:2]
+        for shot in self.shots:
+            diff = np.sum(np.abs(shot.polar_intensities[:,:2] - q_phis))
+            if diff > epsilon:
+                raise ValueError('Detector values in Shotset not consistent '
+                                  ' across set. Homogenize interpolated polar'
+                                  ' grid using Shot.interpolate_to_polar()')
     
     
     def I(self, q, phi):
