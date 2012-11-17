@@ -40,12 +40,16 @@ class TestBeam():
 class TestDetector():
     
     def setup(self):
-        self.d = xray.Detector.generic()
         self.spacing = 0.05
         self.lim     = 10.0
         self.energy  = 0.7293
         self.flux    = 100.0
-        self.l       = 50.0    
+        self.l       = 50.0
+        self.d = xray.Detector.generic(spacing = self.spacing
+                                       lim = self.lim
+                                       energy = self.energy
+                                       flux = self.flux
+                                       l = self.l) 
     
     def test_recpolar_n_reciprocal(self):
         q1 = np.sqrt( np.sum( np.power(self.d.reciprocal,2), axis=1) )
@@ -75,8 +79,9 @@ class TestDetector():
         qx = self.d.reciprocal[:,0]
         qy = self.d.reciprocal[:,1]
         
-        Sx_unit = self.d._unit_vector(self.d.real)[:,0]
-        Sy_unit = self.d._unit_vector(self.d.real)[:,1]
+        Shat    = self.d._unit_vector(self.d.real)
+        Sx_unit = Shat[:,0]
+        Sy_unit = Shat[:,1]
         
         assert_array_almost_equal(qx/self.d.k, Sx_unit)
         assert_array_almost_equal(qy/self.d.k, Sy_unit)        
@@ -93,6 +98,8 @@ class TestDetector():
         h = self.l * np.tan(2.0 * np.arcsin(q/2.0))
         
         href = np.sqrt( np.power(xx.flatten(),2), np.power(yy.flatten(),2) )
+        print 'h:', h
+        print 'href:', href
         assert_array_almost_equal(href, h)
         
         phiref = self.d.polar[:,2]
