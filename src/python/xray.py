@@ -385,12 +385,11 @@ class Shot(object):
         
         self.intensities = intensities
         self.detector = detector
-        self.interpolate_to_polar(intensities, detector)
+        self.interpolate_to_polar()
         self._mask_missing()
         
         
-    def interpolate_to_polar(self, intensities, detector, 
-                             q_spacing=0.02, phi_spacing=1.0):
+    def interpolate_to_polar(self, q_spacing=0.02, phi_spacing=1.0):
         """
         Interpolate our (presumably) cartesian-based measurements into a binned
         polar coordiante system.
@@ -427,8 +426,8 @@ class Shot(object):
         self.phi_values = [ i*self.phi_spacing for i in range(self.num_phi) ]
     
         self.q_spacing = q_spacing
-        self.q_min = np.min( detector.recpolar[:,0] )
-        self.q_max = np.max( detector.recpolar[:,0] )
+        self.q_min = np.min( self.detector.recpolar[:,0] )
+        self.q_max = np.max( self.detector.recpolar[:,0] )
         self.q_values = np.arange(self.q_min, self.q_max, self.q_spacing)
         self.num_q = len(self.q_values)
                 
@@ -440,8 +439,8 @@ class Shot(object):
         interpoldata[:,1] = np.tile(self.phi_values, self.num_q)
         
         # generate a cubic interpolation from the measured intensities
-        x = detector.real[:,0]
-        y = detector.real[:,1]
+        x = self.detector.real[:,0]
+        y = self.detector.real[:,1]
         
         # find out what our polar coordinates are in x,y space
         polar_x = interpoldata[:,0] * np.cos(interpoldata[:,1])
@@ -450,14 +449,15 @@ class Shot(object):
         # TJL testing methods below --------------------------------------------
         
         # -- MATPLOTLIB/GRIDDATA -- delauny triangulation + nearest neighbour
-        Ztri = griddata( x, y, intensities, polar_x, polar_y )
+        Ztri = griddata( x, y, self.intensities, polar_x, polar_y )
 
         nmask = np.ma.count_masked(Ztri)
         if nmask > 0:
             logger.info("griddata: %d of %d points are masked, not interpolated" % (
                 nmask, Ztri.size))
-            logger.debug('Ztri data: %s' % str(Ztri.data))
-            interpoldata[:,2] = Ztri.data  # Nans outside convex hull
+                
+        logger.debug('Ztri data: %s' % str(Ztri.data))
+        interpoldata[:,2] = Ztri.data  # Nans outside convex hull
         
         # -- SCIPY/LINEAR INTERP evaluate the interpolation on our polar grid
         # interpf = interpolate.interp2d(x, y, intensities, kind='linear')
