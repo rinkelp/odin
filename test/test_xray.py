@@ -41,11 +41,11 @@ class TestDetector():
     
     def setup(self):
         self.d = xray.Detector.generic()
-        self.spacing=0.05
-        self.lim=10.0
-        self.energy=0.7293
-        self.flux=100.0
-        self.l=50.0    
+        self.spacing = 0.05
+        self.lim     = 10.0
+        self.energy  = 0.7293
+        self.flux    = 100.0
+        self.l       = 50.0    
     
     def test_recpolar_n_reciprocal(self):
         q1 = np.sqrt( np.sum( np.power(self.d.reciprocal,2), axis=1) )
@@ -114,7 +114,7 @@ class TestDetector():
 class TestShot():
     
     def setup(self):
-        self.d = xray.Detector.generic(spacing=0.3)
+        self.d = xray.Detector.generic(spacing=0.4)
         self.t = trajectory.load(ref_file('ala2.pdb'))
         self.shot = xray.Shot.load(ref_file('refshot.shot'))
         
@@ -210,7 +210,7 @@ class TestShot():
             
             correlation_ring[i,1] = ref
         
-        assert_array_almost_equal(correlation_ring, self.correlate_ring(q1, q2))
+        assert_array_almost_equal(correlation_ring, self.shot.correlate_ring(q1, q2))
         
         
 class TestShotset():
@@ -223,12 +223,12 @@ class TestShotset():
         
     def test_simulate(self):
         if not GPU: raise SkipTest
-        d = xray.Detector.generic(spacing=0.3)
+        d = xray.Detector.generic(spacing=0.4)
         x = xray.Shotset.simulate(self.t, 512, d, 2)
     
     def test_detector_checking(self):
-        d1 = xray.Detector.generic(spacing=0.3)
-        d2 = xray.Detector.generic(spacing=0.3)
+        d1 = xray.Detector.generic(spacing=0.4)
+        d2 = xray.Detector.generic(spacing=0.4)
 
         s1 = xray.Shot.simulate(self.t, 512, d1)
         s2 = xray.Shot.simulate(self.t, 512, d2)

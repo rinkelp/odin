@@ -240,8 +240,8 @@ class Detector(Beam):
         norm = self._norm(vector)
         
         unit_vectors = np.zeros( vector.shape )
-        for i in range(vector.shape[1]):
-            unit_vectors[:,i] = vector[:,i] / norm
+        for i in range(vector.shape[0]):
+            unit_vectors[i,:] = vector[i,:] / norm[i]
         
         return unit_vectors
 
@@ -451,12 +451,12 @@ class Shot(object):
         
         # -- MATPLOTLIB/GRIDDATA -- delauny triangulation + nearest neighbour
         Ztri = griddata( x, y, intensities, polar_x, polar_y )
-                # 1d x y z -> 2d Ztri on meshgrid(xnew,ynew)
 
         nmask = np.ma.count_masked(Ztri)
         if nmask > 0:
             logger.info("griddata: %d of %d points are masked, not interpolated" % (
                 nmask, Ztri.size))
+            logger.debug('Ztri data: %s' % str(Ztri.data))
             interpoldata[:,2] = Ztri.data  # Nans outside convex hull
         
         # -- SCIPY/LINEAR INTERP evaluate the interpolation on our polar grid
