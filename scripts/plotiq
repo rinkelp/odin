@@ -4,14 +4,12 @@
 Plot the intensity profile of a shot or shotset in an appealing manner.
 """
 
-import argparse
-
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 
 from odin import xray
-from odin.utils import graphic
+from odin.utils import odinparser
 
 def main(input_file, output):
     
@@ -37,16 +35,13 @@ def main(input_file, output):
     
 if __name__ == '__main__':
     
-    print graphic
-    
-    parser = argparse.ArgumentParser(description='Plot intensity profile of a shotset.')
+    parser = odinparser('Plot intensity profile of a shotset.')
     
     parser.add_argument('-i', '--input', type=str, help='An hdf shotset file.')
     parser.add_argument('-o', '--output', default='intensity_plot.pdf',
                         help='Image file to write. Append .pdf, .png, .jpg, etc. Default: intensity_plot.pdf')
 
     args = parser.parse_args()
-    print args.__dict__
     
     main(args.input, args.output)
 

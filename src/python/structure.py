@@ -300,9 +300,9 @@ def multiply_conformations(traj, num_replicas, density, traj_weights=None):
     num_per_shapshot = np.random.multinomial(num_replicas, traj_weights)
     
     # determine the box size
-    boxvol  = (num_replicas * 1.0e24) / (density * 6.02e17) # in nm^3
-    boxsize = cbrt(boxvol)            # one dim of a cubic box, in nm
-    logger.info('Set boxsize: %f nm' % boxsize)
+    boxvol  = (num_replicas * 1.0e27) / (density * 6.02e17) # in A^3
+    boxsize = cbrt(boxvol)            # one dim of a cubic box, in Angstrom
+    logger.info('Set boxsize: %f A' % boxsize)
 
     # find the maximal radius of each snapshot in traj
     max_radius = np.zeros(traj.n_frames)
@@ -310,9 +310,9 @@ def multiply_conformations(traj, num_replicas, density, traj_weights=None):
         max_radius[i] = np.max( np.sqrt( np.sum(np.power(traj.xyz[i,:,:], 2), axis=1) ) )
         
     if boxsize < np.max(max_radius)*2:
-        raise RuntimeError('You solution is too concentrated for its constituent'
-                            ' matter! There is no way it will fit. Box: '
-                            '%f, Biggest Molecule: %f' % (boxsize, np.max(max_radius)))
+        raise ValueError('You solution is too concentrated for its constituent'
+                         ' matter! There is no way it will fit. Box: '
+                         '%f, Biggest Molecule: %f' % (boxsize, np.max(max_radius)))
         
     # place in space
     ind = []
@@ -331,24 +331,28 @@ def multiply_conformations(traj, num_replicas, density, traj_weights=None):
             
             attempt += 1
         
-            # do a random translation & rotation
+            # suggest a random translation
             centers_of_mass[i,:] = np.random.uniform(low=0, high=boxsize, size=3)
             
             # check to see if we're overlapping another molecule already placed
             for j in range(i):
                 molec_dist = np.linalg.norm(centers_of_mass[i,:] - centers_of_mass[j,:])
-                max_allowable_dist = max_radius[ind[i]] + max_radius[ind[j]]
+                min_allowable_dist = max_radius[ind[i]] + max_radius[ind[j]]
                 
-                if molec_dist > max_allowable_dist:
+                if molec_dist > min_allowable_dist:
+                    # if not, move the molecule there and do a rotation.
                     molecule_overlapping = False
                 else:
                     molecule_overlapping = True
-
-            # if not do a rotation
-            for x in range(3):
-                xyz[i,:,x] += centers_of_mass[i,x]
-            xyz[i,:,:] = rand_rotate_molecule(xyz[i,:,:])
+                    break
+                    
+            if attempt > 10000:
+                raise RuntimeError('Number of attempts > 10000, density is too high.')
             
+        xyz[i,:,:] = rand_rotate_molecule(xyz[i,:,:])
+        for x in range(3):
+            xyz[i,:,x] += centers_of_mass[i,x]
+        
         logger.debug('Placed molecule, took %d attempts' % attempt)
                     
     # store & return the results

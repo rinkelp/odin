@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 
 from odin import xray
-from odin.utils import graphic
+from odin.utils import odinparser
 
 def main(input_file, output_file, n_maxima_cutoff=5):
     
@@ -53,10 +53,7 @@ def main(input_file, output_file, n_maxima_cutoff=5):
     
 if __name__ == '__main__':
     
-    print graphic
-    
-    parser = argparse.ArgumentParser(description='''Plot scattering autocorrelations.
- Chooses points of maximal intensity to correlate automatically.''')
+    parser = odinparser('Plot scattering autocorrelations. Chooses points of maximal intensity to correlate automatically.')
     
     parser.add_argument('-i', '--input', type=str, help='An hdf shotset file.')
     parser.add_argument('-m', '--maxima', type=int, default=5,
@@ -65,7 +62,6 @@ if __name__ == '__main__':
                         help='Image file to write. Append .pdf, .png, .jpg, etc. Default: intensity_plot.pdf')
 
     args = parser.parse_args()
-    print args.__dict__
     
     main(args.input, args.output, args.maxima)
 
