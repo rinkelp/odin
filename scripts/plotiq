@@ -19,7 +19,7 @@ def main(input_file, output):
     fig, ax = plt.subplots(nrows=1, ncols=2, figsize=(8,3.5))
     fig.tight_layout()
     
-    ax[0].plot(I[:,0], I[:,0], lw=2) # should call Shotset.intensity() here
+    ax[0].plot(I[:,0], I[:,1], lw=2)
     ax[0].set_xlabel(r'q / $\AA$')
     ax[0].set_ylabel(r'I(q)')
     

@@ -415,8 +415,9 @@ class Shot(object):
         
         # determine the bounds of the grid, and the discrete points to use
         self.phi_spacing = phi_spacing
-        self.num_phi = int( 360. / self.phi_spacing )
-        self.phi_values = np.array([ i*self.phi_spacing for i in range(self.num_phi) ])
+        radian_spacing = self.phi_spacing * (2.0*np.pi/360.)
+        self.phi_values = np.arange(0.0, 2.0*np.pi, radian_spacing)
+        self.num_phi = len(self.phi_values)
     
         self.q_spacing = q_spacing
         self.q_min = np.min( self.detector.recpolar[:,0] )
@@ -428,23 +429,15 @@ class Shot(object):
         
         # generate the polar grid to interpolate onto
         interpoldata = np.zeros((self.num_datapoints, 3))
-        interpoldata[:,0] = np.repeat(self.q_values, self.num_phi)
-        interpoldata[:,1] = np.tile(self.phi_values, self.num_q)
-        
-        # generate a cubic interpolation from the measured intensities
-        x = self.detector.real[:,0]
-        y = self.detector.real[:,1]
-        
-        # find out what our polar coordinates are in x,y space
-        #polar_x = self.q_values * np.cos(self.phi_values)
-        #polar_y = self.q_values * np.sin(self.phi_values)
-        
+        interpoldata[:,0] = np.tile(self.q_values, self.num_phi)
+        interpoldata[:,1] = np.repeat(self.phi_values, self.num_q)
+         
         # TJL testing methods below --------------------------------------------
        
         # -- MATPLOTLIB/GRIDDATA -- delauny triangulation + nearest neighbour
        
-        xp = np.sqrt(x**2 + y**2)  # r
-        yp = utils.arctan3(y,x) # theta
+        xp = self.detector.k * np.sqrt( 2.0 - 2.0 * np.cos(self.detector.polar[:,1]) ) # |q|
+        yp = self.detector.polar[:,2] # phi
 
         z_interp = griddata( xp, yp, self.intensities, self.q_values, self.phi_values )
 
