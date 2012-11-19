@@ -45,10 +45,10 @@ class TestDetector():
         self.energy  = 0.7293
         self.flux    = 100.0
         self.l       = 50.0
-        self.d = xray.Detector.generic(spacing = self.spacing
-                                       lim = self.lim
-                                       energy = self.energy
-                                       flux = self.flux
+        self.d = xray.Detector.generic(spacing = self.spacing,
+                                       lim = self.lim,
+                                       energy = self.energy,
+                                       flux = self.flux,
                                        l = self.l) 
     
     def test_recpolar_n_reciprocal(self):
