@@ -7,7 +7,7 @@ Simulate the scattering experiment (SAXS, WAXS).
 import multiprocessing
 
 from mdtraj import trajectory
-from odin import xray
+from odin import xray, structure
 from odin.utils import odinparser
 
 import numpy as np
@@ -27,7 +27,8 @@ if __name__ == '__main__':
     parser = odinparser('Simulate a scattering experiment, generating a `shot`.')
 
     parser.add_argument('-s', '--structures', type=str,
-                        help='A a PDB or trajectory file (.lh5 only right now), defining the molecular geometrie(s) to shoot.')
+                        help='''A a PDB, coor, or trajectory file (.lh5 only 
+                        right now), defining the molecular geometrie(s) to shoot.''')
     parser.add_argument('-n', '--numshots', type=int, default=1,
                         help='Number of shots (experiments) to perform.')
     parser.add_argument('-m', '--nummolec', type=int, default=1200,
@@ -50,7 +51,10 @@ if __name__ == '__main__':
     args = parser.parse_args()
     
     # load up filenames
-    traj = trajectory.load(args.structures)
+    if args.structures.endswith('.coor') or args.structures.endswith('.xyz')
+        traj = structure.load_corr(args.structures)
+    else:
+        traj = trajectory.load(args.structures)
     
     if args.detector != 'NONE':
         detector = xray.Detector.load(args.detector)

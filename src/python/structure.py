@@ -10,6 +10,10 @@ import numpy as np
 from scipy.special import cbrt
 
 from mdtraj import trajectory
+from mdtraj.topology import Topology
+from mdtraj.pdb.element import Element
+
+from odin.data import periodic_table
 
 import logging
 logger = logging.getLogger(__name__)
@@ -378,11 +382,24 @@ def load_coor(filename):
         A meta-data minimal mdtraj instance
     """
     
-    pass
+    data = np.genfromtxt(filename)
     
+    xyz = data[:,:3]
+    atomic_numbers = data[:,3]
     
+    top = Topology()
+    chain = top.addChain()
+    residue = top.addResidue('', chain)
     
-    return
+    for i in range(data.shape[0]):
+        element_symb = periodic_table[atomic_numbers[i]][1] # should give symbol
+        element = Element.getBySymbol(element_symb)
+        name = '%s%d' % (element_symb, i)
+        top.addAtom(name, element, residue)
+    
+    structure = trajectory.Trajectory(xyz=xyz, topology=top)
+    
+    return structure
     
     
     
