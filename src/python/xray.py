@@ -416,13 +416,13 @@ class Shot(object):
         # determine the bounds of the grid, and the discrete points to use
         self.phi_spacing = phi_spacing
         radian_spacing = self.phi_spacing * (2.0*np.pi/360.)
-        self.phi_values = np.arange(0.0, 2.0*np.pi, radian_spacing)
+        self.phi_values = np.arange(0.0, 2.0*np.pi+radian_spacing, radian_spacing)
         self.num_phi = len(self.phi_values)
     
         self.q_spacing = q_spacing
         self.q_min = np.min( self.detector.recpolar[:,0] )
         self.q_max = np.max( self.detector.recpolar[:,0] )
-        self.q_values = np.arange(self.q_min, self.q_max, self.q_spacing)
+        self.q_values = np.arange(self.q_min, self.q_max+self.q_spacing, self.q_spacing)
         self.num_q = len(self.q_values)
                 
         self.num_datapoints = self.num_phi * self.num_q
@@ -444,13 +444,14 @@ class Shot(object):
         nmask = np.ma.count_masked(z_interp)
         if nmask > 0:
             # then there are Nans outsize the convex hull...
-            logger.warning("griddata: %d of %d points are masked, not interpolated" % (nmask, z_interp.size))
+            if IGNORE_NAN:
+                logger.warning("griddata: %d of %d points are masked, not interpolated" % (nmask, z_interp.size))
+                z_interp = np.nan_to_num(z_interp)
+            else:
+                raise RuntimeError('Interpolation not complete -- interpolation does not cover convex hull')
+                
                 
         interpoldata[:,2] = z_interp.flatten()
-        
-        # -- SCIPY/LINEAR INTERP evaluate the interpolation on our polar grid
-        # interpf = interpolate.interp2d(x, y, intensities, kind='linear')
-        # interpoldata[:,2] = ( interpf(polar_x, polar_y) ).flatten()
         
         # ----------------------------------------------------------------------
         
@@ -1279,6 +1280,7 @@ def simulate_shot(traj, num_molecules, detector, traj_weights=None,
         if IGNORE_NAN:
             intensities[ind] = 0.0
             logger.critical('Set NaNs to zero... be careful!!!')
+            assert not np.isnan(np.sum(intensities))
         else:
             raise RuntimeError('Fatal error, NaNs detected in GPU output!')
     
