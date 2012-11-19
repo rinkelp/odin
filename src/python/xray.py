@@ -8,6 +8,11 @@ Todo:
 -- add simulate_shot factor functions to Shot and Shotset
 
 """
+
+# ---------------- #
+IGNORE_NAN = True  #
+# ---------------- #
+
 import logging
 logging.basicConfig()
 logger = logging.getLogger(__name__)
@@ -1021,7 +1026,7 @@ class Shotset(Shot):
         
     @classmethod
     def simulate(cls, traj, num_molecules, detector, num_shots,
-                 traj_weights=None, force_no_gpu=False):
+                 traj_weights=None, force_no_gpu=False, device_id=0):
         """
         Simulate many scattering 'shot's, i.e. one exposure of x-rays to a sample, and
         return that as a Shot object (factory function).
@@ -1068,7 +1073,7 @@ class Shotset(Shot):
     
         shotlist = []
         for i in range(num_shots):
-            I = simulate_shot(traj, num_molecules, detector, traj_weights, force_no_gpu)
+            I = simulate_shot(traj, num_molecules, detector, traj_weights, force_no_gpu, device_id=device_id)
             shot = Shot(I, detector)
             shotlist.append(shot)
         
@@ -1275,7 +1280,13 @@ def simulate_shot(traj, num_molecules, detector, traj_weights=None,
                 intensities += out_obj.this[1].astype(np.float64)
     
     if np.isnan(np.sum(intensities)):
-        logger.critical('%s' % str(intensities))
-        raise RuntimeError('Fatal error, NaNs detected in GPU output!')
+        ind = np.where(np.isnan(intensities) == True)
+        n_nan = len(ind)
+        logger.critical('%d NaNs in output!!!' % n_nan)
+        if IGNORE_NAN:
+            intensities[ind] = 0.0
+            logger.critical('Set NaNs to zero... be careful!!!')
+        else:
+            raise RuntimeError('Fatal error, NaNs detected in GPU output!')
     
     return intensities
