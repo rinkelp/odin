@@ -51,7 +51,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
     
     # load up filenames
-    if args.structures.endswith('.coor') or args.structures.endswith('.xyz')
+    if args.structures.endswith('.coor') or args.structures.endswith('.xyz'):
         traj = structure.load_corr(args.structures)
     else:
         traj = trajectory.load(args.structures)
