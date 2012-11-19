@@ -1275,5 +1275,9 @@ def simulate_shot(traj, num_molecules, detector, traj_weights=None,
                 if verbose: logger.info('Retrived data from GPU.')
                 assert( len(out_obj.this[1]) == num_q )
                 intensities += out_obj.this[1].astype(np.float64)
-                
+    
+    if np.isnan(np.sum(intensities)):
+        logger.critical('%s' % str(intensities))
+        raise RuntimeError('Fatal error, NaNs detected in GPU output!')
+    
     return intensities
