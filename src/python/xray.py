@@ -13,7 +13,7 @@ logging.basicConfig()
 logger = logging.getLogger(__name__)
 
 import numpy as np
-from scipy import interpolate
+from scipy import interpolate, fftpack
 from bisect import bisect_left
 from matplotlib.mlab import griddata
 
@@ -652,10 +652,10 @@ class Shot(object):
             Correlate for many values of delta
         """
         
-        # we need to assume that previously the interpolation function gave
-        # us a regular spaced azimuthal angular coordinate
+        q1 = self._nearest_q(q1)
+        q2 = self._nearest_q(q2)
         delta = self._nearest_delta(delta)
-        
+
         correlation = 0.0
         mean1 = 0.0
         mean2 = 0.0
@@ -702,13 +702,25 @@ class Shot(object):
             Correlate for one value of delta
         """
         
-        # recall the possible deltas are really the possible values of phi
-        correlation_ring = np.zeros(( self.num_phi, 2 ))
-        correlation_ring[:,0] = np.array(self.phi_values)
+        q1 = self._nearest_q(q1)
+        q2 = self._nearest_q(q2)
         
-        # now just correlate for each value of delta
-        for i in range(self.num_phi):
-            correlation_ring[i,1] = self.correlate(q1, q2, correlation_ring[i,0])
+        correlation_ring = np.zeros((self.num_phi, 2))
+        correlation_ring[:,0] = np.setdiff1d(self.phi_values, self._masked_coords)
+        
+        x = np.array([ self.I(q1, a) for a in correlation_ring[:,0] ])
+        
+        if np.abs(q1 - q2) < 1e-6:
+            y = x.copy()
+        else:
+            y = np.array([ self.I(q2, a) for a in angles ])
+        
+        # use d-FFT + convolution thm
+        ffx = fftpack.fft(x)
+        ffy = fftpack.fft(y)
+        iff = np.real(fftpack.ifft( ffx * ffy ))
+        
+        correlation_ring[:,1] = iff - (np.mean(x)*np.mean(y))
         
         return correlation_ring
         

@@ -3,7 +3,7 @@
 Tests: src/python/xray.py
 """
 
-import os
+import os, sys
 from nose import SkipTest
 
 from odin import xray, utils
@@ -181,6 +181,10 @@ class TestShot():
         
         q1 = 1.0
         q2 = 1.0
+
+        q1 = self.shot._nearest_q(q1)
+        q2 = self.shot._nearest_q(q2)
+        print "PI", self.shot.polar_intensities; sys.exit(1)
         
         # recall the possible deltas are really the possible values of phi
         correlation_ring = np.zeros(( self.shot.num_phi, 2 ))
@@ -201,6 +205,7 @@ class TestShot():
                 if (  (q1,phi) not in self.shot._masked_coords ) and (  (q2,phi+delta) not in self.shot._masked_coords ):            
                     x = self.shot.I(q1, phi)
                     y = self.shot.I(q2, phi+delta)
+                    print "x,y", x, y
                     mean1 += x
                     mean2 += y
                     correlation += x*y
@@ -276,7 +281,6 @@ class TestShotset():
         assert_array_almost_equal(i1, i2)
 
 if __name__ == '__main__':
-    test = TestDetector()
+    test = TestShot()
     test.setup()
-    #test.test_recpolar_n_reciprocal()
-    test.test_recpolar_space()
+    test.test_corr_ring()
