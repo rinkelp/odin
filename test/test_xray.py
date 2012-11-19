@@ -6,8 +6,8 @@ Tests: src/python/xray.py
 import os
 from nose import SkipTest
 
-from odin import xray
-from odin.testing import skip, ref_file
+from odin import xray, utils
+from odin.testing import skip, ref_file, gputest
 from mdtraj import trajectory, io
 
 try:
@@ -73,7 +73,6 @@ class TestDetector():
         
         assert_array_almost_equal(xx.flatten(), x)
         assert_array_almost_equal(yy.flatten(), y)
-        #assert_array_almost_equal(np.ones(len(x)**2) * self.l, z)
    
     def test_reciprocal_space(self):
         qx = self.d.reciprocal[:,0]
@@ -84,28 +83,28 @@ class TestDetector():
         Sy_unit = Shat[:,1]
         
         assert_array_almost_equal(qx/self.d.k, Sx_unit)
-        assert_array_almost_equal(qy/self.d.k, Sy_unit)        
-        assert_array_almost_equal(np.zeros(len(qy)), self.d.path_length)
+        assert_array_almost_equal(qy/self.d.k, Sy_unit)
    
     def test_recpolar_space(self):
+                
+        # build a reference conversion, using a different geometrical calc
+        ref1 = np.zeros(self.d.xyz.shape)
+        hd = np.sqrt( np.power(self.d.xyz[:,0], 2) + np.power(self.d.xyz[:,1], 2) )
         
-        # this is the "generic" detector in real space
-        x = np.arange(-self.lim, self.lim+self.spacing, self.spacing)
-        xx, yy = np.meshgrid(x, x)
+        # consistency check on the polar conversion
+        #theta = utils.arctan3( self.d.xyz[:,2], hd )
+        #assert_array_almost_equal(theta, self.d.polar[:,1], err_msg='theta check wrong')
         
-        # one slice along the horizontal direction in real space
-        q = self.d.recpolar[:,0]
-        h = self.l * np.tan(2.0 * np.arcsin(q/2.0))
+        # |q| = k*sqrt{ 2 - 2 cos(theta) }
+        ref1[:,0] = self.d.k * np.sqrt( 2.0 - 2.0 * np.cos(self.d.polar[:,1]) )
+                                
+        # phi is the same as polar
+        ref1[:,2] = self.d.polar[:,2].copy()
         
-        href = np.sqrt( np.power(xx.flatten(),2), np.power(yy.flatten(),2) )
-        print 'h:', h
-        print 'href:', href
-        assert_array_almost_equal(href, h)
+        assert_array_almost_equal( ref1[:,0], self.d.recpolar[:,0], err_msg='|q|')
+        assert_array_almost_equal( ref1[:,2], self.d.recpolar[:,2], err_msg='phi')
         
-        phiref = self.d.polar[:,2]
-        assert_array_almost_equal(phiref, self.d.recpolar[:,2])
-        
-        # NO THETA TEST --- DO WE CARE?
+        # NO THETA TEST -- DO WE CARE?
         
     def test_io(self):
         if os.path.exists('r.dtc'): os.system('rm r.dtc')
@@ -235,6 +234,7 @@ class TestShotset():
         x = xray.Shotset.simulate(self.t, 512, d, 2)
     
     def test_detector_checking(self):
+        if not GPU: raise SkipTest
         d1 = xray.Detector.generic(spacing=0.4)
         d2 = xray.Detector.generic(spacing=0.4)
 
@@ -276,6 +276,7 @@ class TestShotset():
         assert_array_almost_equal(i1, i2)
 
 if __name__ == '__main__':
-    test = TestShot()
+    test = TestDetector()
     test.setup()
-    test.test_simulate() 
+    #test.test_recpolar_n_reciprocal()
+    test.test_recpolar_space()

@@ -19,7 +19,7 @@ from odin.data import cromer_mann_params
 from odin import xray
 from odin.xray import Detector
 from odin.structure import rand_rotate_molecule
-from odin.testing import skip, ref_file
+from odin.testing import skip, ref_file, gputest
 
 from mdtraj import trajectory
 

@@ -205,12 +205,9 @@ class Detector(Beam):
     def real_to_recpolar(self, xyz):
         """
         Convert the real-space to reciprocal-space in polar form, that is
-        (|q|, theta, phi).
+        (|q|, ztheta , phi).
         """
-        
-        q = self.real_to_reciprocal(xyz)
-        reciprocal_polar = self._to_polar(q)
-        
+        reciprocal_polar = self._to_polar( self.real_to_reciprocal(xyz) )
         return reciprocal_polar
         
         
