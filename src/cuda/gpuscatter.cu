@@ -5,7 +5,9 @@
 // ============================================================================
 // IF YOU ARE HERE BECAUSE YOUR num_atom_types WAS TOO BIG...
 // then increment the number below according to your needs. 
+
 #define MAX_NUM_TYPES 10
+
 // ============================================================================
 
 
@@ -175,7 +177,7 @@ void __global__ kernel(float const * const __restrict__ q_x,
                 Qsum.y += fi*__cosf(qr);
             } // finished one molecule.
             
-            float fQ = Qsum.x*Qsum.x + Qsum.y*Qsum.y;  
+            float fQ = (Qsum.x*Qsum.x + Qsum.y*Qsum.y) / numRotations;  
             sdata[tid] = fQ;
             __syncthreads();
 
@@ -202,15 +204,3 @@ void __global__ kernel(float const * const __restrict__ q_x,
     }
 
 }
-
-
-// TJL to YTZ: do we need this?
-// __global__ void randTest(float *a) {
-//     int gid = blockIdx.x*blockDim.x + threadIdx.x;
-// 
-//     int tt = __cosf(gid);
-//     int yy = __sinf(gid);
-// 
-//     a[gid] = tt;
-//     a[gid/2] = yy;
-// }
