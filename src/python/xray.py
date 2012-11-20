@@ -483,8 +483,8 @@ class Shot(object):
             pass
         else:
             q = self.q_values[ bisect_left(self.q_values, q, hi=len(self.q_values)-1) ]
-            logger.warning('Passed value `q` not on grid -- using closest '
-                           'possible value')
+            logger.debug('Passed value `q` not on grid -- using closest '
+                         'possible value')
         return q
         
         
@@ -496,8 +496,8 @@ class Shot(object):
             pass
         else:
             phi = self.phi_values[ bisect_left(self.phi_values, phi, hi=len(phi_values)-1) ]
-            logger.warning('Passed value `phi` not on grid -- using closest '
-                           'possible value')
+            logger.debug('Passed value `phi` not on grid -- using closest '
+                         'possible value')
         return phi
         
         
@@ -511,8 +511,8 @@ class Shot(object):
             pass
         else:
             delta = self.phi_values[ bisect_left(self.phi_values, delta, hi=len(self.phi_values)-1) ]
-            logger.warning('Passed value `delta` not on grid -- using closest '
-                           'possible value')
+            logger.debug('Passed value `delta` not on grid -- using closest '
+                         'possible value')
         return delta
         
         
