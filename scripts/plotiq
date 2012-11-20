@@ -5,13 +5,14 @@ Plot the intensity profile of a shot or shotset in an appealing manner.
 """
 
 import numpy as np
+from scipy.interpolate import griddata
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 
 from odin import xray
 from odin.utils import odinparser
 
-def main(input_file, output):
+def main(input_file, max_intensity, output, npoints=1000):
     
     shotset = xray.Shotset.load(input_file)
     I = shotset.intensity_profile()
@@ -23,9 +24,27 @@ def main(input_file, output):
     ax[0].set_xlabel(r'q / $\AA$')
     ax[0].set_ylabel(r'I(q)')
     
-    ax[1].imshow(np.transpose(I), cmap=cm.jet, interpolation="nearest")
+    intensities = shotset.shots[0].intensities
+    intensities[intensities > max_intensity] = 0.0
+    intensities[intensities < 0.0] = 0.0
+    
+    q = shotset.shots[0].detector.xyz[:,:2] # ignore z-comp. of detector
+    grid = np.zeros(( npoints**2, 2 ))
+    gx = np.linspace(q[:,0].min(), q[:,0].max(), npoints)
+    gy = np.linspace(q[:,1].min(), q[:,1].max(), npoints)
+
+    gxx, gyy = np.meshgrid(gx, gy)
+    grid[:,0] = gxx.flatten()
+    grid[:,1] = gyy.flatten()
+
+    i_interp = griddata(q, intensities, grid, method='nearest', fill_value=0.0)
+    i_interp = i_interp.reshape(npoints, npoints)
+    
+    ax[1].imshow(np.transpose(i_interp), cmap=cm.jet, interpolation="nearest")
     ax[1].set_xlabel('x')
     ax[1].set_ylabel('y')
+    ax[1].set_xticklabels([])
+    ax[1].set_yticklabels([])
     
     plt.savefig(output, bbox_inches='tight')
     print "Saved: %s" % output
@@ -38,10 +57,12 @@ if __name__ == '__main__':
     parser = odinparser('Plot intensity profile of a shotset.')
     
     parser.add_argument('-i', '--input', type=str, help='An hdf shotset file.')
+    parser.add_argument('-m', '--max', type=float, default=1e6,
+                        help='Maximum intensity to plot (simulated beamstop). Default: 1e6.')
     parser.add_argument('-o', '--output', default='intensity_plot.pdf',
                         help='Image file to write. Append .pdf, .png, .jpg, etc. Default: intensity_plot.pdf')
 
     args = parser.parse_args()
     
-    main(args.input, args.output)
+    main(args.input, args.max, args.output)
 

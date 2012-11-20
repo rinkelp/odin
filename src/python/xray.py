@@ -20,7 +20,6 @@ logger = logging.getLogger(__name__)
 import numpy as np
 from scipy import interpolate, fftpack
 from bisect import bisect_left
-from matplotlib.mlab import griddata
 
 from odin import utils
 from odin.data import cromer_mann_params
@@ -436,21 +435,13 @@ class Shot(object):
        
         # -- MATPLOTLIB/GRIDDATA -- delauny triangulation + nearest neighbour
        
-        xp = self.detector.k * np.sqrt( 2.0 - 2.0 * np.cos(self.detector.polar[:,1]) ) # |q|
-        yp = self.detector.polar[:,2] # phi
+        xy = np.zeros(( self.detector.polar.shape[0], 2 ))
+        xy[:,0] = self.detector.k * np.sqrt( 2.0 - 2.0 * np.cos(self.detector.polar[:,1]) ) # |q|
+        xy[:,1] = self.detector.polar[:,2] # phi
 
-        z_interp = griddata( xp, yp, self.intensities, self.q_values, self.phi_values )
+        z_interp = interpolate.griddata( xy, self.intensities, interpoldata[:,:2], 
+                                         method='linear', fill_value=0.0 )
 
-        nmask = np.ma.count_masked(z_interp)
-        if nmask > 0:
-            # then there are Nans outsize the convex hull...
-            if IGNORE_NAN:
-                logger.warning("griddata: %d of %d points are masked, not interpolated" % (nmask, z_interp.size))
-                z_interp = np.nan_to_num(z_interp)
-            else:
-                raise RuntimeError('Interpolation not complete -- interpolation does not cover convex hull')
-                
-                
         interpoldata[:,2] = z_interp.flatten()
         
         # ----------------------------------------------------------------------
@@ -1273,6 +1264,7 @@ def simulate_shot(traj, num_molecules, detector, traj_weights=None,
                 assert( len(out_obj.this[1]) == num_q )
                 intensities += out_obj.this[1].astype(np.float64)
     
+    # check for NaNs in output
     if np.isnan(np.sum(intensities)):
         ind = np.where(np.isnan(intensities) == True)
         n_nan = len(ind)
@@ -1283,5 +1275,17 @@ def simulate_shot(traj, num_molecules, detector, traj_weights=None,
             assert not np.isnan(np.sum(intensities))
         else:
             raise RuntimeError('Fatal error, NaNs detected in GPU output!')
+    
+    # check for negative values in output
+    if len(intensities[intensities < 0.0]) != 0:
+        ind = np.where(intensities < 0.0)[0]
+        n_neg = len(ind)
+        logger.critical('%d negative intensities in output!!!' % n_neg)
+        if IGNORE_NAN:
+            intensities[ind] = 0.0
+            logger.critical('Set negative values to zero... be careful!!!')
+            assert( len(intensities[intensities < 0.0]) == 0 )
+        else:
+            raise RuntimeError('Fatal error, negative intensities detected in GPU output!')
     
     return intensities
