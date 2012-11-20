@@ -258,7 +258,7 @@ class Detector(Beam):
         polar = np.zeros( vector.shape )
         
         polar[:,0] = self._norm(vector)
-        polar[:,1] = np.arccos(vector[:,2] / polar[:,0])       # cos^{-1}(z/r)
+        polar[:,1] = np.arccos(vector[:,2] / (polar[:,0]+1e-16))       # cos^{-1}(z/r)
         polar[:,2] = utils.arctan3(vector[:,1], vector[:,0])   # y coord first!
         
         return polar

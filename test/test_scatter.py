@@ -132,6 +132,7 @@ def ref_simulate_shot(xyzlist, atomic_numbers, num_molecules, q_grid, rfloats=No
     
             I[i] += F.real*F.real + F.imag*F.imag
 
+    I /= float(num_molecules) # normalize
     return I
 
 
@@ -227,7 +228,7 @@ class TestScatter():
     
     def setup(self):
         
-        self.nq = 1 # number of detector vectors to do
+        self.nq = 100 # number of detector vectors to do
         
     def test_gpu_scatter(self):
 
