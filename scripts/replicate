@@ -13,7 +13,7 @@ from numpy import loadtxt
 def main(input_traj, num_replicas, density, weights, output):
     
     tout = multiply_conformations(input_traj, num_replicas, density, traj_weights=weights)
-    tout.save(output)
+    tout.save_pdb(output, no_models=True)
     print "Wrote: %s" % output
     
     return
