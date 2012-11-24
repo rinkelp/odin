@@ -389,12 +389,12 @@ def load_coor(filename):
     
     top = Topology()
     chain = top.addChain()
-    residue = top.addResidue('', chain)
+    residue = top.addResidue('XXX', chain)
     
     for i in range(data.shape[0]):
         element_symb = periodic_table[atomic_numbers[i]][1] # should give symbol
         element = Element.getBySymbol(element_symb)
-        name = '%s%d' % (element_symb, i)
+        name = '%s' % element_symb
         top.addAtom(name, element, residue)
     
     structure = trajectory.Trajectory(xyz=xyz, topology=top)

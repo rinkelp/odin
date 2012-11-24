@@ -1,4 +1,6 @@
 
+import os
+
 from mdtraj import trajectory
 from odin import structure
 from odin.testing import ref_file
@@ -23,8 +25,22 @@ def test_rm_com():
     masses = [ a.element.mass for a in t.topology.atoms() ]
     
     for i in range(t.n_frames):
-        assert_array_almost_equal(np.zeros(3), 
-                                  np.average(t.xyz[i,:,:], weights=masses, axis=0))
+        assert_array_almost_equal(np.zeros(3), np.average(t.xyz[i,:,:], weights=masses, axis=0))
+        
+def test_load_coor():
+    
+    s = structure.load_coor( ref_file('goldBenchMark.coor') )
+    s.save('s.pdb')
+    t = trajectory.load('s.pdb')
+    
+    assert_array_almost_equal(s.xyz, t.xyz, decimal=3)
+    
+    for a in t.topology.atoms():
+        assert a.element.symbol == 'Au'
+        
+    if os.path.exists('s.pdb'):
+        os.remove('s.pdb')
+
     
     
 if __name__ == '__main__':

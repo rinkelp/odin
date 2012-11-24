@@ -415,7 +415,7 @@ class Shot(object):
         # determine the bounds of the grid, and the discrete points to use
         self.phi_spacing = phi_spacing
         radian_spacing = self.phi_spacing * (2.0*np.pi/360.)
-        self.phi_values = np.arange(0.0, 2.0*np.pi+radian_spacing, radian_spacing)
+        self.phi_values = np.arange(0.0, 2.0*np.pi, radian_spacing)
         self.num_phi = len(self.phi_values)
     
         self.q_spacing = q_spacing
