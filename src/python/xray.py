@@ -353,14 +353,14 @@ class Shot(object):
     """
     Objects representing the data contained in a single xray exposure, and
     associated methods for analyzing such data.
-    
+        
     See Also
     --------
     Shotset : odin.xray.Shotset
         A collection of shots, with methods for analyzing statistical properties
         across the collection
     """
-    
+        
     def __init__(self, intensities, detector):
         """
         Instantiate a Shot class.
@@ -375,10 +375,16 @@ class Shot(object):
             A detector object, containing the pixel positions in space.
         """
         
+        self._masked_polar_pixels = []
+        self._masked_real_pixels = []
+        
         self.intensities = intensities
         self.detector = detector
         self.interpolate_to_polar()
-        self._mask_missing()
+        
+        # default polar grid
+        self.q_spacing = 0.02
+        self.phi_spacing = 1.0
         
         
     def interpolate_to_polar(self, q_spacing=0.02, phi_spacing=1.0):
@@ -412,13 +418,15 @@ class Shot(object):
                 interpoldata[:,2] -- intensity I(|q|, phi)
         """
         
-        # determine the bounds of the grid, and the discrete points to use
+        # save polar grid
+        self.q_spacing = q_spacing
         self.phi_spacing = phi_spacing
+        
+        # determine the bounds of the grid, and the discrete points to use
         radian_spacing = self.phi_spacing * (2.0*np.pi/360.)
         self.phi_values = np.arange(0.0, 2.0*np.pi, radian_spacing)
         self.num_phi = len(self.phi_values)
     
-        self.q_spacing = q_spacing
         self.q_min = np.min( self.detector.recpolar[:,0] )
         self.q_max = np.max( self.detector.recpolar[:,0] )
         self.q_values = np.arange(self.q_min, self.q_max+self.q_spacing, self.q_spacing)
@@ -430,40 +438,107 @@ class Shot(object):
         interpoldata = np.zeros((self.num_datapoints, 3))
         interpoldata[:,0] = np.tile(self.q_values, self.num_phi)
         interpoldata[:,1] = np.repeat(self.phi_values, self.num_q)
-         
-        # TJL testing methods below --------------------------------------------
        
-        # -- MATPLOTLIB/GRIDDATA -- delauny triangulation + nearest neighbour
+        # interpolate onto polar grid : delauny triangulation + nearest neighbour
        
         xy = np.zeros(( self.detector.polar.shape[0], 2 ))
         xy[:,0] = self.detector.k * np.sqrt( 2.0 - 2.0 * np.cos(self.detector.polar[:,1]) ) # |q|
         xy[:,1] = self.detector.polar[:,2] # phi
 
         z_interp = interpolate.griddata( xy, self.intensities, interpoldata[:,:2], 
-                                         method='linear', fill_value=0.0 )
+                                         method='linear', fill_value=np.nan )
+
+        # mask missing pixels (outside convex hull)
+        nan_ind = np.where( np.isnan(z_interp) )[0]
+        self.mask(interpoldata[nan_ind,:2], space='polar')
+        z_interp[nan_ind] = 0.0
 
         interpoldata[:,2] = z_interp.flatten()
-        
-        # ----------------------------------------------------------------------
         
         self.polar_intensities = interpoldata
         return interpoldata
         
         
-    def _mask_missing(self):
+    def mask(self, pixels, space='polar'):
+        r"""
+        Apply a mask to pixels that might contain corrupted or uninformative
+        data.
+        
+        Parameters
+        ----------
+        pixels : {list of tupes, 3d ndarray}
+            If space == 'real':
+                Either a list [(x,y,z), ...] of the pixel coordinates to mask, or a
+                n x 3 array of the same.
+            If space == 'polar':
+                Either a list [(q,phi), ...] of the pixel coordinates to mask, or a
+                n x 2 array of the same.
+            
+        space : str {'polar', 'real'}
         """
-        somehow, we need to process the data to either skip regions of 
-        poor/absent signal, or interpolate the data inside them.
-        """
+                
+        if space == 'polar':
+            if type(pixels) == list:
+                pp = pixels
+            elif type(pixels) = np.ndarray:
+                pp = []
+                for i in range(pixels.shape[0]):
+                    pp.append( (pixels[i,0], pixels[i,1]) )
+            else:
+                raise TypeError('`pixels` must be a list or array.')
+            self._mask_polar(pp)
+            
+        elif space == 'real':
+            if type(pixels) == list:
+                pp = pixels
+            elif type(pixels) = np.ndarray:
+                pp = []
+                for i in range(pixels.shape[0]):
+                    pp.append( (pixels[i,0], pixels[i,1], pixels[i,2]) )
+            else:
+                raise TypeError('`pixels` must be a list or array.')
+            self._mask_real(pp)
+            
+        else:
+            raise ValueError('`space` must be one of {polar, real}')
         
-        self._masked_coords = []
-        #self.intensities = np.ma(self.intensities, mask=mask)
+        return
         
-        return # for now...
-       
         
-    def _unmask_missing(self):
+    def _mask_polar(self, pixels):
+        
+        mask = np.zeros((self.polar_intensities.shape[0]), dtype=np.int)
+        
+        for i in range(len(pixels)):
+            exists = True
+            if pixels[i][0] not in self.q_values:
+                exists = False
+            if pixels[i][1] not in self.phi_values:
+                exists = False
+                
+            if exists:
+                self.masked_polar_pixels.append(pixels[i])
+                mask[self._intensity_index( *pixels[i] )] = 1
+            else:
+                logger.warning('pixel %s cannot be masked - does not exist' % pixels[i])
+                
+        self.polar_intensities = np.ma.array(self.polar_intensities, mask=mask)
+
+        
+    def _mask_real(self, pixels):
         raise NotImplementedError()
+        # self.masked_real_pixels = pixels
+        # self.intensities = np.ma.array( ... )
+        # self.interpolate_to_polar(self.q_spacing, self.phi_spacing)
+        
+        
+    def unmask_all(self):
+        """
+        Reveals all masked coordinates.
+        """
+        self.masked_real_pixels = []
+        self.masked_polar_pixels = []
+        self.polar_intensities = np.array(self.polar_intensities) # unmask
         
         
     def _nearest_q(self, q):
@@ -505,7 +580,27 @@ class Shot(object):
             logger.debug('Passed value `delta` not on grid -- using closest '
                          'possible value')
         return delta
+    
+    def _q_index(self, q):
+        """
+        Quick return of all self.intensities with a specific `q`
+        """
+        q = self._nearest_q(q)
+        start = int(q/self.q_spacing) - int(self.q_min/self.q_spacing)
+        end = start + self.num_phi
+        inds = np.arange(start, end)
+        return inds
         
+        
+    def _phi_index(self, phi):
+        """
+        Quick return of all self.intensities with a specific `phi`
+        """
+        phi = self._nearest_phi(phi)
+        start = int(phi/self.phi_spacing)
+        inds = np.arange(start, start+self.num_phi, self.num_q)
+        return inds
+    
         
     def _intensity_index(self, q, phi):
         """
@@ -542,6 +637,15 @@ class Shot(object):
         return self.polar_intensities[self._intensity_index(q,phi),2]
         
         
+    def I_ring(self, q):
+        """
+        Return the intensities around a ring at `q`
+        """
+        q = self._nearest_q(q)
+        ind = self._q_index(q)
+        return self.polar_intensities[ind,2]
+        
+        
     def qintensity(self, q):
         """
         Averages over the azimuth phi to obtain an intensity for magnitude |q|.
@@ -558,8 +662,7 @@ class Shot(object):
         """
         
         q = self._nearest_q(q)
-        
-        ind = np.where(self.polar_intensities[:,0] == q)
+        ind = self._q_index(q)
         intensity = np.mean( self.polar_intensities[ind,2] )
         
         return intensity
@@ -644,24 +747,24 @@ class Shot(object):
         q2 = self._nearest_q(q2)
         delta = self._nearest_delta(delta)
 
+        mean_x = 0.0
+        mean_y = 0.0
         correlation = 0.0
-        mean1 = 0.0
-        mean2 = 0.0
         
+        N = 0
         for phi in self.phi_values:
-            
-            if (  (q1,phi) not in self._masked_coords ) and (  (q2,phi+delta) not in self._masked_coords ):            
-                x = self.I(q1, phi)
-                y = self.I(q2, phi+delta)
-                mean1 += x
-                mean2 += y
+            # todo TJL : can we use the np masking scheme here?
+            if (  (q1,phi) not in self.masked_polar_pixels ) and (  (q2,phi+delta) not in self.masked_polar_pixels ):            
+                x = self.shot.I(q1, phi)
+                y = self.shot.I(q2, phi+delta)
+                N += 1
+                mean_x += x
+                mean_y += y
                 correlation += x*y
         
-        correlation /= float(self.num_phi)
-        mean1 /= float(self.num_phi)
-        mean2 /= float(self.num_phi)
+        ncorr = (1.0/float(N)) * ( correlation - mean_x * mean_y )
         
-        return correlation - (mean1*mean2)
+        return ncorr
         
         
     def correlate_ring(self, q1, q2):
@@ -690,25 +793,40 @@ class Shot(object):
             Correlate for one value of delta
         """
         
+        # As dermen has pointed out, here we need to be a little careful with
+        # how we deal with masked pixels. If we subtract the means from the 
+        # pixels first, then perform the correlation, we can safely ignore
+        # masked pixels so long as (1) we make sure their value is zero, and
+        # (2) we don't include them in the count `n_delta` of total corration
+        # pairs.
+        
         q1 = self._nearest_q(q1)
         q2 = self._nearest_q(q2)
         
-        correlation_ring = np.zeros((self.num_phi, 2))
-        correlation_ring[:,0] = np.setdiff1d(self.phi_values, self._masked_coords)
-        
-        x = np.array([ self.I(q1, a) for a in correlation_ring[:,0] ])
-        
+        x = self.I_ring(q1)
         if np.abs(q1 - q2) < 1e-6:
             y = x.copy()
         else:
-            y = np.array([ self.I(q2, a) for a in angles ])
+            y = self.I_ring(q2)
+        assert len(x) == len(y)
+        n_theta = len(x)
+        
+        # subtract the means
+        x -= x.mean()
+        y -= y.mean()
+        
+        # count the number of total pairs
+        n_delta = np.ma.count(x) * np.ma.count(y)
+        
+        correlation_ring = np.zeros((n_theta, 2))
+        correlation_ring[:,0] = self.phi_values
         
         # use d-FFT + convolution thm
         ffx = fftpack.fft(x)
         ffy = fftpack.fft(y)
         iff = np.real(fftpack.ifft( ffx * ffy ))
         
-        correlation_ring[:,1] = iff - (np.mean(x)*np.mean(y))
+        correlation_ring[:,1] = iff * float(n_theta) / float(n_delta)
         
         return correlation_ring
         
@@ -1127,7 +1245,7 @@ class Shotset(Shot):
 
     
 def simulate_shot(traj, num_molecules, detector, traj_weights=None,
-                  force_no_gpu=False, verbose=False, device_id=0):
+                  force_no_gpu=False, device_id=0):
     """
     Simulate a scattering 'shot', i.e. one exposure of x-rays to a sample.
     
@@ -1165,9 +1283,6 @@ def simulate_shot(traj, num_molecules, detector, traj_weights=None,
     force_no_gpu : bool
         Run the (slow) CPU version of this function.
         
-    verbose : bool
-        Be noisy and loud
-        
     device_id : int
         The index of the GPU device to run on.
         
@@ -1185,9 +1300,8 @@ def simulate_shot(traj, num_molecules, detector, traj_weights=None,
         results into the Shot and Shotset classes, respectively.
     """
     
-    if verbose:
-        logger.info('Performing scattering simulation...')
-        logger.info('Simulating %d copies in the dilute limit' % num_molecules)
+    logger.debug('Performing scattering simulation...')
+    logger.debug('Simulating %d copies in the dilute limit' % num_molecules)
 
     if traj_weights == None:
         traj_weights = np.ones( traj.n_frames )
@@ -1248,11 +1362,11 @@ def simulate_shot(traj, num_molecules, detector, traj_weights=None,
 
             # run dat shit
             if force_no_gpu:
-                if verbose: logger.info('Running CPU computation')
+                logger.debug('Running CPU computation')
                 raise NotImplementedError('')
 
             else:
-                if verbose: logger.info('Sending calculation to GPU device...')
+                logger.debug('Sending calculation to GPU device...')
                 device_id = int(0)
                 bpg = int(bpg)
                 out_obj = gpuscatter.GPUScatter(device_id,
@@ -1268,24 +1382,24 @@ def simulate_shot(traj, num_molecules, detector, traj_weights=None,
     if np.isnan(np.sum(intensities)):
         ind = np.where(np.isnan(intensities) == True)
         n_nan = len(ind)
-        logger.critical('%d NaNs in output!!!' % n_nan)
+        logger.critical('%d NaNs in output...' % n_nan)
         if IGNORE_NAN:
             intensities[ind] = 0.0
-            logger.critical('Set NaNs to zero... be careful!!!')
+            logger.critical('Set NaNs to zero... be careful!')
             assert not np.isnan(np.sum(intensities))
         else:
-            raise RuntimeError('Fatal error, NaNs detected in GPU output!')
+            raise RuntimeError('Fatal error, NaNs detected in scattering output!')
     
     # check for negative values in output
     if len(intensities[intensities < 0.0]) != 0:
         ind = np.where(intensities < 0.0)[0]
         n_neg = len(ind)
-        logger.critical('%d negative intensities in output!!!' % n_neg)
+        logger.critical('%d negative intensities in output..' % n_neg)
         if IGNORE_NAN:
             intensities[ind] = 0.0
-            logger.critical('Set negative values to zero... be careful!!!')
+            logger.critical('Set negative values to zero... be careful!')
             assert( len(intensities[intensities < 0.0]) == 0 )
         else:
-            raise RuntimeError('Fatal error, negative intensities detected in GPU output!')
+            raise RuntimeError('Fatal error, negative intensities detected in scattering output!')
     
     return intensities
