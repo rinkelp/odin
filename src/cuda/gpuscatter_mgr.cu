@@ -210,7 +210,7 @@ GPUScatter::GPUScatter (int device_id_,
     cudaFree(d_ry);
     cudaFree(d_rz);
     cudaFree(d_id);
-    cudaFree(d_cm);
+//    cudaFree(d_cm);
     cudaFree(d_rand1);
     cudaFree(d_rand2);
     cudaFree(d_rand3);
