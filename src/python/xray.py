@@ -1340,7 +1340,11 @@ def simulate_shot(traj, num_molecules, detector, traj_weights=None,
 
     for i,a in enumerate(atom_types):
         ind = i * 9
-        cromermann[ind:ind+9] = cromer_mann_params[(a,0)]
+        try:
+            cromermann[ind:ind+9] = cromer_mann_params[(a,0)]
+        except KeyError as e:
+            logger.critical('Element number %d not in Cromer-Mann form factor parameter database' % a)
+            raise ValueError('Could not get critical parameters for computation')
         aid[ aid == a ] = i
     
     # do the simulation, scan over confs., store in `intensities`
