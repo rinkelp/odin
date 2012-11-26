@@ -62,7 +62,7 @@ GPUScatter::GPUScatter (int device_id_,
                         int    nQout_,
                         float* h_outQ_
                         ) {
-                            
+
     /* All arguments consist of 
      *   (1) a float pointer to the beginning of the array to be passed
      *   (2) ints representing the size of each array
@@ -223,8 +223,8 @@ GPUScatter::GPUScatter (int device_id_,
     }
 
     printf("output:\n");
-    for(int i; i<nQ; i++) {
-        printf("%f ", h_outQ[i]);
+    for(int x=0; x<nQ; x++) {
+        printf("%f ", h_outQ[x]);
     }
 
 }
