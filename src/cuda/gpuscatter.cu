@@ -98,7 +98,7 @@ void __global__ kernel(float const * const __restrict__ q_x,
 		               int   const * const __restrict__ r_id, 
                        int   const numAtoms, 
                        int   const numAtomTypes,
-                       // float const * const __restrict__ cromermann,
+                       float const * const __restrict__ cromermann,
                        float const * const __restrict__ randN1, 
                        float const * const __restrict__ randN2, 
                        float const * const __restrict__ randN3,
@@ -139,28 +139,24 @@ void __global__ kernel(float const * const __restrict__ q_x,
             Qsum.x = 0;
             Qsum.y = 0;
      
-            // START DEBUG
-     
-            // // Cromer-Mann computation, precompute for this value of q
-            // float mq = qx*qx + qy*qy + qz*qz;
-            // float qo = mq / (16*M_PI*M_PI); // qo is (sin(theta)/lambda)^2
-            // float fi;
-            // 
-            // // for each atom type, compute the atomic form factor f_i(q)
-            // for (int type = 0; type < numAtomTypes; type++) {
-            // 
-            //     // scan through cromermann in blocks of 9 parameters
-            //     int tind = type * 9;
-            //     fi =  cromermann[tind]   * exp(-cromermann[tind+4]*qo);
-            //     fi += cromermann[tind+1] * exp(-cromermann[tind+5]*qo);
-            //     fi += cromermann[tind+2] * exp(-cromermann[tind+6]*qo);
-            //     fi += cromermann[tind+3] * exp(-cromermann[tind+7]*qo);
-            //     fi += cromermann[tind+8];
-            //     
-            //     formfactors[type] = fi; // store for use in a second
-            // }
+            // Cromer-Mann computation, precompute for this value of q
+            float mq = qx*qx + qy*qy + qz*qz;
+            float qo = mq / (16*M_PI*M_PI); // qo is (sin(theta)/lambda)^2
+            float fi;
             
-            // END DEBUG
+            // for each atom type, compute the atomic form factor f_i(q)
+            for (int type = 0; type < numAtomTypes; type++) {
+            
+                // scan through cromermann in blocks of 9 parameters
+                int tind = type * 9;
+                fi =  cromermann[tind]   * exp(-cromermann[tind+4]*qo);
+                fi += cromermann[tind+1] * exp(-cromermann[tind+5]*qo);
+                fi += cromermann[tind+2] * exp(-cromermann[tind+6]*qo);
+                fi += cromermann[tind+3] * exp(-cromermann[tind+7]*qo);
+                fi += cromermann[tind+8];
+                
+                formfactors[type] = fi; // store for use in a second
+            }
 
             // for each atom in molecule
             // bottle-necked by this currently. 
@@ -176,14 +172,9 @@ void __global__ kernel(float const * const __restrict__ q_x,
                 rotate(rx, ry, rz, q0, q1, q2, q3, ax, ay, az);
                 float qr = ax*qx + ay*qy + az*qz;
 
-                // fi = formfactors[id]; // DEBUG
-                
-                // tjl for DEBUG
-                Qsum.x += __sinf(qr);
-                Qsum.y += __cosf(qr);
-                
-                // Qsum.x += fi*__sinf(qr);
-                // Qsum.y += fi*__cosf(qr);
+                fi = formfactors[id];
+                Qsum.x += fi*__sinf(qr);
+                Qsum.y += fi*__cosf(qr);
             } // finished one molecule.
             
             float fQ = (Qsum.x*Qsum.x + Qsum.y*Qsum.y) / numRotations;  

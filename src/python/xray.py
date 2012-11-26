@@ -1307,6 +1307,11 @@ def simulate_shot(traj, num_molecules, detector, traj_weights=None,
         results into the Shot and Shotset classes, respectively.
     """
     
+    # NOTES ON DATA TYPES
+    # all arrays should be float32 / int32
+    # output array gets upcast to float64 before being returned
+    # native python ints are expected by swig - not stand alone np.int32's
+    
     logger.debug('Performing scattering simulation...')
     logger.debug('Simulating %d copies in the dilute limit' % num_molecules)
 
@@ -1341,14 +1346,14 @@ def simulate_shot(traj, num_molecules, detector, traj_weights=None,
     for i,a in enumerate(atom_types):
         ind = i * 9
         try:
-            cromermann[ind:ind+9] = cromer_mann_params[(a,0)]
+            cromermann[ind:ind+9] = cromer_mann_params[(a,0)].astype(np.float32)
         except KeyError as e:
             logger.critical('Element number %d not in Cromer-Mann form factor parameter database' % a)
             raise ValueError('Could not get critical parameters for computation')
-        aid[ aid == a ] = i
+        aid[ aid == a ] = int(i)
     
     # do the simulation, scan over confs., store in `intensities`
-    intensities = np.zeros(detector.num_q)
+    intensities = np.zeros(detector.num_q, dtype=np.float64) # should be double
     
     for i,num in enumerate(num_per_shapshot):
         if num > 0:

@@ -62,6 +62,34 @@ GPUScatter::GPUScatter (int device_id_,
                         int    nQout_,
                         float* h_outQ_
                         ) {
+    
+    // check all input
+    int z
+    
+    printf("qx:\n");
+    for(z = 0; z < 5; z++) {
+        printf("%f ", h_qx_[z]);
+    }
+    printf("rx:\n");
+    for(z = 0; z < 5; z++) {
+        printf("%f ", h_rx_[z]);
+    }
+    printf("rid:\n");
+    for(z = 0; z < 5; z++) {
+        printf("%f ", h_rid_[z]);
+    }
+    printf("cm:\n");
+    for(z = 0; z < 5; z++) {
+        printf("%f ", h_cm_[z]);
+    }
+    printf("rand1:\n");
+    for(z = 0; z < 5; z++) {
+        printf("%f ", h_rand1_[z]);
+    }
+    printf("outQ:\n");
+    for(z = 0; z < 5; z++) {
+        printf("%f ", h_outQ_[z]);
+    }
 
     /* All arguments consist of 
      *   (1) a float pointer to the beginning of the array to be passed
@@ -80,11 +108,8 @@ GPUScatter::GPUScatter (int device_id_,
     assert( nAtomsx_ == nAtomsid_ );
     
     assert( nRot1_ == nRot2_ );
-    assert( nRot1_ == nRot3_ );
-    
+    assert( nRot1_ == nRot3_ );    
     assert( bpg_ * 512 == nRot1_ );
-    assert( nRot1_ == nRot2_ );
-    assert( nRot1_ == nRot3_ );
     
     // unpack arguments
     device_id = device_id_;
@@ -149,7 +174,7 @@ GPUScatter::GPUScatter (int device_id_,
     float *d_ry;        deviceMalloc( (void **) &d_ry, nAtoms_size);
     float *d_rz;        deviceMalloc( (void **) &d_rz, nAtoms_size);
     int   *d_id;        deviceMalloc( (void **) &d_id, nAtoms_idsize);
-    // float *d_cm;        deviceMalloc( (void **) &d_cm, cm_size);
+    float *d_cm;        deviceMalloc( (void **) &d_cm, cm_size);
     float *d_rand1;     deviceMalloc( (void **) &d_rand1, nRotations_size);
     float *d_rand2;     deviceMalloc( (void **) &d_rand2, nRotations_size);
     float *d_rand3;     deviceMalloc( (void **) &d_rand3, nRotations_size);
@@ -170,7 +195,7 @@ GPUScatter::GPUScatter (int device_id_,
     cudaMemcpy(d_ry, &h_ry[0], nAtoms_size, cudaMemcpyHostToDevice);
     cudaMemcpy(d_rz, &h_rz[0], nAtoms_size, cudaMemcpyHostToDevice);
     cudaMemcpy(d_id, &h_id[0], nAtoms_idsize, cudaMemcpyHostToDevice);
-    // cudaMemcpy(d_cm, &h_cm[0], cm_size, cudaMemcpyHostToDevice);
+    cudaMemcpy(d_cm, &h_cm[0], cm_size, cudaMemcpyHostToDevice);
     cudaMemcpy(d_rand1, &h_rand1[0], nRotations_size, cudaMemcpyHostToDevice);
     cudaMemcpy(d_rand2, &h_rand2[0], nRotations_size, cudaMemcpyHostToDevice);
     cudaMemcpy(d_rand3, &h_rand3[0], nRotations_size, cudaMemcpyHostToDevice);
@@ -183,8 +208,8 @@ GPUScatter::GPUScatter (int device_id_,
     }
 
     // execute the kernel
-    // kernel<tpb> <<<bpg, tpb>>> (d_qx, d_qy, d_qz, d_outQ, nQ, d_rx, d_ry, d_rz, d_id, nAtoms, numAtomTypes, d_cm, d_rand1, d_rand2, d_rand3, nRotations);
-    kernel<tpb> <<<bpg, tpb>>> (d_qx, d_qy, d_qz, d_outQ, nQ, d_rx, d_ry, d_rz, d_id, nAtoms, numAtomTypes, d_rand1, d_rand2, d_rand3, nRotations);
+    kernel<tpb> <<<bpg, tpb>>> (d_qx, d_qy, d_qz, d_outQ, nQ, d_rx, d_ry, d_rz, d_id, nAtoms, numAtomTypes, d_cm, d_rand1, d_rand2, d_rand3, nRotations);
+    // kernel<tpb> <<<bpg, tpb>>> (d_qx, d_qy, d_qz, d_outQ, nQ, d_rx, d_ry, d_rz, d_id, nAtoms, numAtomTypes, d_rand1, d_rand2, d_rand3, nRotations);
     cudaThreadSynchronize();
     err = cudaGetLastError();
     if (err != cudaSuccess) {
@@ -210,7 +235,7 @@ GPUScatter::GPUScatter (int device_id_,
     cudaFree(d_ry);
     cudaFree(d_rz);
     cudaFree(d_id);
-//    cudaFree(d_cm);
+    cudaFree(d_cm);
     cudaFree(d_rand1);
     cudaFree(d_rand2);
     cudaFree(d_rand3);
@@ -223,7 +248,7 @@ GPUScatter::GPUScatter (int device_id_,
     }
 
     printf("output:\n");
-    for(int x=0; x<nQ; x++) {
+    for(int x = 0; x < nQ; x++) {
         printf("%f ", h_outQ[x]);
     }
 
