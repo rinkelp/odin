@@ -133,6 +133,9 @@ def ref_simulate_shot(xyzlist, atomic_numbers, num_molecules, q_grid, rfloats=No
             I[i] += F.real*F.real + F.imag*F.imag
 
     I /= float(num_molecules) # normalize
+    if len(I[I<0.0]) != 0:
+        raise Exception('neg values in CPU!')
+
     return I
 
 
@@ -228,7 +231,7 @@ class TestScatter():
     
     def setup(self):
         
-        self.nq = 100 # number of detector vectors to do
+        self.nq = 3 # number of detector vectors to do
         
     def test_gpu_scatter(self):
 
@@ -270,7 +273,12 @@ class TestScatter():
        
 
 if __name__ == '__main__':
-    t = TestScatter()
-    t.setup()
-    t.test_gpu_scatter()
-    t.test_python_call()
+        xyzQ = np.loadtxt(ref_file('3lyz.xyz'))
+        xyzlist = xyzQ[:,:3]
+        atomic_numbers = xyzQ[:,3].flatten()
+
+        q_grid = np.loadtxt(ref_file('512_q.xyz'))[:100]
+
+        rfloats = np.loadtxt(ref_file('512_x_3_random_floats.txt'))
+        num_molecules = rfloats.shape[0]        
+        print ref_simulate_shot(xyzlist, atomic_numbers, num_molecules, q_grid, rfloats=None)
