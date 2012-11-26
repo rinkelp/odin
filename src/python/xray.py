@@ -980,7 +980,7 @@ class Shotset(Shot):
         for i in xrange(self.num_shots):
             yield self.shots[i]
             
-    def __getitem(self, key):
+    def __getitem__(self, key):
         return self.shots[key]
         
     def _check_qvectors_same(self, epsilon=1e-6):
