@@ -375,8 +375,8 @@ class Shot(object):
             A detector object, containing the pixel positions in space.
         """
         
-        self._masked_polar_pixels = []
-        self._masked_real_pixels = []
+        self.masked_polar_pixels = []
+        self.masked_real_pixels = []
         
         self.intensities = intensities
         self.detector = detector
@@ -448,15 +448,13 @@ class Shot(object):
         z_interp = interpolate.griddata( xy, self.intensities, interpoldata[:,:2], 
                                          method='linear', fill_value=np.nan )
 
+        interpoldata[:,2] = z_interp.flatten()
+        self.polar_intensities = interpoldata
+
         # mask missing pixels (outside convex hull)
         nan_ind = np.where( np.isnan(z_interp) )[0]
         self.mask(interpoldata[nan_ind,:2], space='polar')
-        z_interp[nan_ind] = 0.0
-
-        interpoldata[:,2] = z_interp.flatten()
-        
-        self.polar_intensities = interpoldata
-        return interpoldata
+        self.polar_intensities[nan_ind] = 0.0
         
         
     def mask(self, pixels, space='polar'):
@@ -480,7 +478,7 @@ class Shot(object):
         if space == 'polar':
             if type(pixels) == list:
                 pp = pixels
-            elif type(pixels) = np.ndarray:
+            elif type(pixels) == np.ndarray:
                 pp = []
                 for i in range(pixels.shape[0]):
                     pp.append( (pixels[i,0], pixels[i,1]) )
@@ -491,7 +489,7 @@ class Shot(object):
         elif space == 'real':
             if type(pixels) == list:
                 pp = pixels
-            elif type(pixels) = np.ndarray:
+            elif type(pixels) == np.ndarray:
                 pp = []
                 for i in range(pixels.shape[0]):
                     pp.append( (pixels[i,0], pixels[i,1], pixels[i,2]) )
@@ -507,7 +505,7 @@ class Shot(object):
         
     def _mask_polar(self, pixels):
         
-        mask = np.zeros((self.polar_intensities.shape[0]), dtype=np.int)
+        mask = np.zeros((self.polar_intensities.shape), dtype=np.int)
         
         for i in range(len(pixels)):
             exists = True
@@ -518,7 +516,7 @@ class Shot(object):
                 
             if exists:
                 self.masked_polar_pixels.append(pixels[i])
-                mask[self._intensity_index( *pixels[i] )] = 1
+                mask[self._intensity_index( *pixels[i] ),2] = 1
             else:
                 logger.warning('pixel %s cannot be masked - does not exist' % pixels[i])
                 
@@ -561,7 +559,7 @@ class Shot(object):
         if (phi % self.phi_spacing == 0.0):
             pass
         else:
-            phi = self.phi_values[ bisect_left(self.phi_values, phi, hi=len(phi_values)-1) ]
+            phi = self.phi_values[ bisect_left(self.phi_values, phi, hi=self.num_phi-1) ]
             logger.debug('Passed value `phi` not on grid -- using closest '
                          'possible value')
         return phi
@@ -576,7 +574,7 @@ class Shot(object):
         if (delta % self.phi_spacing == 0.0):
             pass
         else:
-            delta = self.phi_values[ bisect_left(self.phi_values, delta, hi=len(self.phi_values)-1) ]
+            delta = self.phi_values[ bisect_left(self.phi_values, delta, hi=self.num_phi-1) ]
             logger.debug('Passed value `delta` not on grid -- using closest '
                          'possible value')
         return delta
@@ -634,7 +632,7 @@ class Shot(object):
         """
         Return the intensity a (q,phi).
         """
-        return self.polar_intensities[self._intensity_index(q,phi),2]
+        return np.array(self.polar_intensities)[self._intensity_index(q,phi),2]
         
         
     def I_ring(self, q):
@@ -643,7 +641,7 @@ class Shot(object):
         """
         q = self._nearest_q(q)
         ind = self._q_index(q)
-        return self.polar_intensities[ind,2]
+        return np.array(self.polar_intensities)[ind,2]
         
         
     def qintensity(self, q):
@@ -663,7 +661,7 @@ class Shot(object):
         
         q = self._nearest_q(q)
         ind = self._q_index(q)
-        intensity = np.mean( self.polar_intensities[ind,2] )
+        intensity = (self.polar_intensities[ind,2]).mean()
         
         return intensity
         
@@ -746,25 +744,25 @@ class Shot(object):
         q1 = self._nearest_q(q1)
         q2 = self._nearest_q(q2)
         delta = self._nearest_delta(delta)
-
-        mean_x = 0.0
-        mean_y = 0.0
-        correlation = 0.0
         
-        N = 0
-        for phi in self.phi_values:
-            # todo TJL : can we use the np masking scheme here?
-            if (  (q1,phi) not in self.masked_polar_pixels ) and (  (q2,phi+delta) not in self.masked_polar_pixels ):            
-                x = self.shot.I(q1, phi)
-                y = self.shot.I(q2, phi+delta)
-                N += 1
-                mean_x += x
-                mean_y += y
-                correlation += x*y
+        i = delta / self.phi_spacing
+        assert delta % self.phi_spacing == 0.0
         
-        ncorr = (1.0/float(N)) * ( correlation - mean_x * mean_y )
+        print self.polar_intensities
         
-        return ncorr
+        x = self.polar_intensities[self._q_index(q1),2]
+        y = self.polar_intensities[self._q_index(q2),2]
+        y = np.concatenate(( y[i:], y[:i] ))
+        
+        print type(x), x
+        print type(y), y
+        
+        x -= x.mean()
+        y -= y.mean()
+        
+        corr = (x*y).mean() # this should work with masking
+        
+        return corr
         
         
     def correlate_ring(self, q1, q2):
@@ -975,6 +973,15 @@ class Shotset(Shot):
     
         self._check_qvectors_same()
         
+    def __len__(self):
+        return len(self.shots)
+        
+    def __iter__(self):
+        for i in xrange(self.num_shots):
+            yield self.shots[i]
+            
+    def __getitem(self, key):
+        return self.shots[key]
         
     def _check_qvectors_same(self, epsilon=1e-6):
         """

@@ -159,32 +159,39 @@ class TestShot():
         mean1 = 0.0
         mean2 = 0.0
         
+        n = 0
+        
         for phi in self.shot.phi_values:
             
-            if (  (q1,phi) not in self.shot._masked_coords ) and (  (q2,phi+delta) not in self.shot._masked_coords ):            
+            if (  (q1,phi) not in self.shot.masked_polar_pixels ) and (  (q2,phi+delta) not in self.shot.masked_polar_pixels ):            
                 x = self.shot.I(q1, phi)
                 y = self.shot.I(q2, phi+delta)
                 mean1 += x
                 mean2 += y
                 correlation += x*y
+                n += 1
         
-        correlation /= float(self.shot.num_phi)
-        mean1 /= float(self.shot.num_phi)
-        mean2 /= float(self.shot.num_phi)
+        correlation /= float(n)
+        mean1 /= float(n)
+        mean2 /= float(n)
         
         ref = correlation - (mean1*mean2)
+        ans = self.shot.correlate(q1, q2, delta)
         
-        assert_almost_equal(ref, self.shot.correlate(q1, q2, delta))
+        print "code:", ans
+        print "ref: ", ref
+                
+        assert_almost_equal(ref, ans)
     
     
     def test_corr_ring(self):
-        
+
         q1 = 1.0
         q2 = 1.0
 
         q1 = self.shot._nearest_q(q1)
         q2 = self.shot._nearest_q(q2)
-        print "PI", self.shot.polar_intensities; sys.exit(1)
+        print "PI", self.shot.polar_intensities
         
         # recall the possible deltas are really the possible values of phi
         correlation_ring = np.zeros(( self.shot.num_phi, 2 ))
@@ -202,7 +209,7 @@ class TestShot():
 
             for phi in self.shot.phi_values:
 
-                if (  (q1,phi) not in self.shot._masked_coords ) and (  (q2,phi+delta) not in self.shot._masked_coords ):            
+                if (  (q1,phi) not in self.shot.masked_polar_pixels ) and (  (q2,phi+delta) not in self.shot.masked_polar_pixels ):            
                     x = self.shot.I(q1, phi)
                     y = self.shot.I(q2, phi+delta)
                     print "x,y", x, y
@@ -269,15 +276,15 @@ class TestShotset():
         q1 = 0.1
         q2 = 0.1
         delta = 45.0
-        i1 = self.shot.correlate(q1, q2, delta)
-        i2 = self.shotset.correlate(q1, q2, delta)
+        i1 = np.array(self.shot.correlate(q1, q2, delta))
+        i2 = np.array(self.shotset.correlate(q1, q2, delta))
         assert_almost_equal(i1, i2)
         
     def test_rings(self):
         q1 = 0.1
         q2 = 0.1
-        i1 = self.shot.correlate_ring(q1, q2)
-        i2 = self.shotset.correlate_ring(q1, q2)
+        i1 = np.array(self.shot.correlate_ring(q1, q2))
+        i2 = np.array(self.shotset.correlate_ring(q1, q2))
         assert_array_almost_equal(i1, i2)
 
 if __name__ == '__main__':
