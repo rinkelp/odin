@@ -139,24 +139,24 @@ void __global__ kernel(float const * const __restrict__ q_x,
             Qsum.x = 0;
             Qsum.y = 0;
      
-            // Cromer-Mann computation, precompute for this value of q
-            float mq = qx*qx + qy*qy + qz*qz;
-            float qo = mq / (16*M_PI*M_PI); // qo is (sin(theta)/lambda)^2
-            float fi;
-
-            // for each atom type, compute the atomic form factor f_i(q)
-            for (int type = 0; type < numAtomTypes; type++) {
-            
-                // scan through cromermann in blocks of 9 parameters
-                int tind = type * 9;
-                fi =  cromermann[tind]   * exp(-cromermann[tind+4]*qo);
-                fi += cromermann[tind+1] * exp(-cromermann[tind+5]*qo);
-                fi += cromermann[tind+2] * exp(-cromermann[tind+6]*qo);
-                fi += cromermann[tind+3] * exp(-cromermann[tind+7]*qo);
-                fi += cromermann[tind+8];
-                
-                formfactors[type] = fi; // store for use in a second
-            }
+            // // Cromer-Mann computation, precompute for this value of q
+            // float mq = qx*qx + qy*qy + qz*qz;
+            // float qo = mq / (16*M_PI*M_PI); // qo is (sin(theta)/lambda)^2
+            // float fi;
+            // 
+            // // for each atom type, compute the atomic form factor f_i(q)
+            // for (int type = 0; type < numAtomTypes; type++) {
+            // 
+            //     // scan through cromermann in blocks of 9 parameters
+            //     int tind = type * 9;
+            //     fi =  cromermann[tind]   * exp(-cromermann[tind+4]*qo);
+            //     fi += cromermann[tind+1] * exp(-cromermann[tind+5]*qo);
+            //     fi += cromermann[tind+2] * exp(-cromermann[tind+6]*qo);
+            //     fi += cromermann[tind+3] * exp(-cromermann[tind+7]*qo);
+            //     fi += cromermann[tind+8];
+            //     
+            //     formfactors[type] = fi; // store for use in a second
+            // }
 
             // for each atom in molecule
             // bottle-necked by this currently. 
