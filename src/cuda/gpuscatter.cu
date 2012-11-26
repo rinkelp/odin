@@ -173,8 +173,13 @@ void __global__ kernel(float const * const __restrict__ q_x,
                 float qr = ax*qx + ay*qy + az*qz;
 
                 fi = formfactors[id];
-                Qsum.x += fi*__sinf(qr);
-                Qsum.y += fi*__cosf(qr);
+                
+                // tjl for debug
+                Qsum.x += __sinf(qr);
+                Qsum.y += __cosf(qr);
+                
+                // Qsum.x += fi*__sinf(qr);
+                // Qsum.y += fi*__cosf(qr);
             } // finished one molecule.
             
             float fQ = (Qsum.x*Qsum.x + Qsum.y*Qsum.y) / numRotations;  
