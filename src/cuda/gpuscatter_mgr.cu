@@ -149,7 +149,7 @@ GPUScatter::GPUScatter (int device_id_,
     float *d_ry;        deviceMalloc( (void **) &d_ry, nAtoms_size);
     float *d_rz;        deviceMalloc( (void **) &d_rz, nAtoms_size);
     int   *d_id;        deviceMalloc( (void **) &d_id, nAtoms_idsize);
-    float *d_cm;        deviceMalloc( (void **) &d_cm, cm_size);
+    // float *d_cm;        deviceMalloc( (void **) &d_cm, cm_size);
     float *d_rand1;     deviceMalloc( (void **) &d_rand1, nRotations_size);
     float *d_rand2;     deviceMalloc( (void **) &d_rand2, nRotations_size);
     float *d_rand3;     deviceMalloc( (void **) &d_rand3, nRotations_size);
@@ -170,7 +170,7 @@ GPUScatter::GPUScatter (int device_id_,
     cudaMemcpy(d_ry, &h_ry[0], nAtoms_size, cudaMemcpyHostToDevice);
     cudaMemcpy(d_rz, &h_rz[0], nAtoms_size, cudaMemcpyHostToDevice);
     cudaMemcpy(d_id, &h_id[0], nAtoms_idsize, cudaMemcpyHostToDevice);
-    cudaMemcpy(d_cm, &h_cm[0], cm_size, cudaMemcpyHostToDevice);
+    // cudaMemcpy(d_cm, &h_cm[0], cm_size, cudaMemcpyHostToDevice);
     cudaMemcpy(d_rand1, &h_rand1[0], nRotations_size, cudaMemcpyHostToDevice);
     cudaMemcpy(d_rand2, &h_rand2[0], nRotations_size, cudaMemcpyHostToDevice);
     cudaMemcpy(d_rand3, &h_rand3[0], nRotations_size, cudaMemcpyHostToDevice);
@@ -183,7 +183,8 @@ GPUScatter::GPUScatter (int device_id_,
     }
 
     // execute the kernel
-    kernel<tpb> <<<bpg, tpb>>> (d_qx, d_qy, d_qz, d_outQ, nQ, d_rx, d_ry, d_rz, d_id, nAtoms, numAtomTypes, d_cm, d_rand1, d_rand2, d_rand3, nRotations);
+    // kernel<tpb> <<<bpg, tpb>>> (d_qx, d_qy, d_qz, d_outQ, nQ, d_rx, d_ry, d_rz, d_id, nAtoms, numAtomTypes, d_cm, d_rand1, d_rand2, d_rand3, nRotations);
+    kernel<tpb> <<<bpg, tpb>>> (d_qx, d_qy, d_qz, d_outQ, nQ, d_rx, d_ry, d_rz, d_id, nAtoms, numAtomTypes, d_rand1, d_rand2, d_rand3, nRotations);
     cudaThreadSynchronize();
     err = cudaGetLastError();
     if (err != cudaSuccess) {
