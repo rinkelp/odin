@@ -172,7 +172,7 @@ void __global__ kernel(float const * const __restrict__ q_x,
                 rotate(rx, ry, rz, q0, q1, q2, q3, ax, ay, az);
                 float qr = ax*qx + ay*qy + az*qz;
 
-                fi = formfactors[id];
+                // fi = formfactors[id];
                 
                 // tjl for debug
                 Qsum.x += __sinf(qr);

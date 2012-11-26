@@ -4,7 +4,7 @@ from mdtraj import trajectory
 
 lyz = trajectory.load('3LYZ.pdb')
 d = xray.Detector.generic()
-shot = xray.Shot.simulate(lyz, 1000, d)
+shot = xray.Shot.simulate(lyz, 512*2, d)
 
 intensities = shot.intensities # these are the GPU-generated values
 
