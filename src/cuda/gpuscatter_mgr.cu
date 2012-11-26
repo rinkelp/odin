@@ -222,6 +222,11 @@ GPUScatter::GPUScatter (int device_id_,
         exit(-1);
     }
 
+    printf("output:\n");
+    for(int i; i<nQ; i++) {
+        printf("%f ", h_outQ[i]);
+    }
+
 }
 
 GPUScatter::~GPUScatter() {
