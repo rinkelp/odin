@@ -266,7 +266,7 @@ class TestScatter():
         num_molecules = 512
         detector = Detector.generic()
 
-        py_I = xray.simulate_shot(traj, num_molecules, detector, verbose=True)
+        py_I = xray.simulate_shot(traj, num_molecules, detector)
         
         # todo: get reference, provide random seed
 

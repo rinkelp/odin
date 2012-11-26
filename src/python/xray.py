@@ -1342,8 +1342,6 @@ def simulate_shot(traj, num_molecules, detector, traj_weights=None,
         ind = i * 9
         cromermann[ind:ind+9] = cromer_mann_params[(a,0)]
         aid[ aid == a ] = i
-    if verbose:
-        logger.debug('Atom IDs:', aid)
     
     # do the simulation, scan over confs., store in `intensities`
     intensities = np.zeros(detector.num_q)
@@ -1381,7 +1379,7 @@ def simulate_shot(traj, num_molecules, detector, traj_weights=None,
                                                 rx, ry, rz, aid,
                                                 cromermann,
                                                 rand1, rand2, rand3, num_q)
-                if verbose: logger.info('Retrived data from GPU.')
+                logger.info('Retrived data from GPU.')
                 assert( len(out_obj.this[1]) == num_q )
                 intensities += out_obj.this[1].astype(np.float64)
     
