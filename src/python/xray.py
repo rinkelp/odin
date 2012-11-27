@@ -263,7 +263,7 @@ class Detector(Beam):
         return polar
         
     @classmethod
-    def generic(cls, spacing=1.0, lim=50.0, energy=8.0, flux=100.0, l=50.0):
+    def generic(cls, spacing=2.0, lim=100.0, energy=10.0, flux=100.0, l=50.0):
         """
         Generates a simple grid detector that can be used for testing
         (factory function). 
