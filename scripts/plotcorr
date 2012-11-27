@@ -13,7 +13,7 @@ import matplotlib.cm as cm
 from odin import xray
 from odin.utils import odinparser
 
-def main(input_file, output_file, n_maxima_cutoff=5):
+def main(input_file, output_file, max_intensity=0.0, n_maxima_cutoff=5):
     
     # load data
     shotset = xray.Shotset.load(input_file)
@@ -22,28 +22,49 @@ def main(input_file, output_file, n_maxima_cutoff=5):
     I = shotset.intensity_profile()
     n_maxima = len(maxima)
     
+    # set an intensity cutoff (beamstop)
+    q_edge = 0.4  # HARDCODED inv Ang.
+    
+    if max_intensity == 0:
+        x = np.argsort( np.abs(I[:,0] - q_edge) )[0] # index closest to 0.5 inv A
+        max_intensity = I[x,1]
+    else:
+        q_edge = 0.0
+        
+    # make sure no maxima are below the q_edge
+    for m in maxima:
+        if I[m,0] < q_edge:
+            maxima = np.delete(maxima, np.where(maxima == m)[0])
+    
+    # check the number of maxima
     if n_maxima > n_maxima_cutoff:
-        print "Found %d maxima in plot, trimming to largest %d" % (n_maxima, n_maxima)
-        maxima = np.sort(maxima)[-n_maxima_cutoff:]
+        print "Found %d maxima in plot, trimming to largest %d" % (n_maxima, n_maxima_cutoff)
+        maxima = maxima[np.argsort( I[maxima,1] )][-n_maxima_cutoff:]
         n_maxima = n_maxima_cutoff
     
-    plt.figure(figsize=(12,6))
-    plt.subplots_adjust(wspace=0.65, hspace=0.4)
+    print "Maxima (A^-1):", I[maxima,0]
+    
+    plt.figure(figsize=(12,4))
+    plt.subplots_adjust(wspace=0.75, hspace=0.4)
     
     # plot the intensity profile on the lhs
     prf_ax = plt.subplot2grid((n_maxima,5), (0,0), rowspan=n_maxima, colspan=2)
     prf_ax.plot(I[:,0], I[:,1], lw=2) 
     prf_ax.set_xlabel(r'q / $\AA$')
     prf_ax.set_ylabel(r'I(q)')
-    prf_ax.vlines(maxima, I[:,1].min(), I[:,1].max(), lw=2)
+    prf_ax.set_ylim([ np.min(I[:,1]), max_intensity ])
+    prf_ax.set_xlim([ q_edge, np.max(I[:,0]) ])
+    prf_ax.set_yticklabels([])
+    prf_ax.vlines(I[maxima,0], np.min(I[:,1]), max_intensity, lw=1)
     
     # plot the correlations on the rhs
     for i in range(n_maxima):
         ax = plt.subplot2grid((n_maxima,5), (i,2), colspan=3)
         ring = shotset.correlate_ring(maxima[i], maxima[i])
-        ax.plot(ring[:,0],  ring[:,1], lw=2) # should call here
+        ax.plot(ring[:,0] * (360.0 / (2.*np.pi)),  ring[:,1], lw=2) # in deg
         ax.set_ylabel(r'$C(q, \Delta)$')
-    ax.set_xlabel(r'$\Delta$') # only the bottow plot
+        ax.set_xlim([0,360])
+    ax.set_xlabel(r'$\Delta$ (degrees)') # only the bottow plot
     
     plt.savefig(output_file, bbox_inches='tight')
     print "Saved: %s" % output_file
@@ -56,12 +77,14 @@ if __name__ == '__main__':
     parser = odinparser('Plot scattering autocorrelations. Chooses points of maximal intensity to correlate automatically.')
     
     parser.add_argument('-i', '--input', type=str, help='An hdf shotset file.')
-    parser.add_argument('-m', '--maxima', type=int, default=5,
+    parser.add_argument('-c', '--correlations', type=int, default=5,
                         help='Maximum number of correlations to pick out. Default: 5')
+    parser.add_argument('-m', '--max', type=float, default=0,
+                        help='Maximum intensity to plot (simulated beamstop). Default: Value at 0.4 1/A')
     parser.add_argument('-o', '--output', default='correlation_plot.pdf',
                         help='Image file to write. Append .pdf, .png, .jpg, etc. Default: intensity_plot.pdf')
 
     args = parser.parse_args()
     
-    main(args.input, args.output, args.maxima)
+    main(args.input, args.output, args.max, args.correlations)
 
