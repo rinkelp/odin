@@ -63,32 +63,14 @@ GPUScatter::GPUScatter (int device_id_,
                         float* h_outQ_
                         ) {
     
-    // check all input
-    int z
-    
-    printf("qx:\n");
-    for(z = 0; z < 5; z++) {
-        printf("%f ", h_qx_[z]);
-    }
-    printf("rx:\n");
-    for(z = 0; z < 5; z++) {
-        printf("%f ", h_rx_[z]);
-    }
-    printf("rid:\n");
-    for(z = 0; z < 5; z++) {
-        printf("%f ", h_rid_[z]);
-    }
-    printf("cm:\n");
-    for(z = 0; z < 5; z++) {
-        printf("%f ", h_cm_[z]);
-    }
-    printf("rand1:\n");
-    for(z = 0; z < 5; z++) {
-        printf("%f ", h_rand1_[z]);
-    }
-    printf("outQ:\n");
-    for(z = 0; z < 5; z++) {
-        printf("%f ", h_outQ_[z]);
+    // sometimes SWIG fucks up and retains non-zero values in the output
+    // array, so we have to initialize it
+    int z;
+    //printf("\noutQ:\n");
+    for(z = 0; z < nQout_; z++) {
+        //printf("%f ", h_outQ_[z]);
+        h_outQ_[z] = 0.0;
+        //printf("%f \n", h_outQ_[z]);
     }
 
     /* All arguments consist of 
@@ -246,12 +228,6 @@ GPUScatter::GPUScatter (int device_id_,
         printf("Error freeing memory. CUDA error: %s\n", cudaGetErrorString(err));
         exit(-1);
     }
-
-    printf("output:\n");
-    for(int x = 0; x < nQ; x++) {
-        printf("%f ", h_outQ[x]);
-    }
-
 }
 
 GPUScatter::~GPUScatter() {

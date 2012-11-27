@@ -1330,8 +1330,8 @@ def simulate_shot(traj, num_molecules, detector, traj_weights=None,
 
     # get cromer-mann parameters for each atom type
     # renumber the atom types 0, 1, 2, ... to point to their CM params
-    aid = np.array([ a.element.atomic_number for a in traj.topology.atoms() ]).astype(np.int32)
-    atom_types = np.unique(aid)
+    aZ = np.array([ a.element.atomic_number for a in traj.topology.atoms() ])
+    atom_types = np.unique(aZ)
     num_atom_types = len(atom_types)
 
     # if `num_atom_types` > 10, we're in trouble
@@ -1342,16 +1342,17 @@ def simulate_shot(traj, num_molecules, detector, traj_weights=None,
                         'to fix this -- see file odin/src/cuda/gpuscatter.cu')
 
     cromermann = np.zeros(9*num_atom_types, dtype=np.float32)
+    aid = np.zeros( len(aZ), dtype=np.int32 )
 
     for i,a in enumerate(atom_types):
         ind = i * 9
         try:
-            cromermann[ind:ind+9] = cromer_mann_params[(a,0)].astype(np.float32)
+            cromermann[ind:ind+9] = np.array(cromer_mann_params[(a,0)]).astype(np.float32)
         except KeyError as e:
             logger.critical('Element number %d not in Cromer-Mann form factor parameter database' % a)
             raise ValueError('Could not get critical parameters for computation')
-        aid[ aid == a ] = int(i)
-    
+        aid[ aZ == a ] = np.int32(i)
+
     # do the simulation, scan over confs., store in `intensities`
     intensities = np.zeros(detector.num_q, dtype=np.float64) # should be double
     
