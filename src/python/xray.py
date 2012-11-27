@@ -439,8 +439,17 @@ class Shot(object):
         xy = np.zeros(( self.detector.polar.shape[0], 2 ))
         xy[:,0] = self.detector.k * np.sqrt( 2.0 - 2.0 * np.cos(self.detector.polar[:,1]) ) # |q|
         xy[:,1] = self.detector.polar[:,2] # phi
-
-        z_interp = interpolate.griddata( xy, self.intensities, interpoldata[:,:2], 
+        
+        # because we're using a "square" interplation method, wrap around one
+        # set of polar coordinates to capture the periodic nature of polar coords
+        add = np.where( xy[:,1] == xy[:,1].min() )[0]
+        xy_add = xy[add]
+        xy_add[:,1] += 2.0 * np.pi
+        aug_xy  = np.concatenate(( xy, xy_add ))
+        aug_int = np.concatenate(( self.intensities, self.intensities[add] ))
+        
+        # do the interpolation
+        z_interp = interpolate.griddata( aug_xy, aug_int, interpoldata[:,:2], # xy, self.intensities,
                                          method='linear', fill_value=np.nan )
 
         interpoldata[:,2] = z_interp.flatten()
@@ -448,7 +457,7 @@ class Shot(object):
 
         # mask missing pixels (outside convex hull)
         nan_ind = np.where( np.isnan(z_interp) )[0]
-        #self.mask(interpoldata[nan_ind,:2], space='polar')
+        self.mask(interpoldata[nan_ind,:2], space='polar')
         self.polar_intensities[nan_ind,2] = 0.0
         
         
@@ -748,24 +757,16 @@ class Shot(object):
         
         q1 = self._nearest_q(q1)
         q2 = self._nearest_q(q2)
-        delta = self._nearest_delta(delta)
+        delta = self._nearest_phi(delta)
         
-        i = delta / self.phi_spacing
-        print delta % self.phi_spacing == 0.0
+        i = int(delta / self.phi_spacing)
         
-        print self.polar_intensities
+        x = self.I_ring(q1)
+        y = self.I_ring(q2)
+        y = y[ np.array(range(i,len(y)) + range(i)) ] # permute y
         
-        x = self.polar_intensities[self._q_index(q1),2]
-        y = self.polar_intensities[self._q_index(q2),2]
-        y = np.concatenate(( y[i:], y[:i] ))
-        
-        print type(x), x
-        print type(y), y
-        
-        x -= x.mean()
-        y -= y.mean()
-        
-        corr = (x*y).mean() # this should work with masking
+        # this should work with masking
+        corr = ( (x-x.mean()) * (y-y.mean()) ).mean() / (x.std() * y.std())
         
         return corr
         
@@ -814,12 +815,13 @@ class Shot(object):
         assert len(x) == len(y)
         n_theta = len(x)
         
-        # subtract the means
+        xstd = x.std()
+        ystd = y.std()
+        
         x -= x.mean()
         y -= y.mean()
         
-        # count the number of total pairs
-        n_delta = np.ma.count(x) * np.ma.count(y)
+        # todo : ensure a zero gets plugged in at all mask positions
         
         correlation_ring = np.zeros((n_theta, 2))
         correlation_ring[:,0] = self.phi_values
@@ -829,7 +831,8 @@ class Shot(object):
         ffy = fftpack.fft(y)
         iff = np.real(fftpack.ifft( ffx * ffy ))
         
-        correlation_ring[:,1] = iff * float(n_theta) / float(n_delta)
+        correlation_ring[:,1] = iff / (xstd * ystd)
+        print correlation_ring
         
         return correlation_ring
         
