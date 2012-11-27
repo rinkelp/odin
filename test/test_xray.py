@@ -17,7 +17,8 @@ except ImportError as e:
     GPU = False
 
 import numpy as np
-from numpy.testing import assert_almost_equal, assert_array_almost_equal, assert_allclose
+from numpy.testing import (assert_almost_equal, assert_array_almost_equal, 
+                           assert_allclose, assert_array_equal)
 
 import logging
 logger = logging.getLogger(__name__)
@@ -101,8 +102,8 @@ class TestDetector():
         # phi is the same as polar
         ref1[:,2] = self.d.polar[:,2].copy()
         
-        assert_array_almost_equal( ref1[:,0], self.d.recpolar[:,0], err_msg='|q|')
-        assert_array_almost_equal( ref1[:,2], self.d.recpolar[:,2], err_msg='phi')
+        assert_array_almost_equal(ref1[:,0], self.d.recpolar[:,0], err_msg='|q|')
+        assert_array_almost_equal(ref1[:,2], self.d.recpolar[:,2], err_msg='phi')
         
         # NO THETA TEST -- DO WE CARE?
         
@@ -141,11 +142,84 @@ class TestShot():
         pass
         
     def test_nearests(self):
-        pass
+        
+        nq = self.shot._nearest_q(0.0199)
+        assert_almost_equal(nq, 0.02)
+        
+        np = self.shot._nearest_phi(0.034)
+        assert_almost_equal(np, 0.03490658503988659)
+        
+        nd = self.shot._nearest_delta(0.034)
+        assert_almost_equal(nd, 0.03490658503988659)
+        
+    def test_q_index(self):
+        qs = self.shot.polar_intensities[:,0]
+        q = self.shot._nearest_q(0.09)
+        ref = np.where(qs == q)[0]
+        qinds = self.shot._q_index(q)
+        
+        # due to numerics, where sometimes fails
+        for x in ref:
+            assert x in qinds
+            
+        a1 = self.shot.polar_intensities[qinds,0]
+        a2 = np.ones(len(a1)) * q
+        assert_array_almost_equal(a1, a2)
+            
+        
+    def test_phi_index(self):
+        phis = self.shot.polar_intensities[:,1]
+        phi = self.shot._nearest_phi(6.0)
+        ref = np.where(phis == phi)[0]
+
+        phiinds = self.shot._phi_index(phi)
+        
+        a1 = self.shot.polar_intensities[phiinds,1]
+        a2 = np.ones(len(a1)) * phi
+        assert_array_almost_equal(a1, a2)
+        
+        for x in ref:
+            assert x in phiinds
         
     def test_I_index(self):
-        pass
+        q_guess   = 0.09
+        phi_guess = 0.035
         
+        q_ref = self.shot._nearest_q(q_guess)
+        phi_ref = self.shot._nearest_phi(phi_guess)
+        
+        index = self.shot._intensity_index(q_guess, phi_guess)
+        q   = self.shot.polar_intensities[index,0]
+        phi = self.shot.polar_intensities[index,1]
+        
+        assert_almost_equal(q, q_ref)
+        assert_almost_equal(phi, phi_ref)
+        
+    @skip
+    def test_i_profile(self):
+        
+        i = self.shot.polar_intensities
+        qs = np.unique(i[:,0])
+        p = np.zeros(len(qs))
+        
+        for x,q in enumerate(qs):
+            p[x] = (i[:,2][i[:,0]==q]).mean()
+            
+        profile = self.shot.intensity_profile()
+        ind_code = profile[:,0]
+        p_code = profile[:,1]
+        
+        qs = np.array(qs)
+        assert_array_almost_equal(qs, ind_code)
+        
+        for i in range(len(p)):
+            d = np.abs(p[i] - p_code[i])
+            if d > 1e-6:
+                print p[i], p_code[i]
+                
+        assert_allclose(p, p_code)
+        
+    @skip
     def test_correlation(self):
         
         # arb. parameters for testing
@@ -183,7 +257,7 @@ class TestShot():
                 
         assert_almost_equal(ref, ans)
     
-    
+    @skip
     def test_corr_ring(self):
 
         q1 = 1.0
@@ -275,7 +349,7 @@ class TestShotset():
     def test_correlations(self):
         q1 = 0.1
         q2 = 0.1
-        delta = 45.0
+        delta = (45.0 / 360.0) * 2.0*np.pi
         i1 = np.array(self.shot.correlate(q1, q2, delta))
         i2 = np.array(self.shotset.correlate(q1, q2, delta))
         assert_almost_equal(i1, i2)
@@ -290,4 +364,4 @@ class TestShotset():
 if __name__ == '__main__':
     test = TestShot()
     test.setup()
-    test.test_corr_ring()
+    test.test_i_profile()

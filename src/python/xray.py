@@ -382,10 +382,6 @@ class Shot(object):
         self.detector = detector
         self.interpolate_to_polar()
         
-        # default polar grid
-        self.q_spacing = 0.02
-        self.phi_spacing = 1.0
-        
         
     def interpolate_to_polar(self, q_spacing=0.02, phi_spacing=1.0):
         """
@@ -420,18 +416,18 @@ class Shot(object):
         
         # save polar grid
         self.q_spacing = q_spacing
-        self.phi_spacing = phi_spacing
+        # phi_spacing gets converted to radians below... may be confusing to user
         
         # determine the bounds of the grid, and the discrete points to use
-        radian_spacing = self.phi_spacing * (2.0*np.pi/360.)
-        self.phi_values = np.arange(0.0, 2.0*np.pi, radian_spacing)
+        self.phi_spacing = phi_spacing * (2.0*np.pi/360.) # conv. to radians
+        self.phi_values = np.arange(0.0, 2.0*np.pi, self.phi_spacing)
         self.num_phi = len(self.phi_values)
-    
+        
         self.q_min = np.min( self.detector.recpolar[:,0] )
         self.q_max = np.max( self.detector.recpolar[:,0] )
         self.q_values = np.arange(self.q_min, self.q_max+self.q_spacing, self.q_spacing)
         self.num_q = len(self.q_values)
-                
+        
         self.num_datapoints = self.num_phi * self.num_q
         
         # generate the polar grid to interpolate onto
@@ -440,7 +436,6 @@ class Shot(object):
         interpoldata[:,1] = np.repeat(self.phi_values, self.num_q)
        
         # interpolate onto polar grid : delauny triangulation + nearest neighbour
-       
         xy = np.zeros(( self.detector.polar.shape[0], 2 ))
         xy[:,0] = self.detector.k * np.sqrt( 2.0 - 2.0 * np.cos(self.detector.polar[:,1]) ) # |q|
         xy[:,1] = self.detector.polar[:,2] # phi
@@ -453,8 +448,8 @@ class Shot(object):
 
         # mask missing pixels (outside convex hull)
         nan_ind = np.where( np.isnan(z_interp) )[0]
-        self.mask(interpoldata[nan_ind,:2], space='polar')
-        self.polar_intensities[nan_ind] = 0.0
+        #self.mask(interpoldata[nan_ind,:2], space='polar')
+        self.polar_intensities[nan_ind,2] = 0.0
         
         
     def mask(self, pixels, space='polar'):
@@ -556,6 +551,10 @@ class Shot(object):
         """
         Get value of phi nearest to the argument that is on our computed grid.
         """
+        
+        # phase shift
+        phi = phi % (2*np.pi)
+        
         if (phi % self.phi_spacing == 0.0):
             pass
         else:
@@ -571,6 +570,9 @@ class Shot(object):
         
         This is really just the same as _nearest_phi() right now (BAD)
         """
+        # phase shift
+        delta = delta % (2*np.pi)
+        
         if (delta % self.phi_spacing == 0.0):
             pass
         else:
@@ -581,28 +583,29 @@ class Shot(object):
     
     def _q_index(self, q):
         """
-        Quick return of all self.intensities with a specific `q`
+        Quick return of all self.polar_intensities with a specific `q`
         """
+        # recall : q values are tiled
         q = self._nearest_q(q)
         start = int(q/self.q_spacing) - int(self.q_min/self.q_spacing)
-        end = start + self.num_phi
-        inds = np.arange(start, end)
+        inds = np.arange(start, self.num_datapoints, self.num_q)
         return inds
         
         
     def _phi_index(self, phi):
         """
-        Quick return of all self.intensities with a specific `phi`
+        Quick return of all self.polar_intensities with a specific `phi`
         """
+        # recall : phi values are repeated
         phi = self._nearest_phi(phi)
-        start = int(phi/self.phi_spacing)
-        inds = np.arange(start, start+self.num_phi, self.num_q)
+        start = int(phi/self.phi_spacing) * self.num_q
+        inds = np.arange(start, start+self.num_q)
         return inds
     
         
     def _intensity_index(self, q, phi):
         """
-        Returns the index of self.intensities that matches the passed values
+        Returns the index of self.polar_intensities that matches the passed values
         of `q` and `phi`.
         
         Parameters
@@ -622,8 +625,9 @@ class Shot(object):
         q = self._nearest_q(q)
         phi = self._nearest_phi(phi)
         
-        index = ( int(q/self.q_spacing) - int(self.q_min/self.q_spacing) ) + \
-                    int(phi/self.phi_spacing)
+        qpos = int(q/self.q_spacing) - int(self.q_min/self.q_spacing)
+        ppos = int(phi/self.phi_spacing) * self.num_q
+        index = qpos + ppos
         
         return index
         
@@ -683,6 +687,7 @@ class Shot(object):
             intensity_profile[i,0] = q
             intensity_profile[i,1] = self.qintensity(q)
 
+        intensity_profile = np.array(intensity_profile) # rm mask
         return intensity_profile
         
         
@@ -746,7 +751,7 @@ class Shot(object):
         delta = self._nearest_delta(delta)
         
         i = delta / self.phi_spacing
-        assert delta % self.phi_spacing == 0.0
+        print delta % self.phi_spacing == 0.0
         
         print self.polar_intensities
         

@@ -12,10 +12,23 @@ import matplotlib.cm as cm
 from odin import xray
 from odin.utils import odinparser
 
-def main(input_file, max_intensity, output, npoints=1000):
+def main(input_file, output, max_intensity=0, npoints=1000):
+    
+    # ----- HARDCODE -------- #
+    q_edge = 0.4  # inv Ang.
+    # ----------------------- #
     
     shotset = xray.Shotset.load(input_file)
     I = shotset.intensity_profile()
+    
+    if max_intensity == 0:
+        x = np.argsort( np.abs(I[:,0] - q_edge) )[0] # index closest to 0.5 inv A
+        max_intensity = I[x,1]
+    else:
+        q_edge = 0.0
+        
+    print 'Max. Intensity Cutoff: %f' % max_intensity
+    print 'Minimum value of q at that cutoff (A^-1): %f' % q_edge
     
     fig, ax = plt.subplots(nrows=1, ncols=2, figsize=(8,3.5))
     fig.tight_layout()
@@ -23,6 +36,9 @@ def main(input_file, max_intensity, output, npoints=1000):
     ax[0].plot(I[:,0], I[:,1], lw=2)
     ax[0].set_xlabel(r'q / $\AA$')
     ax[0].set_ylabel(r'I(q)')
+    ax[0].set_ylim([ np.min(I[:,1]), max_intensity ])
+    ax[0].set_xlim([ q_edge, np.max(I[:,0]) ])
+    ax[0].set_yticklabels([])
     
     intensities = shotset.shots[0].intensities
     intensities[intensities > max_intensity] = 0.0
@@ -57,12 +73,12 @@ if __name__ == '__main__':
     parser = odinparser('Plot intensity profile of a shotset.')
     
     parser.add_argument('-i', '--input', type=str, help='An hdf shotset file.')
-    parser.add_argument('-m', '--max', type=float, default=1e6,
-                        help='Maximum intensity to plot (simulated beamstop). Default: 1e6.')
+    parser.add_argument('-m', '--max', type=float, default=0,
+                        help='Maximum intensity to plot (simulated beamstop). Default: Value at 0.4 1/A')
     parser.add_argument('-o', '--output', default='intensity_plot.pdf',
                         help='Image file to write. Append .pdf, .png, .jpg, etc. Default: intensity_plot.pdf')
 
     args = parser.parse_args()
     
-    main(args.input, args.max, args.output)
+    main(args.input, args.output, args.max)
 
