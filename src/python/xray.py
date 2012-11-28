@@ -833,7 +833,7 @@ class Shot(object):
         ffy = fftpack.fft(y)
         iff = np.real(fftpack.ifft( ffx * ffy ))
         
-        correlation_ring[:,1] = iff / (np.linalg.norm(x) * np.linalg.norm(y)) # (xstd * ystd)
+        correlation_ring[:,1] = iff # / (np.linalg.norm(x) * np.linalg.norm(y)) # (xstd * ystd)
         
         m = correlation_ring[:,1].max()
         for i in range(correlation_ring.shape[0]):

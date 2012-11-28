@@ -13,6 +13,8 @@ import matplotlib.cm as cm
 from odin import xray
 from odin.utils import odinparser
 
+from matplotlib.ticker import MultipleLocator
+
 def main(input_file, output_file, max_intensity=0.0, n_maxima_cutoff=5):
     
     # load data
@@ -35,6 +37,9 @@ def main(input_file, output_file, max_intensity=0.0, n_maxima_cutoff=5):
     for m in maxima:
         if I[m,0] < q_edge:
             maxima = np.delete(maxima, np.where(maxima == m)[0])
+    if 0 in maxima:
+        maxima = np.delete(maxima, 0)
+    n_maxima = len(maxima)
     
     # check the number of maxima
     if n_maxima > n_maxima_cutoff:
@@ -60,10 +65,13 @@ def main(input_file, output_file, max_intensity=0.0, n_maxima_cutoff=5):
     # plot the correlations on the rhs
     for i in range(n_maxima):
         ax = plt.subplot2grid((n_maxima,5), (i,2), colspan=3)
-        ring = shotset.correlate_ring(maxima[i], maxima[i])
+        q = I[maxima[i],0]
+        ring = shotset.correlate_ring(q, q)
         ax.plot(ring[:,0] * (360.0 / (2.*np.pi)),  ring[:,1], lw=2) # in deg
         ax.set_ylabel(r'$C(q, \Delta)$')
         ax.set_xlim([0,360])
+        ax.yaxis.set_major_locator(MultipleLocator(0.5))
+        if i != n_maxima - 1: ax.set_xticklabels([])
     ax.set_xlabel(r'$\Delta$ (degrees)') # only the bottow plot
     
     plt.savefig(output_file, bbox_inches='tight')
