@@ -763,7 +763,7 @@ class Shot(object):
         
         x = self.I_ring(q1)
         y = self.I_ring(q2)
-        y = y[ np.array(range(i,len(y)) + range(i)) ] # permute y
+        y = np.roll(y, i)
         
         # this should work with masking
         corr = ( (x-x.mean()) * (y-y.mean()) ).mean() / (x.std() * y.std())
@@ -815,6 +815,8 @@ class Shot(object):
         assert len(x) == len(y)
         n_theta = len(x)
         
+        logger.debug("Correlating rings at %f / %f" % (q1, q2))
+        
         xstd = x.std()
         ystd = y.std()
         
@@ -831,8 +833,11 @@ class Shot(object):
         ffy = fftpack.fft(y)
         iff = np.real(fftpack.ifft( ffx * ffy ))
         
-        correlation_ring[:,1] = iff / (xstd * ystd)
-        print correlation_ring
+        correlation_ring[:,1] = iff / (np.linalg.norm(x) * np.linalg.norm(y)) # (xstd * ystd)
+        
+        m = correlation_ring[:,1].max()
+        for i in range(correlation_ring.shape[0]):
+            correlation_ring[i,1] = correlation_ring[i,1] / m
         
         return correlation_ring
         
