@@ -3,10 +3,6 @@
 
 """
 Classes, methods, functions for use with xray scattering experiments.
-
-Todo:
--- add simulate_shot factor functions to Shot and Shotset
-
 """
 
 # ---------------- #
@@ -1233,7 +1229,7 @@ class Shotset(Shot):
     @classmethod
     def load(cls, filename):
         """
-        Loads the a Shot from disk.
+        Loads the a Shot from disk. Must be `.shot` or `.cxi` format.
 
         Parameters
         ----------
@@ -1245,21 +1241,27 @@ class Shotset(Shot):
         shotset : odin.xray.Shotset
             A shotset object
         """
-        if not filename.endswith('.shot'):
-            raise ValueError('Must load a detector file (.shot extension)')
 
-        hdf = io.loadh(filename)
+        if filename.endswith('.shot'):
+            hdf = io.loadh(filename)
 
-        num_shots   = hdf['num_shots'][0]
-        xyz         = hdf['dxyz']
-        path_length = hdf['dpath_length'][0]
-        k           = hdf['dk'][0]
+            num_shots   = hdf['num_shots'][0]
+            xyz         = hdf['dxyz']
+            path_length = hdf['dpath_length'][0]
+            k           = hdf['dk'][0]
         
-        d = Detector(xyz, path_length, k)
+            d = Detector(xyz, path_length, k)
         
-        list_of_shots = []
-        for i in range(num_shots):
-            list_of_shots.append( Shot( hdf[('shot%d' % i)], d ) )
+            list_of_shots = []
+            for i in range(num_shots):
+                list_of_shots.append( Shot( hdf[('shot%d' % i)], d ) )
+            
+            
+        elif filename.endswith('.cxi'):
+            raise NotImplementedError() # todo
+            
+        else:
+            raise ValueError('Must load a shotset file [.shot, .cxi]')
 
         return Shotset(list_of_shots)
 
@@ -1370,7 +1372,7 @@ def simulate_shot(traj, num_molecules, detector, traj_weights=None,
     intensities = np.zeros(detector.num_q, dtype=np.float64) # should be double
     
     for i,num in enumerate(num_per_shapshot):
-        if num > 0:
+        if int(num) > 0:
     
             num = int(num)
 

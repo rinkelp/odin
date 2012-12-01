@@ -215,19 +215,35 @@ class ExptData(object):
     @abstractplaceholder
     def _default_error():
         """ estimates the error of the experiment (conservatively) in the
-            absence of explicit input  """
+            absence of explicit input """
         return error_guess        
 
 
 class ScatteringData(ExptData):
     
     def _load_file(self, filename):
+        
+        extension = filename.split('.')[-1]
+        if extension == '.cxi':
+            values, errors, metadata = self._load_cxi(filename)
+        else:
+            raise ValueError('Scattering data format must be one of: .cxi,')
+        
         return values, errors, metadata
         
     def _default_error():
         """ estimates the error of the experiment (conservatively) in the
-            absence of explicit input  """
+            absence of explicit input """
         return error_guess
+        
+    def _load_cxi(self, filename):
+        """
+        Load a file in the CXI-database format.
+        """
+        shot = xray.Shotset.load(filename)
+        raise NotImplementedError()
+        
+        
         
     
 class ChemShiftData(ExptData):
@@ -237,5 +253,5 @@ class ChemShiftData(ExptData):
         
     def _default_error():
         """ estimates the error of the experiment (conservatively) in the
-            absence of explicit input  """
+            absence of explicit input """
         return error_guess
