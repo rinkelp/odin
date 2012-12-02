@@ -117,7 +117,7 @@ class Detector(Beam):
     setup. Also provides loading and saving of detector geometries.
     """
     
-    def __init__(self, xyz, path_length, *args):
+    def __init__(self, xyz, path_length, k, xyz_type='explicit'):
         """
         Instantiate a Detector object.
         
@@ -131,60 +131,201 @@ class Detector(Beam):
         
         Parameters
         ----------
-        xyz_file : {str, ndarray}
-            EITHER A string pointing to a file containing the x,y,z coordinates 
-            of each pixel of the detector, OR an n x 3 array of floats 
-            representing the coordinates.
+        xyz : ndarray (OR sometimes list, see xyz_type kwarg)
+            An n x 3 array specifying the (x,y,z) positions of each pixel.
             
         path_length : float
             The distance between the sample and the detector, in the same units
             as the pixel dimensions in the input file.
             
-        k : float
-            The wavenumber of the incident beam to use.
+        k : float or odin.xray.Beam
+            The wavenumber of the incident beam to use. Optionally A Beam 
+            object, defining the beam energy.
             
         Optional Parameters
-        -------------------
-        photon : odin.xray.Beam
-            A Beam object, defining the beam energy. If this is passed, the
-            the argument `k` for the wavenumber is redundant and should not be
-            passed.
+        -------------------            
+        xyz_type : str, {'explicit', 'implicit'}
+            Choose between an explicit and implicit detector type. If explicit,
+            then `xyz` is an array explicitly definining the xyz coordinates of
+            each pixel. If implicit, then `xyz` is a `grid_list` that 
+            implicitly specifies the detector pixels. See the factor function 
+            Detector.from_basis() for extensive documentation of this feature,
+            and a handle for constructing detectors of this type.
         """
         
-        self.xyz = xyz
-        self.path_length = path_length
-        self.num_q = xyz.shape[0]
-        
-        # parse the wavenumber
-        if len(args) != 1:
-            raise ValueError('Expected exactly 3 arguments, got %d' % (len(args)+2) )
-        else:
-            for arg in args:
-                if isinstance(arg, Beam):
-                    self.k = arg.wavenumber
-                elif type(arg) in [float, np.float64, np.float32]:
-                    self.k = arg
-                else:
-                    raise ValueError('Must pass `beam` or `k` argument')
-        
-        # convert to other reps
-        self.real = self.xyz.copy()
-        self.real[:,2] += self.path_length # set origin to sample
-        
-        self.polar      = self.real_to_polar(self.real)
-        self.reciprocal = self.real_to_reciprocal(self.real)
-        self.recpolar   = self.real_to_recpolar(self.real)
-        
+        if xyz_type == 'explicit':
             
-    def real_to_polar(self, xyz):
+            if type(xyz) != np.ndarray:
+                raise ValueError('Explicit xyz pixels required, `xyz` must be np.ndarray')
+            
+            self.pixels = xyz
+            self.grid_list = None
+            
+            self.num_q = xyz.shape[0]
+            self._xyz_type = 'explicit'
+                
+        elif xyz_type == 'implicit':
+            
+            # I am being a little tricky here -- by passing the grid_list into
+            # the xyz argument. The safety of this move is predicated on
+            # the user employing the xyz_type kwarg appropriately. Hopefully 
+            # this doesn't cause too much trouble later... -- TJL
+            if type(xyz) != list:
+                raise ValueError('Implicit xyz pixels required, `xyz` must be list')
+            self._xyz_type = 'implicit'
+            
+            self.grid_list = xyz
+            self.pixels = None
+            
+        else:
+            raise ValueError("`xyz_type` must be one of {'explicit', 'implicit'}")
+        
+        # parse wavenumber
+        if isinstance(k, Beam):
+            self.k = k.wavenumber
+        elif type(k) in [float, np.float64, np.float32]:
+            self.k = k
+        else:
+            raise ValueError('`k` must be a float or odin.xray.Beam')
+        
+        self.path_length = path_length
+        
+        
+    @classmethod
+    def from_basis(cls, grid_list, path_length, k):
+        """
+        Factory function - generate a detector object from an implicit "basis"
+        scheme, where the detector is a set of rectangular grids specified by
+        an x/y/z-spacing and size, rather than explicit x/y/z coords.
+        
+        This method provides optimal memory performance. It is slightly more
+        abstract to instantiate, but if your data conforms to this kind of
+        representation, we recommend using it (especially for large datasets).
+        
+        Parameters
+        ----------
+        grid_list : list
+            A list of detector arrays, specificed "implicitly" by the following
+            scheme: 
+            
+                -- A corner position (top left corner)
+                -- x-basis, y-basis, z-basis vectors, aka the pixel spacing
+                -- array shape (detector dimensions)
+             
+            This method then generates a detector object by building a grid 
+            specifed by these parameters - e.g. if the x/y-basis vectors are
+            both unit vectors, and shape is (10, 10), you'd get an xyz array
+            with pixels of the form (0,0), (0,1), (0,2), ... (10,10).
+            
+            The `grid_list` argument then should be a list-of-tuples of the form
+            
+                grid_list = [ ( basis, shape, corner ) ]
+            
+            where
+            
+                basis   : tuple of floats (x_basis, y_basis, z_basis)
+                shape   : tuple of floats (x_size, y_size, z_size)
+                corner  : tuple of floats (x_corner, y_corner, z_corner)
+            
+            Each item in the list gets instatiated as a different detector
+            "array", but all are included into the same detector object.
+            
+        path_length : float
+            The distance between the sample and the detector, in the same units
+            as the pixel dimensions in the input file.
+
+        k : float or odin.xray.Beam
+            The wavenumber of the incident beam to use. Optionally A Beam 
+            object, defining the beam energy.
+        """
+        if type(grid_list) == tuple: # be generous...
+            grid_list = [grid_list]
+        d = Detector(grid_list, path_length, k, xyz_type='implicit')
+        return d
+        
+    def implicit_to_explicit(self):
+        """
+        Convert an implicit detector to an explicit one (where the xyz pixels
+        are stored in memory).
+        """
+        if not self.xyz_type == 'implicit':
+            raise Exception('Detector must have xyz_type implicit for conversion.')
+        self.pixels = self.xyz
+        self._xyz_type = 'explicit'
+        return
+             
+    @property
+    def xyz_type(self):
+        return self._xyz_type
+        
+    @property
+    def xyz(self):
+        if self.xyz_type == 'explicit':
+            return self.pixels
+        elif self.xyz_type == 'implicit':
+            return np.concatenate( [self._grid_from_implicit(*t) for t in self.grid_list] )
+        
+    def _grid_from_implicit(self, basis, size, corner):
+        """
+        From an x, y, z basis vector set, and the dimensions of the grid,
+        generates an explicit xyz grid.
+        """
+        
+        assert self.xyz_type == 'implicit'
+        
+        if basis[0] != 0.0:
+            x_pixels = np.arange(0, basis[0]*size[0], basis[0])
+        else:
+            x_pixels = np.zeros( size[0] )
+        
+        if basis[1] != 0.0:
+            y_pixels = np.arange(0, basis[1]*size[1], basis[1])
+        else:
+            y_pixels = np.zeros( size[1] )
+        
+        if basis[2] != 0.0:
+            z_pixels = np.arange(0, basis[2]*size[2], basis[2])
+        else:
+            z_pixels = np.zeros( size[2] )
+        
+        x = np.repeat(x_pixels, size[1]*size[2])
+        y = np.tile( np.repeat(y_pixels, size[2]), size[0] )
+        z = np.tile(z_pixels, size[0]*size[1])
+
+        xyz = np.vstack((x, y, z)).transpose()
+        xyz += np.array(corner)
+        
+        assert xyz.shape[0] == size[0] * size[1] * size[2]
+        assert xyz.shape[1] == 3
+        
+        return xyz
+        
+    @property
+    def real(self):
+        real = self.xyz.copy()
+        real[:,2] += self.path_length
+        return real
+        
+    @property
+    def polar(self):
+        return self._real_to_polar(self.real)
+        
+    @property
+    def reciprocal(self):
+        return self._real_to_reciprocal(self.real)
+        
+    @property
+    def recpolar(self):
+        return self._real_to_recpolar(self.real)
+            
+    def _real_to_polar(self, xyz):
         """
         Convert the real-space representation to polar coordinates.
         """
         polar = self._to_polar(xyz)
         return polar
-        
-            
-    def real_to_reciprocal(self, xyz):
+         
+    def _real_to_reciprocal(self, xyz):
         """
         Convert the real-space to reciprocal-space in cartesian form.
         """
@@ -201,22 +342,19 @@ class Detector(Beam):
         
         return q
         
-        
-    def real_to_recpolar(self, xyz):
+    def _real_to_recpolar(self, xyz):
         """
         Convert the real-space to reciprocal-space in polar form, that is
-        (|q|, ztheta , phi).
+        (|q|, theta , phi).
         """
-        reciprocal_polar = self._to_polar( self.real_to_reciprocal(xyz) )
+        reciprocal_polar = self._to_polar( self._real_to_reciprocal(xyz) )
         return reciprocal_polar
-        
         
     def _norm(self, vector):
         """
         Compute the norm of an n x m array of vectors, where m is the dimension.
         """
         return np.sqrt( np.sum( np.power(vector, 2), axis=1 ) )
-        
         
     def _unit_vector(self, vector):
         """
@@ -241,8 +379,7 @@ class Detector(Beam):
             unit_vectors[i,:] = vector[i,:] / norm[i]
         
         return unit_vectors
-
-
+        
     def _to_polar(self, vector):
         """
         Converts n m-dimensional `vector`s to polar coordinates. By polar
@@ -253,8 +390,8 @@ class Detector(Beam):
         polar = np.zeros( vector.shape )
         
         polar[:,0] = self._norm(vector)
-        polar[:,1] = np.arccos(vector[:,2] / (polar[:,0]+1e-16))       # cos^{-1}(z/r)
-        polar[:,2] = utils.arctan3(vector[:,1], vector[:,0])   # y coord first!
+        polar[:,1] = np.arccos(vector[:,2] / (polar[:,0]+1e-16)) # cos^{-1}(z/r)
+        polar[:,2] = utils.arctan3(vector[:,1], vector[:,0])     # y first!
         
         return polar
         
@@ -289,14 +426,56 @@ class Detector(Beam):
         xx, yy = np.meshgrid(x, x)
 
         xyz = np.zeros((len(x)**2, 3))
-        xyz[:,0] = xx.flatten()
-        xyz[:,1] = yy.flatten()
+        xyz[:,0] = yy.flatten()
+        xyz[:,1] = xx.flatten()
 
         detector = Detector(xyz, l, beam)
 
         return detector
         
+    @classmethod
+    def generic_polar(cls, q_spacing=0.02, q_lim=5.0, angle_spacing=1.0,
+                      energy=10.0, flux=100.0, l=50.0):
+        """
+        Generates a simple grid detector that can be used for testing
+        (factory function). 
+
+        Optional Parameters
+        -------------------
+        q_spacing : float
+            The |q| grid spacing
+        q_lim : float
+            The upper limit of the q-vector
+        angle_spacing : float
+            The angular grid spacing, in degrees
+        k : float
+            Wavenumber of the beam
+        l : float
+            The path length from the sample to the detector, in the same units
+            as the detector dimensions.
+
+        Returns
+        -------
+        detector : odin.xray.Detector
+            An instance of the detector that meets the specifications of the 
+            parameters
+        """
+        # todo : implement
         
+        raise NotImplementedError()
+        # beam = Beam(flux, energy=energy)
+        # 
+        # x = np.arange(-lim, lim+spacing, spacing)
+        # xx, yy = np.meshgrid(x, x)
+        # 
+        # xyz = np.zeros((len(x)**2, 3))
+        # xyz[:,0] = xx.flatten()
+        # xyz[:,1] = yy.flatten()
+        # 
+        # detector = Detector(xyz, l, beam)
+
+        # return detector
+          
     def save(self, filename):
         """
         Writes the current Detector to disk.
@@ -307,6 +486,8 @@ class Detector(Beam):
             The path to the shotset file to save.
         """
         
+        # todo : extend to implicit detectors
+        
         if filename[-4:] != '.dtc':
             filename += '.dtc'
         
@@ -316,7 +497,6 @@ class Detector(Beam):
 
         return
         
-
     @classmethod
     def load(cls, filename):
         """
@@ -332,6 +512,8 @@ class Detector(Beam):
         shotset : odin.xray.Shotset
             A shotset object
         """
+        
+        # todo : extend to implicit detectors
         
         if not filename.endswith('.dtc'):
             raise ValueError('Must load a detector file (.dtc extension)')

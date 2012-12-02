@@ -72,8 +72,8 @@ class TestDetector():
         y = r * np.sin(theta) * np.sin(phi)
         z = r * np.cos(theta)
         
-        assert_array_almost_equal(xx.flatten(), x)
-        assert_array_almost_equal(yy.flatten(), y)
+        assert_array_almost_equal(yy.flatten(), x)
+        assert_array_almost_equal(xx.flatten(), y)
    
     def test_reciprocal_space(self):
         qx = self.d.reciprocal[:,0]
@@ -106,6 +106,16 @@ class TestDetector():
         assert_array_almost_equal(ref1[:,2], self.d.recpolar[:,2], err_msg='phi')
         
         # NO THETA TEST -- DO WE CARE?
+       
+    def test_basis_factory(self):
+        beam = xray.Beam(self.flux, energy=self.energy)
+        basis = (self.spacing, self.spacing, 0.0)
+        dim = 2*(self.lim / self.spacing) + 1
+        shape = (dim, dim, 1)
+        corner = (-self.lim, -self.lim, 0.0)
+        basis_list = [(basis, shape, corner)]
+        bd = xray.Detector.from_basis(basis_list, self.l, beam)
+        assert_array_almost_equal(bd.xyz, self.d.xyz)
         
     def test_io(self):
         if os.path.exists('r.dtc'): os.system('rm r.dtc')
