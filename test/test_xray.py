@@ -129,6 +129,7 @@ class TestShot():
     
     def setup(self):
         self.d = xray.Detector.generic(spacing=0.4)
+        self.i = np.random.randn(self.d.xyz.shape[0])
         self.t = trajectory.load(ref_file('ala2.pdb'))
         self.shot = xray.Shot.load(ref_file('refshot.shot'))
         
@@ -144,8 +145,12 @@ class TestShot():
         if not GPU: raise SkipTest
         shot = xray.Shot.simulate(self.t, 512, self.d)
         
-    def test_polar_interpolation(self):
-        pass
+    def test_implicit_interpolation(self):
+        s = xray.Shot(self.i, self.d)
+        
+    def test_unstructured_interpolation(self):
+        d = xray.Detector.generic(spacing=0.4, force_explicit=True)
+        s = xray.Shot(self.i, d)
         
     @skip
     def test_mask(self):
@@ -244,11 +249,11 @@ class TestShot():
         
             masked = 0
             for phi in self.shot.phi_values:
-                if (  (q1,phi) not in self.shot.masked_polar_pixels ) and (  (q2,phi+delta) not in self.shot.masked_polar_pixels ):            
+                #if (  (q1,phi) not in self.shot.masked_polar_pixels ) and (  (q2,phi+delta) not in self.shot.masked_polar_pixels ):            
                     x.append( self.shot.I(q1, phi) )
                     y.append( self.shot.I(q2, phi+delta) )
-                else:
-                    masked += 1
+                # else:
+                #     masked += 1
                 
             x = np.array(x)
             y = np.array(y)
