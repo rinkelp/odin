@@ -1564,8 +1564,14 @@ def simulate_shot(traj, num_molecules, detector, traj_weights=None,
             rz = traj.xyz[i,:,2].flatten().astype(np.float32)
 
             # choose the number of molecules (must be multiple of 512)
-            num = num - (num % 512) + 512 # round up
+            num = num - (num % 512) # round down
             bpg = num / 512
+
+            # todo : fix temporary fix
+            if bpg == 0:
+                bpg = 1
+                num = 512
+
             logger.info('GPU can only process multiples of 512 molecules.')
             logger.info('Running %d molecules from snapshot %d...' % (num, i))  
 
