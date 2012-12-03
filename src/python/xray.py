@@ -1441,6 +1441,8 @@ class Shotset(Shot):
             I = simulate_shot(traj, num_molecules, detector, traj_weights, force_no_gpu, device_id=device_id)
             shot = Shot(I, detector)
             shotlist.append(shot)
+            
+            logger.info('Finished shot %d/%d on device %d' % (i, num_shots, device_id) )
         
         return Shotset(shotlist)
         
@@ -1650,7 +1652,7 @@ def simulate_shot(traj, num_molecules, detector, traj_weights=None,
                                                 rx, ry, rz, aid,
                                                 cromermann,
                                                 rand1, rand2, rand3, num_q)
-                logger.info('Retrived data from GPU.')
+                logger.debug('Retrived data from GPU.')
                 assert( len(out_obj.this[1]) == num_q )
                 intensities += out_obj.this[1].astype(np.float64)
     
