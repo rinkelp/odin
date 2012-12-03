@@ -55,7 +55,7 @@ def main(input_file, output_file, max_intensity=0.0, n_maxima_cutoff=5):
     # plot the intensity profile on the lhs
     prf_ax = plt.subplot2grid((n_maxima,5), (0,0), rowspan=n_maxima, colspan=2)
     prf_ax.plot(I[:,0], I[:,1], lw=2) 
-    prf_ax.set_xlabel(r'q / $\AA$')
+    prf_ax.set_xlabel(r'q / $\AA^{-1}$')
     prf_ax.set_ylabel(r'I(q)')
     prf_ax.set_ylim([ np.min(I[:,1]), max_intensity ])
     prf_ax.set_xlim([ q_edge, np.max(I[:,0]) ])

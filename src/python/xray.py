@@ -1334,7 +1334,7 @@ def simulate_shot(traj, num_molecules, detector, traj_weights=None,
         traj_weights = np.ones( traj.n_frames )
     traj_weights /= traj_weights.sum()
         
-    num_per_shapshot = np.random.multinomial(num_molecules, traj_weights, size=1)
+    num_per_shapshot = np.random.multinomial(num_molecules, traj_weights)
 
     # get detector
     qx = detector.reciprocal[:,0].astype(np.float32)
@@ -1372,7 +1372,7 @@ def simulate_shot(traj, num_molecules, detector, traj_weights=None,
     intensities = np.zeros(detector.num_q, dtype=np.float64) # should be double
     
     for i,num in enumerate(num_per_shapshot):
-        if int(num) > 0:
+        if int(num) > 0: # else, we can just skip...
     
             num = int(num)
 
@@ -1382,8 +1382,10 @@ def simulate_shot(traj, num_molecules, detector, traj_weights=None,
             rz = traj.xyz[i,:,2].flatten().astype(np.float32)
 
             # choose the number of molecules (must be multiple of 512)
-            num = num - (num % 512)
+            num = num - (num % 512) + 512 # round up
             bpg = num / 512
+            logger.info('GPU can only process multiples of 512 molecules.')
+            logger.info('Running %d molecules from snapshot %d...' % (num, i))  
 
             # generate random numbers for the rotations in python (much easier)
             rand1 = np.random.rand(num).astype(np.float32)

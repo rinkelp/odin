@@ -34,7 +34,7 @@ def main(input_file, output, max_intensity=0, npoints=1000):
     fig.tight_layout()
     
     ax[0].plot(I[:,0], I[:,1], lw=2)
-    ax[0].set_xlabel(r'q / $\AA$')
+    ax[0].set_xlabel(r'q / $\AA^{-1}$')
     ax[0].set_ylabel(r'I(q)')
     ax[0].set_ylim([ np.min(I[:,1]), max_intensity ])
     ax[0].set_xlim([ q_edge, np.max(I[:,0]) ])
