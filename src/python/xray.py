@@ -619,29 +619,13 @@ class Shot(object):
         Injects
         -------
         self.polar_intensities : ndarray, float
-            An n x 3 array, where n in the total number of data points.
-                self.polar_intensities[:,0] -- magnitude of q, |q|
-                self.polar_intensities[:,1] -- azmuthal angle phi
-                self.polar_intensities[:,2] -- intensity I(|q|, phi)
+            An array of the intensities I(|q|, phi)
         """
         
         # construct a polar grid from the parameters passed above, and store
         # a lot of stuff in `self`
         self.q_spacing = q_spacing
         self.phi_spacing = phi_spacing * (2.0*np.pi/360.) # conv. to radians
-        self._generate_polar_grid()
-        self.polar_mask = np.zeros(self.polar_intensities.shape[0], dtype=np.bool)
-        
-        if self.detector.xyz_type == 'explicit':
-            # todo : check for rectangular grid and then use structured
-            self._unstructured_interpolation()
-        elif self.detector.xyz_type == 'implicit':
-            self._implicit_interpolation()
-        else:
-            raise RuntimeError('Invalid detector passed to Shot()')
-        
-        
-    def _generate_polar_grid(self):
         
         # determine the bounds of the grid, and the discrete points to use
         self.phi_values = np.arange(0.0, 2.0*np.pi, self.phi_spacing)
@@ -654,17 +638,54 @@ class Shot(object):
         
         self.num_datapoints = self.num_phi * self.num_q
         
-        # generate the polar grid to interpolate onto
-        self.polar_intensities = np.zeros((self.num_datapoints, 3))
-        self.polar_intensities[:,0] = np.tile(self.q_values, self.num_phi)
-        self.polar_intensities[:,1] = np.repeat(self.phi_values, self.num_q)
+        # initialize a mask, no masked values yet
+        self.polar_mask = np.zeros(self.polar_intensities.shape[0], dtype=np.bool)
         
-        return
+        # check to see what method we want to use to interpolate. Here,
+        # `unstructured` is more general, but slower; implicit/structured assume
+        # the detectors are grids, and are therefore faster but specific
+        
+        if self.detector.xyz_type == 'explicit':
+            # todo : check for rectangular grid and then use structured
+            self._unstructured_interpolation()
+        elif self.detector.xyz_type == 'implicit':
+            self._implicit_interpolation()
+        else:
+            raise RuntimeError('Invalid detector passed to Shot()')
+                    
+        
+    @property
+    def polar_grid(self):
+        """
+        Return the pixels that comprise the polar grid in (q, phi) space.
+        """
+        polar_grid = np.zeros((self.num_datapoints, 2))
+        polar_grid[:,0] = np.tile(self.q_values, self.num_phi)
+        polar_grid[:,1] = np.repeat(self.phi_values, self.num_q)
+        
+        return polar_grid
+        
+        
+    @property
+    def polar_grid_asreal(self):
+        """
+        Returns the pixels that comprise the polar grid in cartesian space
+        """
+        pg = self.polar_grid()
+        pg_real = np.zeros( pg.shape )
+        pg_real[:,0] = pg[:,0] * np.cos( pg[:,1] )
+        pg_real[:,1] = pg[:,0] * np.sin( pg[:,1] )
+        
+        return pg_real
         
         
     def _implicit_interpolation(self):
         """
         Interpolate onto a polar grid from an `implicit` detector geometry.
+        
+        This detector geometry is specified by the x and y pixel spacing,
+        the number of pixels in the x/y direction, and the top-left corner
+        position.
         """
         
         # loop over all the arrays that comprise the detector and use
@@ -676,8 +697,7 @@ class Shot(object):
         inv_mask = np.zeros(self.polar_intensities.shape[0], dtype=np.bool)
         
         # convert the polar to cartesian coords for comparison to detector
-        xp = self.polar_intensities[:,0] * np.cos( self.polar_intensities[:,1] )
-        yp = self.polar_intensities[:,0] * np.sin( self.polar_intensities[:,1] )
+        
         
         for grid in self.detector.grid_list:
             
@@ -718,7 +738,7 @@ class Shot(object):
                 continue
             
             # interpolate onto the polar grid & update the inverse mask
-            self.polar_intensities[p_inds,2] = f.ev(xp[p_inds], yp[p_inds])
+            self.polar_intensities[p_inds] = f.ev(xp[p_inds], yp[p_inds])
             inv_mask[p_ind] = np.bool(True)
             
         self.polar_mask += np.bool(True) - inv_mask
@@ -753,14 +773,14 @@ class Shot(object):
         aug_int = np.concatenate(( self.intensities, self.intensities[add] ))
         
         # do the interpolation
-        z_interp = interpolate.griddata( aug_xy, aug_int, self.polar_intensities[:,:2],
+        z_interp = interpolate.griddata( aug_xy, aug_int, self.polar_grid,
                                          method='linear', fill_value=np.nan )
 
-        self.polar_intensities[:,2] = z_interp.flatten()
+        self.polar_intensities = z_interp.flatten()
 
         # mask missing pixels (outside convex hull)
         nan_ind = np.where( np.isnan(z_interp) )[0]
-        self.polar_intensities[nan_ind,2] = 0.0
+        self.polar_intensities[nan_ind] = 0.0
         #self.polar_mask[nan_ind] = np.bool(True)
         
         self._update_mask()
@@ -769,8 +789,8 @@ class Shot(object):
         
         
     def _update_mask(self):
-        self.polar_intensities[:,2] = np.ma.array(self.polar_intensities[:,2],
-                                                  mask=self.polar_mask)
+        self.polar_intensities[ = np.ma.array(self.polar_intensities,
+                                              mask=self.polar_mask)
         
     def unmask_all(self):
         """
@@ -867,7 +887,7 @@ class Shot(object):
         -------
         index : int
             The index of self.polar_intensities that is closest to the passed values,
-            such that self.intensities[index,2] -> I(q,phi)
+            such that self.polar_intensities[index] -> I(q,phi)
         """
         
         q = self._nearest_q(q)
@@ -884,7 +904,7 @@ class Shot(object):
         """
         Return the intensity a (q,phi).
         """
-        return np.array(self.polar_intensities)[self._intensity_index(q,phi),2]
+        return np.array(self.polar_intensities)[self._intensity_index(q,phi)]
         
         
     def I_ring(self, q):
@@ -893,7 +913,7 @@ class Shot(object):
         """
         q = self._nearest_q(q)
         ind = self._q_index(q)
-        return np.array(self.polar_intensities)[ind,2]
+        return np.array(self.polar_intensities)[ind]
         
         
     def qintensity(self, q):
@@ -913,7 +933,7 @@ class Shot(object):
         
         q = self._nearest_q(q)
         ind = self._q_index(q)
-        intensity = (self.polar_intensities[ind,2]).mean()
+        intensity = (self.polar_intensities[ind]).mean()
         
         return intensity
         
@@ -1244,9 +1264,9 @@ class Shotset(Shot):
         q-phi grids in the shots are the same. If some are different, here
         we recalculate them.
         """
-        q_phis = self.shots[0].polar_intensities[:,:2]
+        q_phis = self.shots[0].polar_grid
         for shot in self.shots:
-            diff = np.sum(np.abs(shot.polar_intensities[:,:2] - q_phis))
+            diff = np.sum(np.abs(shot.polar_grid - q_phis))
             if diff > epsilon:
                 raise ValueError('Detector values in Shotset not consistent '
                                   ' across set. Homogenize interpolated polar'
