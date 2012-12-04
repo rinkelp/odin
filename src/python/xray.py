@@ -175,7 +175,8 @@ class Detector(Beam):
             self._xyz_type = 'implicit'
             
             self.grid_list = xyz
-            self.pixels = None
+            self.num_q     = np.sum([ b[1][0]*b[1][1]*b[1][2] for b in self.grid_list ])
+            self.pixels    = None
             
         else:
             raise ValueError("`xyz_type` must be one of {'explicit', 'implicit'}")
@@ -1455,6 +1456,8 @@ class Shotset(Shot):
         shotset : odin.xray.Shotset
             A Shotset instance, containing the simulated shots.
         """
+        if device_id == None: device_id = 0
+        device_id = int(device_id)
     
         shotlist = []
         for i in range(num_shots):
@@ -1462,7 +1465,7 @@ class Shotset(Shot):
             shot = Shot(I, detector)
             shotlist.append(shot)
             
-            logger.info('Finished shot %d/%d on device %d' % (i, num_shots, device_id) )
+            logger.info('Finished shot %d/%d on device %d' % (i+1, num_shots, device_id) )
         
         return Shotset(shotlist)
         
@@ -1598,6 +1601,10 @@ def simulate_shot(traj, num_molecules, detector, traj_weights=None,
     logger.debug('Performing scattering simulation...')
     logger.debug('Simulating %d copies in the dilute limit' % num_molecules)
 
+    # stupidity check
+    if device_id == None:
+        device_id = 0
+
     if traj_weights == None:
         traj_weights = np.ones( traj.n_frames )
     traj_weights /= traj_weights.sum()
@@ -1609,7 +1616,7 @@ def simulate_shot(traj, num_molecules, detector, traj_weights=None,
     qy = detector.reciprocal[:,1].astype(np.float32)
     qz = detector.reciprocal[:,2].astype(np.float32)
     num_q = len(qx)
-    assert( detector.num_q == num_q )
+    assert detector.num_q == num_q
 
     # get cromer-mann parameters for each atom type
     # renumber the atom types 0, 1, 2, ... to point to their CM params
@@ -1658,7 +1665,7 @@ def simulate_shot(traj, num_molecules, detector, traj_weights=None,
                 bpg = 1
                 num = 512
 
-            logger.info('GPU can only process multiples of 512 molecules.')
+            logger.debug('GPU can only process multiples of 512 molecules.')
             logger.info('Running %d molecules from snapshot %d...' % (num, i))  
 
             # generate random numbers for the rotations in python (much easier)
@@ -1681,7 +1688,7 @@ def simulate_shot(traj, num_molecules, detector, traj_weights=None,
                                                 cromermann,
                                                 rand1, rand2, rand3, num_q)
                 logger.debug('Retrived data from GPU.')
-                assert( len(out_obj.this[1]) == num_q )
+                assert len(out_obj.this[1]) == num_q
                 intensities += out_obj.this[1].astype(np.float64)
     
     # check for NaNs in output
