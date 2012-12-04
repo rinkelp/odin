@@ -65,7 +65,7 @@ if __name__ == '__main__':
     if args.detector != 'NONE':
         detector = xray.Detector.load(args.detector)
     else:
-        detector = xray.Detector.generic()
+        detector = xray.Detector.generic(force_explicit=True)
         
     if args.weights == 'NONE':
         weights = None
