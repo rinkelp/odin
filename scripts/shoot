@@ -4,7 +4,7 @@
 Simulate the scattering experiment (SAXS, WAXS).
 """
 
-import multiprocessing
+import multiprocessing as mp
 
 from mdtraj import trajectory
 from odin import xray, structure
@@ -12,6 +12,9 @@ from odin.utils import odinparser
 
 import numpy as np
 
+
+def main_wrap(args):
+    return main(*args)
 
 def main(traj, num_shots, num_molecules, detector, traj_weights=None, device_id=0):
     shotset = xray.Shotset.simulate(traj, num_molecules, detector, num_shots, traj_weights=None, device_id=device_id)    
@@ -49,10 +52,13 @@ if __name__ == '__main__':
                         help='A Shotset object, written to disk in h5 format. Default: shotset.shot')
 
     args = parser.parse_args()
+
+    if args.structures == None:
+        raise ValueError('structure (-s) argument required!')
     
     # load up filenames
     if args.structures.endswith('.coor') or args.structures.endswith('.xyz'):
-        traj = structure.load_corr(args.structures)
+        traj = structure.load_coor(args.structures)
     else:
         traj = trajectory.load(args.structures)
     
@@ -75,14 +81,14 @@ if __name__ == '__main__':
         gpudev = range(p)
         print "Running on GPU Devices:", gpudev
         
-        pool = Pool(processes=p)
+        pool = mp.Pool(processes=p)
         main_args = zip([traj], 
                         [args.numshots]*p, 
                         [args.nummolec]*p,
                         [detector]*p,
                         [weights]*p,
                         gpudev)
-        shotsets = pool.map(main, main_args)
+        shotsets = pool.map(main_wrap, main_args)
     
         # aggregate all the shotsets into one
         s = []
