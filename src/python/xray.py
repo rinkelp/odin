@@ -731,12 +731,8 @@ class Shot(object):
             # find the indices of the polar grid that are inside the boundaries
             # of the current detector array we're interpolating over
             # todo : this is probably a slow way to go...
-            print x_pixels
-            print np.where( pgr[:,0] > x_pixels[0] )
-            print np.where( pgr[:,0] < x_pixels[-1] )
             p_ind_x = np.intersect1d( np.where( pgr[:,0] > x_pixels[0] )[0], 
                                       np.where( pgr[:,0] < x_pixels[-1] )[0] )
-            print p_ind_x
             p_ind_y = np.intersect1d( np.where( pgr[:,1] > y_pixels[0] )[0], 
                                       np.where( pgr[:,1] < y_pixels[-1] )[0] )                                    
             p_inds = np.intersect1d(p_ind_x, p_ind_y)
