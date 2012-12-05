@@ -731,20 +731,24 @@ class Shot(object):
             # find the indices of the polar grid that are inside the boundaries
             # of the current detector array we're interpolating over
             # todo : this is probably a slow way to go...
-            p_ind_x = np.intersect1d( np.where( pgr[:,0] < x_pixels[0] )[0], 
-                                      np.where( pgr[:,0] > x_pixels[-1] )[0] )
-            p_ind_y = np.intersect1d( np.where( pgr[:,0] < y_pixels[0] )[0], 
-                                      np.where( pgr[:,0] > y_pixels[-1] )[0] )                                    
+            print x_pixels
+            print np.where( pgr[:,0] > x_pixels[0] )
+            print np.where( pgr[:,0] < x_pixels[-1] )
+            p_ind_x = np.intersect1d( np.where( pgr[:,0] > x_pixels[0] )[0], 
+                                      np.where( pgr[:,0] < x_pixels[-1] )[0] )
+            print p_ind_x
+            p_ind_y = np.intersect1d( np.where( pgr[:,1] > y_pixels[0] )[0], 
+                                      np.where( pgr[:,1] < y_pixels[-1] )[0] )                                    
             p_inds = np.intersect1d(p_ind_x, p_ind_y)
             
             if len(p_inds) == 0:
                 logger.warning('Detector array (%d/%d) had no pixels inside the \
-                interpolation area!' % (k, len(self.detector.grid_list)) )
+                interpolation area!' % (k+1, len(self.detector.grid_list)) )
                 continue
             
             # interpolate onto the polar grid & update the inverse mask
             self.polar_intensities[p_inds] = f.ev(pgr[p_inds,0], pgr[p_inds,1])
-            inv_mask[p_ind] = np.bool(True)
+            inv_mask[p_inds] = np.bool(True)
             
         self.polar_mask += np.bool(True) - inv_mask
         self._update_mask()
@@ -1595,8 +1599,6 @@ def simulate_shot(traj, num_molecules, detector, traj_weights=None,
         These are factory functions that call this function, and wrap the
         results into the Shot and Shotset classes, respectively.
     """
-    
-    np.set_printoptions(threshold='nan')
     
     # NOTES ON DATA TYPES
     # all arrays should be float32 / int32
