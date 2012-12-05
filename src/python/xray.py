@@ -325,7 +325,9 @@ class Detector(Beam):
         
     @property
     def recpolar(self):
-        return self._real_to_recpolar(self.real)
+        a = self._real_to_recpolar(self.real)
+        a[:,1] = 0.0 # convention, re: Dermen
+        return a
         
         
     def _real_to_polar(self, xyz):
