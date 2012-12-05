@@ -700,7 +700,7 @@ class Shot(object):
         # convert the polar to cartesian coords for comparison to detector
         
         
-        for grid in self.detector.grid_list:
+        for k,grid in enumerate(self.detector.grid_list):
             
             basis, size, corner = grid
             n_int = size[0] * size[1] * size[2]
@@ -735,7 +735,8 @@ class Shot(object):
             p_inds = np.intersect1d(p_ind_x, p_ind_y)
             
             if len(p_inds) == 0:
-                logger.warning('Detector array had no overlapping polar pixels!')
+                logger.warning('Detector array (%d/%d) had no pixels inside the \
+                interpolation area!' % (k, len(self.detector.grid_list)) )
                 continue
             
             # interpolate onto the polar grid & update the inverse mask
@@ -1593,6 +1594,8 @@ def simulate_shot(traj, num_molecules, detector, traj_weights=None,
         results into the Shot and Shotset classes, respectively.
     """
     
+    np.set_printoptions(threshold='nan')
+    
     # NOTES ON DATA TYPES
     # all arrays should be float32 / int32
     # output array gets upcast to float64 before being returned
@@ -1642,6 +1645,11 @@ def simulate_shot(traj, num_molecules, detector, traj_weights=None,
             logger.critical('Element number %d not in Cromer-Mann form factor parameter database' % a)
             raise ValueError('Could not get critical parameters for computation')
         aid[ aZ == a ] = np.int32(i)
+        
+        
+    print cromermann
+    print aid
+    
 
     # do the simulation, scan over confs., store in `intensities`
     intensities = np.zeros(detector.num_q, dtype=np.float64) # should be double

@@ -1,6 +1,6 @@
 
 
-# CROMER-MANN XRAY SCATTERING PARAMETERS
+# CROMER-MANN XRAY CROSS SECTION PARAMETERS
 #
 # These are the parameters used to calculate the non-anomolous part of the x-ray
 # scattering atomic form factor, f0.
@@ -13,7 +13,9 @@
 #     f0[k] = c + [SUM a_i*EXP(-b_i*(k^2)) ]
 #                 i=1,4
 #     
-# this function gets the a_i, b_i, and c parameters.
+# where k = sin(theta) / lambda = |q| / (4*pi)
+# and c, a_i and b_i are the so called Cromer-Mann coefficients 
+# (International Tables vol. 4 or vol C; in vol. C refer to pg 500-502)
 # 
 # cromer_mann_params : dict
 #     A dictionary such that

@@ -126,7 +126,7 @@ class TestDetector():
         
         
 class TestShot():
-    
+        
     def setup(self):
         self.d = xray.Detector.generic(spacing=0.4)
         self.i = np.random.randn(self.d.xyz.shape[0])
@@ -140,7 +140,7 @@ class TestShot():
         assert_array_almost_equal(s.intensity_profile(), self.shot.intensity_profile())
         os.remove('test.shot')
         if os.path.exists('test.shot'): os.system('test.shot')
-    
+        
     def test_sim(self):
         if not GPU: raise SkipTest
         shot = xray.Shot.simulate(self.t, 512, self.d)
@@ -151,6 +151,7 @@ class TestShot():
     def test_unstructured_interpolation(self):
         d = xray.Detector.generic(spacing=0.4, force_explicit=True)
         s = xray.Shot(self.i, d)
+
         
     @skip
     def test_mask(self):
