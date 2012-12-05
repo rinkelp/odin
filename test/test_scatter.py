@@ -239,7 +239,7 @@ class TestScatter():
         print "testing c code..."
         
         xyzQ = np.loadtxt(ref_file('512_atom_benchmark.xyz'))
-        xyzlist = xyzQ[:,:3]
+        xyzlist = xyzQ[:,:3] * 10.0 # nm -> ang.
         atomic_numbers = xyzQ[:,3].flatten()
     
         q_grid = np.loadtxt(ref_file('512_q.xyz'))[:self.nq]
