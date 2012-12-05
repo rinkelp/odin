@@ -1134,6 +1134,8 @@ class Shot(object):
         num_molecules : int
             The number of molecules estimated to be in the `beam`'s focus.
     
+        Optional Parameters
+        -------------------
         traj_weights : ndarray, float
             If `traj` contains many structures, an array that provides the Boltzmann
             weight of each structure. Default: if traj_weights == None, weights
@@ -1141,14 +1143,17 @@ class Shot(object):
     
         force_no_gpu : bool
             Run the (slow) CPU version of this function.
+ 
+        device_id : int
+            The index of the GPU to run on.
     
         Returns
         -------
         shot : odin.xray.Shot
             A shot instance, containing the simulated shot.
         """
-        I = simulate_shot(traj, num_molecules, detector, traj_weights, 
-                          force_no_gpu, device_id=device_id)
+        I = simulate_shot(traj, num_molecules, detector, traj_weights=traj_weights, 
+                          force_no_gpu=force_no_gpu, device_id=device_id)
         shot = Shot(I, detector)
         return shot
         
@@ -1459,12 +1464,12 @@ class Shotset(Shot):
         shotset : odin.xray.Shotset
             A Shotset instance, containing the simulated shots.
         """
-        if device_id == None: device_id = 0
         device_id = int(device_id)
     
         shotlist = []
         for i in range(num_shots):
-            I = simulate_shot(traj, num_molecules, detector, traj_weights, force_no_gpu, device_id=device_id)
+            I = simulate_shot(traj, num_molecules, detector, traj_weights=traj_weights, 
+                              force_no_gpu=force_no_gpu, device_id=device_id)
             shot = Shot(I, detector)
             shotlist.append(shot)
             
@@ -1605,8 +1610,8 @@ def simulate_shot(traj, num_molecules, detector, traj_weights=None,
     logger.debug('Simulating %d copies in the dilute limit' % num_molecules)
 
     # stupidity check
-    if device_id == None:
-        device_id = 0
+    if type(device_id) != int:
+        raise ValueError('device_id must be type int')
 
     if traj_weights == None:
         traj_weights = np.ones( traj.n_frames )
@@ -1684,7 +1689,6 @@ def simulate_shot(traj, num_molecules, detector, traj_weights=None,
 
             else:
                 logger.debug('Sending calculation to GPU device...')
-                device_id = int(0)
                 bpg = int(bpg)
                 out_obj = gpuscatter.GPUScatter(device_id,
                                                 bpg, qx, qy, qz,

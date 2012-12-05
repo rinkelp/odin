@@ -80,10 +80,15 @@ if __name__ == '__main__':
         p = args.parallel
         gpudev = range(p)
         print "Running on GPU Devices:", gpudev
+
+        # make a list of ints, representing the n_shots each GPU will do
+        n_shots_list = [ args.numshots / p ]*p
+        for i in range( args.numshots % p ):
+            n_shots_list[i] += 1
         
         pool = mp.Pool(processes=p)
-        main_args = zip([traj], 
-                        [args.numshots]*p, 
+        main_args = zip([traj]*p, 
+                        n_shots_list, 
                         [args.nummolec]*p,
                         [detector]*p,
                         [weights]*p,
