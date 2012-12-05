@@ -1108,7 +1108,7 @@ class Shot(object):
 	x -= xmean
         y -= ymean
         
-        xstd = x.std() # might use a norm factors in future
+        xstd = x.std() # might use as norm factors in future
         ystd = y.std()
 	
 	norm = n_theta*xmean*ymean
@@ -1118,7 +1118,7 @@ class Shot(object):
         cor = np.zeros((n_theta, 2))
         cor[:,0] = self.phi_values
 
-	# for now wont worry about gaps to speed things up
+	# for now, dont worry about gaps to speed things up
 
 	for phi in xrange(n_theta):
 	    for i in xrange(n_theta):
@@ -1450,13 +1450,41 @@ class Shotset(Shot):
     def inter(self,q1,q2,n_inter=0):
    	"""
 	computes inter-shot correlation ffts
+	
+	Paramters
+	---------
+	q1 : float
+	    magnitude of first position to correlate
+	    
+	q2 : float
+	    magnitude of second position to correlate
+	    
+	n_inter : int , optional
+	    number of inter-shot correlation ffts to compute
+	
+	Returns
+	--------
+	list of np.ndarrays
+	
 	"""
 	shots = self.shots
 	n_shots = len(shots)
 	
+	if n_shots == 1:
+		print "Cannot compute inter shot correlations with 1 shot"
+		print "Exiting..."
+		return 0
+		
+#	I arbitrarily picked 0.6
+	if n_inter > 0.6 * (n_shots+1)*n_shots/2 :
+		print "Might take a long time to find",n_inter,"unique inter-shot pairs from",n_shots
+		print "shots. Please choose n_inter <",int(0.6 *  (n_shots+1)*n_shots/2 ),"."
+		print "Exiting..."
+		return 0
+	
 	if n_inter==0:
 	    n_inter=n_shots
-	
+	    	
 	interCors = []
 	for s1,s2 in stats.randPairs(n_shots,n_inter):
 	    shot1 = shots[s1]
