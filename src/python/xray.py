@@ -640,7 +640,7 @@ class Shot(object):
         self.num_datapoints = self.num_phi * self.num_q
         
         # initialize a mask, no masked values yet
-        self.polar_mask = np.zeros(self.polar_intensities.shape[0], dtype=np.bool)
+        self.polar_mask = np.zeros(self.num_datapoints, dtype=np.bool)
         
         # check to see what method we want to use to interpolate. Here,
         # `unstructured` is more general, but slower; implicit/structured assume
@@ -791,8 +791,7 @@ class Shot(object):
         
         
     def _update_mask(self):
-        self.polar_intensities[ = np.ma.array(self.polar_intensities,
-                                              mask=self.polar_mask)
+        pass 
         
     def unmask_all(self):
         """
