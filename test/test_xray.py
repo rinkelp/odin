@@ -169,7 +169,7 @@ class TestShot():
         assert_almost_equal(nd, 0.03490658503988659)
         
     def test_q_index(self):
-        qs = self.shot.polar_intensities[:,0]
+        qs = self.shot.polar_grid[:,0]
         q = self.shot._nearest_q(0.09)
         ref = np.where(qs == q)[0]
         qinds = self.shot._q_index(q)
@@ -178,19 +178,19 @@ class TestShot():
         for x in ref:
             assert x in qinds
             
-        a1 = self.shot.polar_intensities[qinds,0]
+        a1 = self.shot.polar_grid[qinds,0]
         a2 = np.ones(len(a1)) * q
         assert_array_almost_equal(a1, a2)
             
         
     def test_phi_index(self):
-        phis = self.shot.polar_intensities[:,1]
+        phis = self.shot.polar_grid[:,1]
         phi = self.shot._nearest_phi(6.0)
         ref = np.where(phis == phi)[0]
 
         phiinds = self.shot._phi_index(phi)
         
-        a1 = self.shot.polar_intensities[phiinds,1]
+        a1 = self.shot.polar_grid[phiinds,1]
         a2 = np.ones(len(a1)) * phi
         assert_array_almost_equal(a1, a2)
         
@@ -205,8 +205,8 @@ class TestShot():
         phi_ref = self.shot._nearest_phi(phi_guess)
         
         index = self.shot._intensity_index(q_guess, phi_guess)
-        q   = self.shot.polar_intensities[index,0]
-        phi = self.shot.polar_intensities[index,1]
+        q   = self.shot.polar_grid[index,0]
+        phi = self.shot.polar_grid[index,1]
         
         assert_almost_equal(q, q_ref)
         assert_almost_equal(phi, phi_ref)
@@ -215,11 +215,12 @@ class TestShot():
     def test_i_profile(self):
         
         i = self.shot.polar_intensities
+        pg = self.shot.polar_grid
         qs = np.unique(i[:,0])
         p = np.zeros(len(qs))
         
         for x,q in enumerate(qs):
-            p[x] = (i[:,2][i[:,0]==q]).mean()
+            p[x] = (i[pg[:,0]==q]).mean()
             
         profile = self.shot.intensity_profile()
         ind_code = profile[:,0]

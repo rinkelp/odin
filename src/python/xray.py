@@ -413,7 +413,7 @@ class Detector(Beam):
         
         
     @classmethod
-    def generic(cls, spacing=2.0, lim=100.0, energy=10.0, flux=100.0, l=50.0, 
+    def generic(cls, spacing=1.0, lim=100.0, energy=10.0, flux=100.0, l=50.0, 
                 force_explicit=False):
         """
         Generates a simple grid detector that can be used for testing
@@ -640,6 +640,7 @@ class Shot(object):
         self.num_q = len(self.q_values)
         
         self.num_datapoints = self.num_phi * self.num_q
+        self.polar_intensities = np.zeros(self.num_datapoints)
         
         # initialize a mask, no masked values yet
         self.polar_mask = np.zeros(self.num_datapoints, dtype=np.bool)
@@ -670,11 +671,11 @@ class Shot(object):
         
         
     @property
-    def polar_grid_asreal(self):
+    def polar_grid_as_cart(self):
         """
         Returns the pixels that comprise the polar grid in cartesian space
         """
-        pg = self.polar_grid()
+        pg = self.polar_grid
         pg_real = np.zeros( pg.shape )
         pg_real[:,0] = pg[:,0] * np.cos( pg[:,1] )
         pg_real[:,1] = pg[:,0] * np.sin( pg[:,1] )
@@ -697,10 +698,10 @@ class Shot(object):
         int_end   = 0 # end of intensity array correpsonding to `grid`
         
         # generate a mask that is true where we successfully interpolated
-        inv_mask = np.zeros(self.polar_intensities.shape[0], dtype=np.bool)
+        inv_mask = np.zeros(self.num_datapoints, dtype=np.bool)
         
         # convert the polar to cartesian coords for comparison to detector
-        
+        pgr = self.polar_grid_as_cart
         
         for k,grid in enumerate(self.detector.grid_list):
             
@@ -730,10 +731,10 @@ class Shot(object):
             # find the indices of the polar grid that are inside the boundaries
             # of the current detector array we're interpolating over
             # todo : this is probably a slow way to go...
-            p_ind_x = np.intersect1d( np.where( xp < x_pixels[0] )[0], 
-                                      np.where( xp > x_pixels[-1] )[0] )
-            p_ind_y = np.intersect1d( np.where( yp < y_pixels[0] )[0], 
-                                      np.where( yp > y_pixels[-1] )[0] )                                    
+            p_ind_x = np.intersect1d( np.where( pgr[:,0] < x_pixels[0] )[0], 
+                                      np.where( pgr[:,0] > x_pixels[-1] )[0] )
+            p_ind_y = np.intersect1d( np.where( pgr[:,0] < y_pixels[0] )[0], 
+                                      np.where( pgr[:,0] > y_pixels[-1] )[0] )                                    
             p_inds = np.intersect1d(p_ind_x, p_ind_y)
             
             if len(p_inds) == 0:
@@ -742,7 +743,7 @@ class Shot(object):
                 continue
             
             # interpolate onto the polar grid & update the inverse mask
-            self.polar_intensities[p_inds] = f.ev(xp[p_inds], yp[p_inds])
+            self.polar_intensities[p_inds] = f.ev(pgr[p_inds,0], pgr[p_inds,1])
             inv_mask[p_ind] = np.bool(True)
             
         self.polar_mask += np.bool(True) - inv_mask
@@ -1647,11 +1648,6 @@ def simulate_shot(traj, num_molecules, detector, traj_weights=None,
             raise ValueError('Could not get critical parameters for computation')
         aid[ aZ == a ] = np.int32(i)
         
-        
-    print cromermann
-    print aid
-    
-
     # do the simulation, scan over confs., store in `intensities`
     intensities = np.zeros(detector.num_q, dtype=np.float64) # should be double
     
@@ -1661,9 +1657,10 @@ def simulate_shot(traj, num_molecules, detector, traj_weights=None,
             num = int(num)
 
             # pull xyz coords
-            rx = traj.xyz[i,:,0].flatten().astype(np.float32)
-            ry = traj.xyz[i,:,1].flatten().astype(np.float32)
-            rz = traj.xyz[i,:,2].flatten().astype(np.float32)
+            xyz = traj.xyz[i,:,:] * 10.0 # convert nm -> ang.
+            rx = xyz[:,0].flatten().astype(np.float32)
+            ry = xyz[:,1].flatten().astype(np.float32)
+            rz = xyz[:,2].flatten().astype(np.float32)
 
             # choose the number of molecules (must be multiple of 512)
             num = num - (num % 512) # round down
