@@ -18,6 +18,9 @@ from scipy import interpolate, fftpack
 from bisect import bisect_left
 
 from odin import utils
+
+from odin import stats # module used for Shotset method "inter"
+
 from odin.data import cromer_mann_params
 
 from mdtraj import trajectory, io
@@ -933,7 +936,7 @@ class Shot(object):
             Correlate for many values of delta
         """
         
-        q1 = self._nearest_q(q1)
+        q1 = self._nearest_q(q1) 
         q2 = self._nearest_q(q2)
         delta = self._nearest_phi(delta)
         
@@ -948,7 +951,100 @@ class Shot(object):
         
         return corr
         
+    def correlate_ring_brute(self,q1,q2): 
+	"""
+        Compute the correlation function C(q1, q2, delta) for the shot, averaged
+        for each measured value of the azimuthal angle phi, for many values
+        of delta. This is a brute-force method and requires order N**2 iterations.
         
+        Parameters
+        ----------
+        q1 : float or numpy.ndarray
+            The magnitude of the first position to correlate.
+	    or
+	    The I_ring(q1) return value
+        
+        q2 : float or numpy.ndarray
+            The magnitude of the second position to correlate.
+	    or
+	    I_ring(q2) return value
+            
+        Returns
+        -------
+        cor : ndarray, float
+            A 2d array, where the first dimension is the value of the angle
+            delta employed, and the second is the correlation at that point.
+            
+        See Also
+        --------
+        odin.xray.Shot.correlate
+            Correlate for one value of delta
+        odin.xray.Shot.correlate_ring
+ 	    Same as correlate_ring_brute but requires n*log(n) iterations          
+        """
+        
+	# this step might be redundant because I_ring does the same thing
+	#q1 = self._nearest_q(q1)
+        #q2 = self._nearest_q(q2)
+	
+#	verify that q1 and q2 are of same type
+	if type(q1) != type(q2):
+	    print "Arguments must both be an instance of the same type..."
+	    print "Exiting function..."
+	    return 0
+
+#	if q1,q2 are floats...
+	if isinstance(q1,float):
+	    x = self.I_ring(q1)
+            if np.abs(q1 - q2) < 1e-6:
+                y = x.copy()
+            else:
+                y = self.I_ring(q2)
+            assert len(x) == len(y)
+            n_theta = len(x)
+	
+	    logger.debug("Correlating rings brute at %f / %f" % (q1, q2))
+
+#	if q1,q2 are np.arrays
+	elif isinstance(q1,np.ndarray):
+	    x=q1
+	    y=q2
+	    n_theta = len(q1)
+
+	else:
+	    print "The arguments are not of type 'float' or 'numpy.ndarray'."
+	    print "Exiting function..."
+	    return 0
+	
+        
+	xmean = x.mean()
+	ymean = y.mean()
+	
+	x -= xmean
+        y -= ymean
+        
+        xstd = x.std() # might use a norm factors in future
+        ystd = y.std()
+	
+	norm = n_theta*xmean*ymean
+
+        # todo : ensure a zero gets plugged in at all mask positions
+        
+        cor = np.zeros((n_theta, 2))
+        cor[:,0] = self.phi_values
+
+	# for now wont worry about gaps to speed things up
+
+	for phi in xrange(n_theta):
+	    for i in xrange(n_theta):
+		j=i+phi
+		if j>= n_theta: 
+		    j=j-n_theta
+		cor[phi,1]+= x[i]*y[j]/norm
+        
+	return cor
+	
+
     def correlate_ring(self, q1, q2):
         """
         Compute the correlation function C(q1, q2, delta) for the shot, averaged
@@ -974,7 +1070,7 @@ class Shot(object):
         odin.xray.Shot.correlate
             Correlate for one value of delta
         """
-        
+
         # As dermen has pointed out, here we need to be a little careful with
         # how we deal with masked pixels. If we subtract the means from the 
         # pixels first, then perform the correlation, we can safely ignore
@@ -1248,6 +1344,40 @@ class Shotset(Shot):
         intensity_profile[:,1] /= float(self.num_shots)
         
         return intensity_profile
+
+    def intra(self,q1,q2):
+	"""
+	computes intra-shot correlation ffts
+	"""
+	shots = self.shots
+	n_phi = len(shots[0].phi_values)
+	intraCors = [np.abs(np.fft.fft (s.correlate_ring_brute(q1,q2)[:,1], n_phi)) for s in shots]
+	return intraCors
+
+    def inter(self,q1,q2,n_inter=0):
+   	"""
+	computes inter-shot correlation ffts
+	"""
+	shots = self.shots
+	n_shots = len(shots)
+	
+	if n_inter==0:
+	    n_inter=n_shots
+	
+	interCors = []
+	for s1,s2 in stats.randPairs(n_shots,n_inter):
+	    shot1 = shots[s1]
+	    shot2 = shots[s2]
+	    I1 = shot1.I_ring(q1)
+	    I2 = shot2.I_ring(q2)
+
+#	    note: when the args passed to correlate_ring_brute are numpy.ndarrays
+#	    the only call to self is self.phi_values, which should be the same for
+#	    shot1 or shot2
+	    c12= shot1.correlate_ring_brute(I1,I2)[:,1]
+	    interCors.append( np.abs( np.fft.fft(c12,len(c12) ) ))
+	
+	return interCors
         
         
     def correlate(self, q1, q2, delta):
