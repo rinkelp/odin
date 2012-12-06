@@ -581,7 +581,7 @@ class Shot(object):
         across the collection
     """
         
-    def __init__(self, intensities, detector):
+    def __init__(self, intensities, detector, mask=None, interpolated_values=None):
         """
         Instantiate a Shot class.
         
@@ -593,13 +593,83 @@ class Shot(object):
         
         detector : odin.xray.Detector
             A detector object, containing the pixel positions in space.
+            
+        Optional Parameters
+        -------------------
+        interpolated_values : tuple
+            If the shot has previously been interpolated onto a polar grid,
+            you can instantiate it by passing
+
+            interpolated_values = (polar_intensities, polar_mask, interp_params)
+
+            This is mostly a function for loading saved data. The user is probably
+            better off just letting the class interpolate automatically.
         """
                 
-        self.intensities = intensities
+        self.intensities = intensities.flatten()
         self.detector = detector
-        self.interpolate_to_polar()
         
+        if mask != None:
+            if mask.shape != intensities.shape:
+                raise ValueError('Mask must be same shape as intensities array!')
+            self.real_mask = np.array(mask.flatten())
+        else:
+            self.real_mask = np.zeros(intensities.shape, dtype=np.bool)
         
+        if interpolated_values == None:
+            self.interpolate_to_polar()
+        else:
+            self.polar_intensities = interpolated_values[0]
+            self.polar_mask        = interpolated_values[1]
+            self._unpack_interp_params(interpolated_values[2])
+            
+        return        
+        
+    @property
+    def phi_values(self):
+        if hasattr(self, 'phi_spacing'):
+            pv = np.arange(0.0, 2.0*np.pi, self.phi_spacing)
+        else:
+            pv = None
+        return pv
+        
+    @property
+    def q_values(self):
+        if hasattr(self, 'q_min') and hasattr(self, 'q_max') and hasattr(self, 'q_spacing'):
+            qv = np.arange(self.q_min, self.q_max+self.q_spacing, self.q_spacing)
+        else:
+            qv = None
+        return qv
+        
+    @property
+    def num_phi(self):
+        if hasattr(self, '_num_phi'):
+            np = self._num_phi
+        else:
+            if self.phi_values == None:
+                np = 0
+            else:
+                self._num_phi = len(self.phi_values)
+                np = self._num_phi
+        return np
+        
+    @property
+    def num_q(self):
+        if hasattr(self, '_num_q'):
+            nq = self._num_q
+        else:
+            if self.q_values == None:
+                nq = 0
+            else:
+                self._num_q = len(self.q_values)
+                nq = self._num_q
+        return nq
+        
+    @property
+    def num_datapoints(self):
+        return self.num_phi * self.num_q
+        
+
     def interpolate_to_polar(self, q_spacing=0.02, phi_spacing=1.0):
         """
         Interpolate our (presumably) cartesian-based measurements into a binned
@@ -628,24 +698,13 @@ class Shot(object):
             An array of the intensities I(|q|, phi)
         """
         
-        # construct a polar grid from the parameters passed above, and store
-        # a lot of stuff in `self`
+        self.phi_spacing = phi_spacing * (2.0 * np.pi / 360.) # conv. to radians
         self.q_spacing = q_spacing
-        self.phi_spacing = phi_spacing * (2.0*np.pi/360.) # conv. to radians
-        
-        # determine the bounds of the grid, and the discrete points to use
-        self.phi_values = np.arange(0.0, 2.0*np.pi, self.phi_spacing)
-        self.num_phi = len(self.phi_values)
         
         self.q_min = np.min( self.detector.recpolar[:,0] )
         self.q_max = np.max( self.detector.recpolar[:,0] )
-        self.q_values = np.arange(self.q_min, self.q_max+self.q_spacing, self.q_spacing)
-        self.num_q = len(self.q_values)
-        
-        self.num_datapoints = self.num_phi * self.num_q
+
         self.polar_intensities = np.zeros(self.num_datapoints)
-        
-        # initialize a mask, no masked values yet
         self.polar_mask = np.zeros(self.num_datapoints, dtype=np.bool)
         
         # check to see what method we want to use to interpolate. Here,
@@ -797,6 +856,7 @@ class Shot(object):
         
         
     def _update_mask(self):
+        # todo
         pass 
         
     def unmask_all(self):
@@ -1037,97 +1097,97 @@ class Shot(object):
         return corr
         
     def correlate_ring_brute(self,q1,q2): 
-	"""
+    	"""
         Compute the correlation function C(q1, q2, delta) for the shot, averaged
         for each measured value of the azimuthal angle phi, for many values
         of delta. This is a brute-force method and requires order N**2 iterations.
-        
+    
         Parameters
         ----------
         q1 : float or numpy.ndarray
             The magnitude of the first position to correlate.
-	    or
-	    The I_ring(q1) return value
-        
+        or
+        The I_ring(q1) return value
+    
         q2 : float or numpy.ndarray
             The magnitude of the second position to correlate.
-	    or
-	    I_ring(q2) return value
-            
+        or
+        I_ring(q2) return value
+        
         Returns
         -------
         cor : ndarray, float
             A 2d array, where the first dimension is the value of the angle
             delta employed, and the second is the correlation at that point.
-            
+        
         See Also
         --------
         odin.xray.Shot.correlate
             Correlate for one value of delta
         odin.xray.Shot.correlate_ring
- 	    Same as correlate_ring_brute but requires n*log(n) iterations          
+    	    Same as correlate_ring_brute but requires n*log(n) iterations          
         """
         
-	# this step might be redundant because I_ring does the same thing
-	#q1 = self._nearest_q(q1)
-        #q2 = self._nearest_q(q2)
+    	# this step might be redundant because I_ring does the same thing
+    	#q1 = self._nearest_q(q1)
+            #q2 = self._nearest_q(q2)
 	
-#	verify that q1 and q2 are of same type
-	if type(q1) != type(q2):
-	    print "Arguments must both be an instance of the same type..."
-	    print "Exiting function..."
-	    return 0
+        #	verify that q1 and q2 are of same type
+    	if type(q1) != type(q2):
+    	    print "Arguments must both be an instance of the same type..."
+    	    print "Exiting function..."
+    	    return 0
 
-#	if q1,q2 are floats...
-	if isinstance(q1,float):
-	    x = self.I_ring(q1)
+        #	if q1,q2 are floats...
+    	if isinstance(q1,float):
+    	    x = self.I_ring(q1)
             if np.abs(q1 - q2) < 1e-6:
                 y = x.copy()
             else:
                 y = self.I_ring(q2)
             assert len(x) == len(y)
             n_theta = len(x)
-	
+
 	    logger.debug("Correlating rings brute at %f / %f" % (q1, q2))
 
-#	if q1,q2 are np.arrays
-	elif isinstance(q1,np.ndarray):
-	    x=q1
-	    y=q2
-	    n_theta = len(q1)
+        #	if q1,q2 are np.arrays
+    	elif isinstance(q1,np.ndarray):
+    	    x=q1
+    	    y=q2
+    	    n_theta = len(q1)
 
-	else:
-	    print "The arguments are not of type 'float' or 'numpy.ndarray'."
-	    print "Exiting function..."
-	    return 0
+    	else:
+    	    print "The arguments are not of type 'float' or 'numpy.ndarray'."
+    	    print "Exiting function..."
+    	    return 0
 	
         
-	xmean = x.mean()
-	ymean = y.mean()
+    	xmean = x.mean()
+    	ymean = y.mean()
 	
-	x -= xmean
+    	x -= xmean
         y -= ymean
-        
+    
         xstd = x.std() # might use as norm factors in future
         ystd = y.std()
 	
-	norm = n_theta*xmean*ymean
+    	norm = n_theta*xmean*ymean
 
         # todo : ensure a zero gets plugged in at all mask positions
-        
+    
         cor = np.zeros((n_theta, 2))
         cor[:,0] = self.phi_values
 
-	# for now, dont worry about gaps to speed things up
+    	# for now, dont worry about gaps to speed things up
 
-	for phi in xrange(n_theta):
-	    for i in xrange(n_theta):
-		j=i+phi
-		if j>= n_theta: 
-		    j=j-n_theta
-		cor[phi,1]+= x[i]*y[j]/norm
+    	for phi in xrange(n_theta):
+    	    for i in xrange(n_theta):
+    		j=i+phi
+    		if j>= n_theta: 
+    		    j=j-n_theta
+    		cor[phi,1]+= x[i]*y[j]/norm
         
-	return cor
+    	return cor
 	
 
     def correlate_ring(self, q1, q2):
@@ -1254,7 +1314,25 @@ class Shot(object):
         return shot
         
         
-    def save(self, filename):
+    def _unpack_interp_params(self, interp_params):
+        """ Extract/inject saved parameters specifying the polar interpolation """
+        self.phi_spacing = interp_params[0]
+        self.q_min       = interp_params[1]
+        self.q_max       = interp_params[2]
+        self.q_spacing   = interp_params[3]
+        return
+
+
+    def _pack_interp_params(self):
+        """ Package the interpolation parameters for saving """
+        interp_params = [self.phi_spacing, self.q_min, self.q_max, self.q_spacing]
+        return np.array(interp_params)
+        
+        
+    # So as to not duplicate code/logic, I am going to employ a wrapped version
+    # of the Shotset save/load methods here...
+        
+    def save(self, filename, save_interpolation=True):
         """
         Writes the current Shot data to disk.
 
@@ -1263,20 +1341,8 @@ class Shot(object):
         filename : str
             The path to the shotset file to save.
         """
-        
-        if not filename.endswith('.shot'):
-            filename += '.shot'
-        
-        shotdata = {'shot1' : self.intensities}
-        
-        io.saveh(filename, 
-                 num_shots    = np.array([1]), # just one shot :)
-                 dxyz         = self.detector.xyz,
-                 dpath_length = np.array([self.detector.path_length]), 
-                 dk           = np.array([self.detector.k]),
-                 **shotdata)
-                 
-        logger.info('Wrote %s to disk.' % filename)
+        ss = Shotset([self])
+        ss.save(filename)
 
 
     @classmethod
@@ -1294,25 +1360,14 @@ class Shot(object):
         shotset : odin.xray.Shotset
             A shotset object
         """
-        if not filename.endswith('.shot'):
-            raise ValueError('Must load a detector file (.shot extension)')
+        ss = Shotset.load(filename)
         
-        hdf = io.loadh(filename)
-        
-        num_shots   = hdf['num_shots'][0]
-        xyz         = hdf['dxyz']
-        path_length = hdf['dpath_length'][0]
-        k           = hdf['dk'][0]
-        intensities = hdf['shot1']
-        
-        if num_shots != 1:
+        if len(ss) != 1:
             logger.warning('You loaded a .shot file that contains multiple shots'
                            ' into a single Shot instance... taking only the'
                            ' first shot of the set (look into Shotset.load()).')
-        
-        d = Detector(xyz, path_length, k)
-        
-        return Shot(intensities, d)
+                           
+        return ss[0]
 
 
 class Shotset(Shot):
@@ -1438,67 +1493,69 @@ class Shotset(Shot):
         
         return intensity_profile
 
+
     def intra(self,q1,q2):
-	"""
-	computes intra-shot correlation ffts
-	"""
-	shots = self.shots
-	n_phi = len(shots[0].phi_values)
-	intraCors = [np.abs(np.fft.fft (s.correlate_ring_brute(q1,q2)[:,1], n_phi)) for s in shots]
-	return intraCors
+    	"""
+    	computes intra-shot correlation ffts
+    	"""
+    	shots = self.shots
+    	n_phi = len(shots[0].phi_values)
+    	intraCors = [np.abs(np.fft.fft (s.correlate_ring_brute(q1,q2)[:,1], n_phi)) for s in shots]
+    	return intraCors
+
 
     def inter(self,q1,q2,n_inter=0):
-   	"""
-	computes inter-shot correlation ffts
+       	"""
+    	computes inter-shot correlation ffts
 	
-	Paramters
-	---------
-	q1 : float
-	    magnitude of first position to correlate
+    	Paramters
+    	---------
+    	q1 : float
+    	    magnitude of first position to correlate
 	    
-	q2 : float
-	    magnitude of second position to correlate
+    	q2 : float
+    	    magnitude of second position to correlate
 	    
-	n_inter : int , optional
-	    number of inter-shot correlation ffts to compute
+    	n_inter : int , optional
+    	    number of inter-shot correlation ffts to compute
 	
-	Returns
-	--------
-	list of np.ndarrays
+    	Returns
+    	--------
+    	list of np.ndarrays
 	
-	"""
-	shots = self.shots
-	n_shots = len(shots)
+    	"""
+    	shots = self.shots
+    	n_shots = len(shots)
 	
-	if n_shots == 1:
-		print "Cannot compute inter shot correlations with 1 shot"
-		print "Exiting..."
-		return 0
+    	if n_shots == 1:
+    		print "Cannot compute inter shot correlations with 1 shot"
+    		print "Exiting..."
+    		return 0
 		
-#	I arbitrarily picked 0.6
-	if n_inter > 0.6 * (n_shots+1)*n_shots/2 :
-		print "Might take a long time to find",n_inter,"unique inter-shot pairs from",n_shots
-		print "shots. Please choose n_inter <",int(0.6 *  (n_shots+1)*n_shots/2 ),"."
-		print "Exiting..."
-		return 0
+    #	I arbitrarily picked 0.6
+    	if n_inter > 0.6 * (n_shots+1)*n_shots/2 :
+    		print "Might take a long time to find",n_inter,"unique inter-shot pairs from",n_shots
+    		print "shots. Please choose n_inter <",int(0.6 *  (n_shots+1)*n_shots/2 ),"."
+    		print "Exiting..."
+    		return 0
 	
-	if n_inter==0:
-	    n_inter=n_shots
+    	if n_inter==0:
+    	    n_inter=n_shots
 	    	
-	interCors = []
-	for s1,s2 in stats.randPairs(n_shots,n_inter):
-	    shot1 = shots[s1]
-	    shot2 = shots[s2]
-	    I1 = shot1.I_ring(q1)
-	    I2 = shot2.I_ring(q2)
+    	interCors = []
+    	for s1,s2 in stats.randPairs(n_shots,n_inter):
+    	    shot1 = shots[s1]
+    	    shot2 = shots[s2]
+    	    I1 = shot1.I_ring(q1)
+    	    I2 = shot2.I_ring(q2)
 
-#	    note: when the args passed to correlate_ring_brute are numpy.ndarrays
-#	    the only call to self is self.phi_values, which should be the same for
-#	    shot1 or shot2
-	    c12= shot1.correlate_ring_brute(I1,I2)[:,1]
-	    interCors.append( np.abs( np.fft.fft(c12,len(c12) ) ))
+    #	    note: when the args passed to correlate_ring_brute are numpy.ndarrays
+    #	    the only call to self is self.phi_values, which should be the same for
+    #	    shot1 or shot2
+    	    c12= shot1.correlate_ring_brute(I1,I2)[:,1]
+    	    interCors.append( np.abs( np.fft.fft(c12,len(c12) ) ))
 	
-	return interCors
+    	return interCors
         
         
     def correlate(self, q1, q2, delta):
@@ -1622,6 +1679,7 @@ class Shotset(Shot):
         shotset : odin.xray.Shotset
             A Shotset instance, containing the simulated shots.
         """
+        
         device_id = int(device_id)
     
         shotlist = []
@@ -1635,15 +1693,20 @@ class Shotset(Shot):
         
         return Shotset(shotlist)
         
-        
-    def save(self, filename):
+                
+    def save(self, filename, save_interpolation=True):
         """
-        Writes the current Shot data to disk.
+        Writes the current Shotset data to disk.
 
         Parameters
         ----------
         filename : str
             The path to the shotset file to save.
+            
+        Optional Parameters
+        -------------------
+        save_interpolation : bool
+            Save the polar interpolation along with the cartesian intensities.
         """
 
         if not filename.endswith('.shot'):
@@ -1652,6 +1715,11 @@ class Shotset(Shot):
         shotdata = {}
         for i in range(self.num_shots):
             shotdata[('shot%d' % i)] = self.shots[i].intensities
+            shotdata[('shot%d_mask' % i)] = self.shots[i].real_mask
+            if save_interpolation:
+                shotdata[('shot%d_polar_intensities' % i)] = self.shots[i].polar_intensities
+                shotdata[('shot%d_polar_mask' % i)]        = self.shots[i].polar_mask
+                shotdata[('shot%d_interp_params' % i)]     = self.shots[i]._pack_interp_params()
 
         io.saveh(filename, 
                  num_shots    = np.array([self.num_shots]),
@@ -1666,7 +1734,7 @@ class Shotset(Shot):
     @classmethod
     def load(cls, filename):
         """
-        Loads the a Shot from disk. Must be `.shot` or `.cxi` format.
+        Loads the a Shotset from disk. Must be `.shot` or `.cxi` format.
 
         Parameters
         ----------
@@ -1691,7 +1759,25 @@ class Shotset(Shot):
         
             list_of_shots = []
             for i in range(num_shots):
-                list_of_shots.append( Shot( hdf[('shot%d' % i)], d ) )
+                intensities = hdf[('shot%d' % i)]
+                
+                # some older files may not have any mask, so be gentle
+                if ('shot%d_mask' % i) in hdf.keys():
+                    real_mask = hdf[('shot%d_mask' % i)]
+                else:
+                    real_mask = None
+                
+                # load saved polar interp if it exists
+                if ('shot%d_polar_intensities' % i) in hdf.keys():
+                    polar_intensities = hdf[('shot%d_polar_intensities' % i)]
+                    polar_mask = hdf[('shot%d_polar_mask' % i)]
+                    interp_params = hdf[('shot%d_interp_params' % i)]
+                    iv = (polar_intensities, polar_mask, interp_params)
+                else:
+                    iv = None
+                
+                s = Shot(intensities, d, mask=real_mask, interpolated_values=iv)
+                list_of_shots.append(s)
             
             
         elif filename.endswith('.cxi'):
