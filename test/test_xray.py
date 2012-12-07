@@ -121,8 +121,8 @@ class TestDetector():
         if os.path.exists('r.dtc'): os.system('rm r.dtc')
         self.d.save('r.dtc')
         d = xray.Detector.load('r.dtc')
-        assert_array_almost_equal(d.xyz, self.d.xyz)
         if os.path.exists('r.dtc'): os.system('rm r.dtc') 
+        assert_array_almost_equal(d.xyz, self.d.xyz)
         
         
 class TestShot():
@@ -137,9 +137,10 @@ class TestShot():
         if os.path.exists('test.shot'): os.system('test.shot')
         self.shot.save('test.shot')
         s = xray.Shot.load('test.shot')
-        assert_array_almost_equal(s.intensity_profile(), self.shot.intensity_profile())
         os.remove('test.shot')
         if os.path.exists('test.shot'): os.system('test.shot')
+        assert_array_almost_equal(np.array(s.intensity_profile()),
+                                  np.array(self.shot.intensity_profile()))
         
     def test_sim(self):
         if not GPU: raise SkipTest
