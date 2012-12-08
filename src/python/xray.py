@@ -1843,7 +1843,7 @@ class Shotset(Shot):
             
             # figure out which shots to load
             if to_load == None:
-                range(num_shots)
+                to_load = range(num_shots)
             else:
                 try:
                     to_load = np.array(to_load)
@@ -1856,9 +1856,9 @@ class Shotset(Shot):
                 d = Detector._from_serial(hdf['detector']) # new (keep)
             except KeyError as e:
                 # old
-                logger.warning('Loaded deprecated Shotset... please re-'
-                                'save this Shotset using Shotset.save()'
-                                'and use the newly saved version! This'
+                logger.warning('WARNING: Loaded deprecated Shotset... please re- '
+                                'save this Shotset using Shotset.save() '
+                                'and use the newly saved version! This '
                                 'will automatically upgrade your data to the'
                                 'latest version.')
                 num_shots = hdf['num_shots'][0]
@@ -1895,6 +1895,8 @@ class Shotset(Shot):
             
         else:
             raise ValueError('Must load a shotset file [.shot, .cxi]')
+
+        hdf.close
 
         return Shotset(list_of_shots)
 
