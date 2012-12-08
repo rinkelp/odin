@@ -1085,7 +1085,11 @@ class Shot(object):
         
         q = self._nearest_q(q)
         ind = self._q_index(q)
-        intensity = float( (self.polar_intensities[ind]).mean() )
+        
+        # the two-step type conversion below ensures that (1) masked values
+        # aren't included in the calc, and (2) if all the values are masked
+        # we get intensity = 0.0
+        intensity = float( np.array( (self.polar_intensities[ind]).mean() ))
         
         return intensity
         
@@ -1859,7 +1863,7 @@ class Shotset(Shot):
                 logger.warning('WARNING: Loaded deprecated Shotset... please re- '
                                 'save this Shotset using Shotset.save() '
                                 'and use the newly saved version! This '
-                                'will automatically upgrade your data to the'
+                                'will automatically upgrade your data to the '
                                 'latest version.')
                 num_shots = hdf['num_shots'][0]
                 xyz = hdf['dxyz']
