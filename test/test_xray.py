@@ -4,6 +4,7 @@ Tests: src/python/xray.py
 """
 
 import os, sys
+import warnings
 from nose import SkipTest
 
 from odin import xray, utils
@@ -138,8 +139,12 @@ class TestShot():
         s = xray.Shot.load('test.shot')
         os.remove('test.shot')
         if os.path.exists('test.shot'): os.system('test.shot')
-        assert_array_almost_equal(np.array(s.intensity_profile()),
-                                  np.array(self.shot.intensity_profile()))
+        
+        print np.where( np.isnan( s.intensity_profile() ) )
+        print np.where( np.isnan( self.shot.intensity_profile() ) )
+        
+        assert_array_almost_equal(s.intensity_profile(),
+                                  self.shot.intensity_profile() )
         
     def test_sim(self):
         if not GPU: raise SkipTest
@@ -352,7 +357,8 @@ class TestShotset():
         assert_array_almost_equal(i1, i2)
 
 if __name__ == '__main__':
-    test = TestShot()
-    test.setup()
-    test.test_correlation()
-    test.test_corr_ring()
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        test = TestShot()
+        test.setup()
+        test.test_io()
