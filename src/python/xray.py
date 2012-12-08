@@ -166,10 +166,10 @@ class Detector(Beam):
             if type(xyz) != np.ndarray:
                 raise ValueError('Explicit xyz pixels required, `xyz` must be np.ndarray')
             
-            self.pixels = xyz
-            self.grid_list = None
+            self._pixels = xyz
+            self._grid_list = None
             
-            self.num_q = xyz.shape[0]
+            self.num_pixels = xyz.shape[0]
             self._xyz_type = 'explicit'
                 
         elif xyz_type == 'implicit':
@@ -183,9 +183,9 @@ class Detector(Beam):
                 raise ValueError('Implicit xyz pixels required, `xyz` must be list')
             self._xyz_type = 'implicit'
             
-            self.grid_list = xyz
-            self.num_q     = np.sum([ b[1][0]*b[1][1]*b[1][2] for b in self.grid_list ])
-            self.pixels    = None
+            self._grid_list  = xyz
+            self.num_pixels = np.sum([ b[1][0]*b[1][1]*b[1][2] for b in self._grid_list ])
+            self._pixels    = None
             
         else:
             raise ValueError("`xyz_type` must be one of {'explicit', 'implicit'}")
@@ -267,7 +267,7 @@ class Detector(Beam):
         """
         if not self.xyz_type == 'implicit':
             raise Exception('Detector must have xyz_type implicit for conversion.')
-        self.pixels = self.xyz
+        self._pixels = self.xyz
         self._xyz_type = 'explicit'
         return
         
@@ -280,9 +280,9 @@ class Detector(Beam):
     @property
     def xyz(self):
         if self.xyz_type == 'explicit':
-            return self.pixels
+            return self._pixels
         elif self.xyz_type == 'implicit':
-            return np.concatenate( [self._grid_from_implicit(*t) for t in self.grid_list] )
+            return np.concatenate( [self._grid_from_implicit(*t) for t in self._grid_list] )
         
         
     def _grid_from_implicit(self, basis, size, corner):
@@ -814,7 +814,7 @@ class Shot(object):
         # convert the polar to cartesian coords for comparison to detector
         pgr = self.polar_grid_as_cart
         
-        for k,grid in enumerate(self.detector.grid_list):
+        for k,grid in enumerate(self.detector._grid_list):
             
             basis, size, corner = grid
             n_int = size[0] * size[1] * size[2]
@@ -939,12 +939,15 @@ class Shot(object):
         
         # todo : faster way? Could Weave + OMP
         
-        for xy in self.polar_grid_as_cart:
+        for i,xy in enumerate(self.polar_grid_as_cart):
             ds = np.sum( np.power( m_cart - xy, 2 ), axis=1 )
-            for i,d in enumerate(ds):
+            
+            assert ds.shape[0] == np.sum(self.real_mask)
+            
+            for d in ds:
                 if d < r2:
                     self.polar_mask[i] = np.bool(True)
-                    continue
+                    break
 
         self._mask()
         
@@ -968,7 +971,6 @@ class Shot(object):
         """
         Get value of phi nearest to the argument that is on our computed grid.
         """
-        
         # phase shift
         phi = phi % (2*np.pi)
         
@@ -1815,7 +1817,7 @@ class Shotset(Shot):
 
 
     @classmethod
-    def load(cls, filename):
+    def load(cls, filename, to_load=None):
         """
         Loads the a Shotset from disk. Must be `.shot` or `.cxi` format.
 
@@ -1823,6 +1825,10 @@ class Shotset(Shot):
         ----------
         filename : str
             The path to the shotset file.
+            
+        to_load : ndarray/list, ints
+            The indices of the shots in `filename` to load. Can be used to sub-
+            sample the shotset.
 
         Returns
         -------
@@ -1834,6 +1840,15 @@ class Shotset(Shot):
             hdf = io.loadh(filename)
 
             num_shots   = int(hdf['num_shots'])
+            
+            # figure out which shots to load
+            if to_load == None:
+                range(num_shots)
+            else:
+                try:
+                    to_load = np.array(to_load)
+                except:
+                    raise ValueError('`to_load` must be a ndarry/list of ints')
 
             # going to maintain backwards compatability -- this should be
             # deprecated ASAP though....
@@ -1853,7 +1868,8 @@ class Shotset(Shot):
                 d = Detector(xyz, path_length, k)
         
             list_of_shots = []
-            for i in range(num_shots):
+            for i in to_load:
+                i = int(i)
                 intensities = hdf[('shot%d' % i)]
                 
                 # some older files may not have any mask, so be gentle
@@ -2023,7 +2039,7 @@ def simulate_shot(traj, num_molecules, detector, traj_weights=None,
             # run dat shit
             if force_no_gpu:
                 logger.debug('Running CPU computation')
-                raise NotImplementedError('')
+                raise NotImplementedError('') # todo
 
             else:
                 logger.debug('Sending calculation to GPU device...')
