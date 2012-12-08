@@ -371,6 +371,9 @@ def load_coor(filename):
     
     x   y   z   atomic_number
     
+    where `x`,`y`,`z` (float) are the positions of the atom, in angstroms, and 
+    `atomic_number` (int) is the atomic number Z specifying what the atom is.
+    
     Parameters
     ----------
     filename : str
@@ -384,7 +387,7 @@ def load_coor(filename):
     
     data = np.genfromtxt(filename)
     
-    xyz = data[:,:3]
+    xyz = data[:,:3] / 10.0 # coor files are in angstoms, conv. to nm
     atomic_numbers = data[:,3]
     
     top = Topology()
