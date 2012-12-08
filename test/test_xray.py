@@ -138,11 +138,7 @@ class TestShot():
         self.shot.save('test.shot')
         s = xray.Shot.load('test.shot')
         os.remove('test.shot')
-        if os.path.exists('test.shot'): os.system('test.shot')
-        
-        print np.where( np.isnan( s.intensity_profile() ) )
-        print np.where( np.isnan( self.shot.intensity_profile() ) )
-        
+        if os.path.exists('test.shot'): os.system('test.shot')        
         assert_array_almost_equal(s.intensity_profile(),
                                   self.shot.intensity_profile() )
         
@@ -358,7 +354,8 @@ class TestShotset():
 
 if __name__ == '__main__':
     with warnings.catch_warnings(record=True) as w:
-        warnings.simplefilter("always")
+        warnings.simplefilter("error")
         test = TestShot()
         test.setup()
         test.test_io()
+        test.test_i_profile()
