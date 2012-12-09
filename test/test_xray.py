@@ -154,6 +154,7 @@ class TestShot():
         s = xray.Shot(self.i, d)
         
     def test_mask(self):
+        """ test masking by confirming some basic stuff is reasonable """
         d = xray.Detector.generic(spacing=0.4)
         n = len(self.i)
         mask = np.zeros(n, dtype=np.bool)
@@ -163,6 +164,30 @@ class TestShot():
         ref_mean = np.mean(self.i[np.bool(True)-mask])
         assert_allclose( ref_mean, s.intensities.mean(), rtol=1e-04 )
         assert_allclose( ref_mean, s.polar_intensities.mean(), rtol=0.1 )
+        
+    def test_mask2(self):
+        """ test masking by ref. implementation """
+        
+        n = len(self.i)
+        mask = np.zeros(n, dtype=np.bool)
+        mask[ np.random.random_integers(0, n, 10) ] = np.bool(True)
+        
+        s = xray.Shot(self.i, self.d, mask=mask)
+        
+        polar_mask = np.zeros(s.num_datapoints, dtype=np.bool)
+        xyz = s.detector.reciprocal
+        pgc = s.polar_grid_as_cart
+        
+        # the max distance, r^2 - a factor of 10 helps get the spacing right
+        r2 =  np.sum( np.power( xyz[0] - xyz[1], 2 ) ) * 10.0
+        masked_cart_points = xyz[mask,:2]
+        
+        ref_polar_mask = np.zeros(s.num_datapoints, dtype=np.bool)        
+        for mp in masked_cart_points:
+            d2 = np.sum( np.power( mp - pgc[:,:2], 2 ), axis=1 )
+            ref_polar_mask[ d2 < r2 ] = np.bool(True)
+        
+        assert_array_equal(ref_polar_mask, s.polar_mask)
         
     def test_nearests(self):
         
