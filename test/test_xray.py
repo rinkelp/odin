@@ -129,7 +129,7 @@ class TestShot():
         
     def setup(self):
         self.d = xray.Detector.generic(spacing=0.4)
-        self.i = np.random.randn(self.d.xyz.shape[0])
+        self.i = np.abs( np.random.randn(self.d.xyz.shape[0]) )
         self.t = trajectory.load(ref_file('ala2.pdb'))
         self.shot = xray.Shot.load(ref_file('refshot.shot'))
         
@@ -153,13 +153,16 @@ class TestShot():
         d = xray.Detector.generic(spacing=0.4, force_explicit=True)
         s = xray.Shot(self.i, d)
         
-    @skip
     def test_mask(self):
         d = xray.Detector.generic(spacing=0.4)
-        mask = np.array(np.random.random_integers(0, 1, self.i.shape[0]), dtype=np.bool)
+        n = len(self.i)
+        mask = np.zeros(n, dtype=np.bool)
+        mask[ np.random.random_integers(0, n, 10) ] = np.bool(True)
         s = xray.Shot(self.i, d, mask=mask)
-        ip = s.intensity_profile()
-        assert_allclose( np.mean(self.i[mask]), ip.mean() )
+        ip = s.intensity_profile()        
+        ref_mean = np.mean(self.i[np.bool(True)-mask])
+        assert_allclose( ref_mean, s.intensities.mean(), rtol=1e-04 )
+        assert_allclose( ref_mean, s.polar_intensities.mean(), rtol=0.1 )
         
     def test_nearests(self):
         

@@ -384,7 +384,15 @@ class Detector(Beam):
         """
         Compute the norm of an n x m array of vectors, where m is the dimension.
         """
-        return np.sqrt( np.sum( np.power(vector, 2), axis=1 ) )
+        if len(vector.shape) == 2:
+            assert vector.shape[1] == 3
+            norm = np.sqrt( np.sum( np.power(vector, 2), axis=1 ) )
+        elif len(vector.shape) == 1:
+            assert vector.shape[0] == 3
+            norm = np.sqrt( np.sum( np.power(vector, 2) ) )
+        else:
+            raise ValueError('Shape of vector wrong')
+        return norm
         
         
     def _unit_vector(self, vector):
@@ -785,7 +793,6 @@ class Shot(object):
         assert xy1.shape[1] == 2
         assert xy2.shape[1] == 2
         
-        # todo : optimize
         p_ind_x = np.intersect1d( np.where( xy1[:,0] > xy2[:,0].min() )[0], 
                                   np.where( xy1[:,0] < xy2[:,0].max() )[0] )
         p_ind_y = np.intersect1d( np.where( xy1[:,1] > xy2[:,1].min() )[0], 
@@ -821,17 +828,17 @@ class Shot(object):
             int_end += n_int
             
             if basis[0] != 0.0:
-                x_pixels = np.arange(0, basis[0]*size[0], basis[0])
+                x_pixels = np.arange(0, basis[0]*size[0], basis[0]) + corner[0]
             else:
                 x_pixels = np.zeros( size[0] )
 
             if basis[1] != 0.0:
-                y_pixels = np.arange(0, basis[1]*size[1], basis[1])
+                y_pixels = np.arange(0, basis[1]*size[1], basis[1]) + corner[1]
             else:
                 y_pixels = np.zeros( size[1] )
 
             if basis[2] != 0.0:
-                z_pixels = np.arange(0, basis[2]*size[2], basis[2])
+                z_pixels = np.arange(0, basis[2]*size[2], basis[2]) + corner[2]
             else:
                 z_pixels = np.zeros( size[2] )
             
@@ -930,25 +937,19 @@ class Shot(object):
         # on the polar grid that are within one-half pixel spacing from a masked
         # pixel on the cartesian grid
         
-        # the max distance, r^2
-        xyz = self.detector.xyz
-        r2 = np.max(self.detector._norm(xyz)) ** 2
+        xyz = self.detector.reciprocal
+        pgc = self.polar_grid_as_cart
         
-        # the coords of the masked points
-        m_cart = xyz[self.real_mask,:2]
+        # the max distance, r^2 - a factor of 10 helps get the spacing right
+        r2 =  np.sum( np.power( xyz[0] - xyz[1], 2 ) ) * 10.0
+        masked_cart_points = xyz[self.real_mask,:2]
         
         # todo : faster way? Could Weave + OMP
+                
+        for mp in masked_cart_points:
+            d2 = np.sum( np.power( mp - pgc[:,:2], 2 ), axis=1 )
+            self.polar_mask[ d2 < r2 ] = np.bool(True)
         
-        for i,xy in enumerate(self.polar_grid_as_cart):
-            ds = np.sum( np.power( m_cart - xy, 2 ), axis=1 )
-            
-            assert ds.shape[0] == np.sum(self.real_mask)
-            
-            for d in ds:
-                if d < r2:
-                    self.polar_mask[i] = np.bool(True)
-                    break
-
         self._mask()
         
         return
