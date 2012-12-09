@@ -1,7 +1,5 @@
 #include <stdio.h>
 #include <assert.h>
-#include <fstream>
-#include <sstream>
 
 #include <cpuscatter.cu>
 #include <cpuscatter_mgr.hh>
