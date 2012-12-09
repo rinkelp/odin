@@ -944,7 +944,7 @@ class Shot(object):
         r2 =  np.sum( np.power( xyz[0] - xyz[1], 2 ) ) * 10.0
         masked_cart_points = xyz[self.real_mask,:2]
         
-        # todo : faster way? Could Weave + OMP
+        # todo : currently slow, can be done faster? Could Weave + OMP
                 
         for mp in masked_cart_points:
             d2 = np.sum( np.power( mp - pgc[:,:2], 2 ), axis=1 )
