@@ -1,10 +1,7 @@
 /*! TJL 2012 */
 
 #include <stdio.h>
-#include <stdint.h>
 #include <assert.h>
-#include <fstream>
-#include <sstream>
 #include <math.h>
 
 #define MAX_NUM_TYPES 10
