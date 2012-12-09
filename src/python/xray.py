@@ -798,6 +798,7 @@ class Shot(object):
         p_ind_y = np.intersect1d( np.where( xy1[:,1] > xy2[:,1].min() )[0], 
                                   np.where( xy1[:,1] < xy2[:,1].max() )[0] )                                    
         p_inds = np.intersect1d(p_ind_x, p_ind_y)
+        
         return p_inds
     
         
@@ -941,7 +942,7 @@ class Shot(object):
         pgc = self.polar_grid_as_cart
         
         # the max distance, r^2 - a factor of 10 helps get the spacing right
-        r2 =  np.sum( np.power( xyz[0] - xyz[1], 2 ) ) * 10.0
+        r2 = np.sum( np.power( xyz[0] - xyz[1], 2 ) ) * 10.0
         masked_cart_points = xyz[self.real_mask,:2]
         
         # todo : currently slow, can be done faster? Could Weave + OMP

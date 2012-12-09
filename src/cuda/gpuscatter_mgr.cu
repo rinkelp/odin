@@ -66,11 +66,8 @@ GPUScatter::GPUScatter (int device_id_,
     // sometimes SWIG fucks up and retains non-zero values in the output
     // array, so we have to initialize it
     int z;
-    //printf("\noutQ:\n");
     for(z = 0; z < nQout_; z++) {
-        //printf("%f ", h_outQ_[z]);
         h_outQ_[z] = 0.0;
-        //printf("%f \n", h_outQ_[z]);
     }
 
     /* All arguments consist of 
@@ -191,7 +188,6 @@ GPUScatter::GPUScatter (int device_id_,
 
     // execute the kernel
     kernel<tpb> <<<bpg, tpb>>> (d_qx, d_qy, d_qz, d_outQ, nQ, d_rx, d_ry, d_rz, d_id, nAtoms, numAtomTypes, d_cm, d_rand1, d_rand2, d_rand3, nRotations);
-    // kernel<tpb> <<<bpg, tpb>>> (d_qx, d_qy, d_qz, d_outQ, nQ, d_rx, d_ry, d_rz, d_id, nAtoms, numAtomTypes, d_rand1, d_rand2, d_rand3, nRotations);
     cudaThreadSynchronize();
     err = cudaGetLastError();
     if (err != cudaSuccess) {
