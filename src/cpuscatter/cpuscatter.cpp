@@ -101,8 +101,7 @@ void kernel( float const * const __restrict__ q_x,
         generate_random_quaternion(rand1, rand2, rand3, q0, q1, q2, q3);
 
         // for each q vector
-        // #pragma omp parallel for private(iq, qx, qy, qz, formfactors, Qsum, mq, q0, fi, type, tind, a, rx, ry, rz, id, ax, ay, az, qr, fQ) shared(outQ, numAtomTypes, numAtoms, cromermann, n_rotations, q0, q1, q2, q3)
-        // #pragma omp parallel for private(iq, formfactors, Qsum, mq, q0, fi, type, tind, a, rx, ry, rz, id, ax, ay, az, qr, fQ) shared(outQ, numAtomTypes, numAtoms, cromermann, n_rotations, q0, q1, q2, q3)
+        #pragma omp parallel for shared(outQ, q0, q1, q2, q3)
         for( int iq = 0; iq < nQ; iq++ ) {
             float qx = q_x[iq];
             float qy = q_y[iq];
@@ -153,12 +152,10 @@ void kernel( float const * const __restrict__ q_x,
                 Qsumx += fi*sinf(qr);
                 Qsumy += fi*cosf(qr);
             } // finished one molecule.
-            
-            float fQ = (Qsumx*Qsumx + Qsumy*Qsumy) / n_rotations;  
-            
+                        
             // add the output to the total intensity array
-            // #pragma omp critical
-            outQ[iq] += fQ;
+            #pragma omp critical
+                outQ[iq] += (Qsumx*Qsumx + Qsumy*Qsumy) / n_rotations;
             
             // discrete photon statistics will go here, if implemented 
             // we'll need a different array to accumulate the results of each
@@ -255,20 +252,9 @@ CPUScatter::CPUScatter( int n_rotations_,
     h_rand3 = h_rand3_;
 
     h_outQ = h_outQ_;
-        
-    // compute the memory necessary to hold input/output
-    // const unsigned int nQ_size = nQ*sizeof(float);
-    // const unsigned int nAtoms_size = nAtoms*sizeof(float);
-    // const unsigned int nAtoms_idsize = nAtoms*sizeof(int);
-    // const unsigned int n_rotations_size = n_rotations*sizeof(float);
-    // const unsigned int cm_size = 9*numAtomTypes*sizeof(float);
-
-    // allocate memory on the board ?
 
     // execute the kernel
     kernel(h_qx, h_qy, h_qz, h_outQ, nQ, h_rx, h_ry, h_rz, h_id, nAtoms, numAtomTypes, h_cm, h_rand1, h_rand2, h_rand3, n_rotations);
-
-    // free memory ?
 }
 
 CPUScatter::~CPUScatter() {
