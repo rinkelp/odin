@@ -2,7 +2,8 @@
 
 """
 Reference implementation & unit test for the GPU scattering simulation code
-(aka gpuscatter, in odin/src/cuda/gpuscatter.*).
+(aka gpuscatter, in odin/src/gpuscatter/gpuscatter.*) and CPU scattering simulation
+code 
 """
 
 import numpy as np
