@@ -46,8 +46,11 @@ if __name__ == '__main__':
                         None (even weights). ''')
     parser.add_argument('-p', '--parallel', type=int, default=1,
                         help='''Number of local GPUs to employ in parallel. 
-                        Will use device IDs 0, 1, ..., p-1. Default: Device 0 
-                        only.''')
+                        Will use device IDs 0, 1, ..., p-1. If you pass a 
+                        *negative* number, the code runs in serial on the
+                        device indexed by the abs. value of the number you
+                        pass (e.g. '-1' means run on device 1). Default: 
+                        Device 0 only.''')
     parser.add_argument('-o', '--output', default='shotset.shot',
                         help='A Shotset object, written to disk in h5 format. Default: shotset.shot')
 
@@ -77,6 +80,10 @@ if __name__ == '__main__':
     if args.parallel == 1:
         xray.Shotset.simulate(traj, args.nummolec, detector, args.numshots, 
                               traj_weights=weights, device_id=0) 
+    elif args.parallel < 0:
+        did = -1 * args.parallel
+        xray.Shotset.simulate(traj, args.nummolec, detector, args.numshots,
+                              traj_weights=weights, device_id=did)
     else:
         p = args.parallel
         gpudev = range(p)
