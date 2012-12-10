@@ -75,8 +75,8 @@ if __name__ == '__main__':
         
     # deal w/parallel
     if args.parallel == 1:
-        xray.Shotset.simulate(traj, args.nummolec, detector, args.numshots, 
-                              traj_weights=weights, device_id=0) 
+        shotset = xray.Shotset.simulate(traj, args.nummolec, detector, args.numshots, 
+                                        traj_weights=weights, device_id=0) 
     else:
         p = args.parallel
         gpudev = range(p)
