@@ -232,12 +232,10 @@ CPUScatter::CPUScatter( int n_rotations_,
     
     assert( nRot1_ == nRot2_ );
     assert( nRot1_ == nRot3_ );    
-    assert( bpg_ * 512 == nRot1_ );
+    assert( n_rotations_ == nRot1_ );
     
     // unpack arguments
-    device_id = device_id_;
-    bpg = bpg_;
-
+    n_rotations = n_rotations_;
     nQ = nQx_;
     h_qx = h_qx_;
     h_qy = h_qy_;
@@ -259,18 +257,19 @@ CPUScatter::CPUScatter( int n_rotations_,
     h_outQ = h_outQ_;
         
     // compute the memory necessary to hold input/output
-    const unsigned int nQ_size = nQ*sizeof(float);
-    const unsigned int nAtoms_size = nAtoms*sizeof(float);
-    const unsigned int nAtoms_idsize = nAtoms*sizeof(int);
-    const unsigned int nRotations_size = nRotations*sizeof(float);
-    const unsigned int cm_size = 9*numAtomTypes*sizeof(float);
+    // const unsigned int nQ_size = nQ*sizeof(float);
+    // const unsigned int nAtoms_size = nAtoms*sizeof(float);
+    // const unsigned int nAtoms_idsize = nAtoms*sizeof(int);
+    // const unsigned int n_rotations_size = n_rotations*sizeof(float);
+    // const unsigned int cm_size = 9*numAtomTypes*sizeof(float);
 
     // allocate memory on the board ?
 
     // execute the kernel
-    kernel(h_qx, h_qy, h_qz, h_outQ, nQ, h_rx, h_ry, h_rz, h_id, nAtoms, numAtomTypes, h_cm, h_rand1, h_rand2, h_rand3, nRotations);
+    kernel(h_qx, h_qy, h_qz, h_outQ, nQ, h_rx, h_ry, h_rz, h_id, nAtoms, numAtomTypes, h_cm, h_rand1, h_rand2, h_rand3, n_rotations);
 
     // free memory ?
+}
 
 CPUScatter::~CPUScatter() {
     // destroy the class
