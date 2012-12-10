@@ -837,7 +837,10 @@ class Shot(object):
             
             i = self.intensities[int_start:int_end].reshape(size[0], size[1])
             int_start += n_int
-            f = interpolate.RectBivariateSpline(x_pixels, y_pixels, i)
+            
+            # perform the interpolation. 
+            # Possible `kind` = {‘linear’, ‘cubic’, ‘quintic’}
+            f = interpolate.interp2d(x_pixels, y_pixels, i, kind='linear')
             
             # find the indices of the polar grid that are inside the boundaries
             # of the current detector array we're interpolating over
