@@ -1,5 +1,5 @@
 
-/* Header file for scatter.c, CPUScatter class */
+/* Header file for gpuscatter.cpp, CPUScatter class */
 
 class CPUScatter {
     
