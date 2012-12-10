@@ -10,7 +10,7 @@ from numpy.linalg import norm
 from numpy.testing import assert_almost_equal, assert_allclose
 
 try:
-    import gpuscatter
+    from odin import gpuscatter
     GPU = True
 except ImportError as e:
     GPU = False
