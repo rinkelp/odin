@@ -18,6 +18,7 @@ except ImportError as e:
 
 from odin.data import cromer_mann_params
 from odin import xray
+from odin import cpuscatter
 from odin.xray import Detector
 from odin.structure import rand_rotate_molecule
 from odin.testing import skip, ref_file, gputest
@@ -223,6 +224,86 @@ def call_gpuscatter(xyzlist, atomic_numbers, num_molecules, qgrid, rfloats):
 # ------------------------------------------------------------------------------
 #                           END INTERFACE TO gpuscatter
 # ------------------------------------------------------------------------------
+#                           BEGIN INTERFACE TO cpuscatter
+# ------------------------------------------------------------------------------
+
+def call_cpuscatter(xyzlist, atomic_numbers, num_molecules, qgrid, rfloats):
+    """
+    Calls the CPU version of the scattering code. This is a simplified interface
+    with no random elements for unit testing purposes only.
+    
+    Parameters
+    ----------
+    xyzlist : ndarray, float, 2d
+        An n x 3 array of each atom's position in space
+        
+    atomic_numbers : ndarray, float, 1d
+        An n-length list of the atomic numbers of each atom
+        
+    num_molecules : int
+        The number of molecules to include in the ensemble.
+        
+    q_grid : ndarray, float, 2d
+        An m x 3 array of the q-vectors corresponding to each detector position.
+
+    rfloats : ndarray, float, n x 3
+        A bunch of random floats, uniform on [0,1] to be used to seed the 
+        quaternion computation.
+        
+    Returns
+    -------
+    I : ndarray, float
+        An array the same size as the first dimension of `q_grid` that gives
+        the value of the measured intensity at each point on the grid.
+    """
+
+    device_id = 0
+
+    assert(num_molecules % 512 == 0)
+    bpg = int(num_molecules / 512)
+    
+    # get detector
+    qx = qgrid[:,0].astype(np.float32)
+    qy = qgrid[:,1].astype(np.float32)
+    qz = qgrid[:,2].astype(np.float32)
+    num_q = len(qx)
+    
+    # get atomic positions
+    rx = xyzlist[:,0].astype(np.float32)
+    ry = xyzlist[:,1].astype(np.float32)
+    rz = xyzlist[:,2].astype(np.float32)
+    num_atoms = len(rx)
+    assert( num_atoms == 512 )
+    
+    aid = atomic_numbers.astype(np.int32)
+    atom_types = np.unique(aid)
+    num_atom_types = len(atom_types)
+    
+    # get cromer-mann parameters for each atom type
+    cromermann = np.zeros(9*num_atom_types, dtype=np.float32)
+    for i,a in enumerate(atom_types):
+        ind = i * 9
+        cromermann[ind:ind+9] = cromer_mann_params[(a,0)]
+        aid[ aid == a ] = i # make the atom index 0, 1, 2, ...
+ 
+    # get random numbers
+    rand1 = rfloats[:,0].astype(np.float32)
+    rand2 = rfloats[:,1].astype(np.float32)
+    rand3 = rfloats[:,2].astype(np.float32)
+    
+    # run dat shit
+    out_obj = cpuscatter.CPUScatter(num_molecules, qx, qy, qz,
+                                    rx, ry, rz, aid,
+                                    cromermann,
+                                    rand1, rand2, rand3, num_q)
+    
+    output = out_obj.this[1].astype(np.float64)
+    return output
+
+
+# ------------------------------------------------------------------------------
+#                           END INTERFACE TO cpuscatter
+# ------------------------------------------------------------------------------
 #                              BEGIN nosetest CLASS
 # ------------------------------------------------------------------------------
 
@@ -234,28 +315,44 @@ class TestScatter():
         
         self.nq = 3 # number of detector vectors to do
         
+        xyzQ = np.loadtxt(ref_file('512_atom_benchmark.xyz'))
+        self.xyzlist = xyzQ[:,:3] * 10.0 # nm -> ang.
+        self.atomic_numbers = xyzQ[:,3].flatten()
+    
+        self.q_grid = np.loadtxt(ref_file('512_q.xyz'))[:self.nq]
+        
+        self.rfloats = np.loadtxt(ref_file('512_x_3_random_floats.txt'))
+        self.num_molecules = self.rfloats.shape[0]
+        
+        self.ref_I = ref_simulate_shot(self.xyzlist, self.atomic_numbers, 
+                                       self.num_molecules, self.q_grid, self.rfloats)
+        
     def test_gpu_scatter(self):
 
         if not GPU: raise SkipTest
-        print "testing c code..."
-        
-        xyzQ = np.loadtxt(ref_file('512_atom_benchmark.xyz'))
-        xyzlist = xyzQ[:,:3] * 10.0 # nm -> ang.
-        atomic_numbers = xyzQ[:,3].flatten()
-    
-        q_grid = np.loadtxt(ref_file('512_q.xyz'))[:self.nq]
-    
-        rfloats = np.loadtxt(ref_file('512_x_3_random_floats.txt'))
-        num_molecules = rfloats.shape[0]
-    
-        gpu_I = call_gpuscatter(xyzlist, atomic_numbers, num_molecules, q_grid, rfloats)
-        self.ref_I = ref_simulate_shot(xyzlist, atomic_numbers, num_molecules, q_grid, rfloats)
+            
+        gpu_I = call_gpuscatter(self.xyzlist, self.atomic_numbers, self.num_molecules, 
+                                self.q_grid, self.rfloats)
 
         print "GPU", gpu_I
-        print "CPU", self.ref_I
+        print "REF", self.ref_I
         
         assert_allclose(gpu_I, self.ref_I, rtol=1e-03,
                         err_msg='scatter: gpu/cpu reference mismatch')
+                        
+                        
+    def test_cpu_scatter(self):
+
+        print "testing c cpu code..."
+
+        cpu_I = call_cpuscatter(self.xyzlist, self.atomic_numbers, self.num_molecules, 
+                                self.q_grid, self.rfloats)
+
+        print "CPU", cpu_I
+        print "REF", self.ref_I
+
+        assert_allclose(cpu_I, self.ref_I, rtol=1e-03,
+                        err_msg='scatter: c-cpu/cpu reference mismatch')
         
                             
     def test_python_call(self):
