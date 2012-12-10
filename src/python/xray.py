@@ -27,7 +27,7 @@ from mdtraj import trajectory, io
 # try to import the gpuscatter module
 GPU = True
 try:
-    import gpuscatter
+    from odin import gpuscatter
 except ImportError as e:
     logger.warning('Could not find `gpuscatter` module, proceeding without it.'
                    ' Note that this may break some functionality!')
@@ -682,26 +682,18 @@ class Shot(object):
         
     @property
     def num_phi(self):
-        if hasattr(self, '_num_phi'):
-            np = self._num_phi
+        if hasattr(self, 'phi_spacing'):
+            nph = len(self.phi_values)
         else:
-            if self.phi_values == None:
-                np = 0
-            else:
-                self._num_phi = len(self.phi_values)
-                np = self._num_phi
-        return np
+            nph = None
+        return nph
         
     @property
     def num_q(self):
-        if hasattr(self, '_num_q'):
-            nq = self._num_q
+        if hasattr(self, 'q_min') and hasattr(self, 'q_max') and hasattr(self, 'q_spacing'): 
+            nq = len(self.q_values)
         else:
-            if self.q_values == None:
-                nq = 0
-            else:
-                self._num_q = len(self.q_values)
-                nq = self._num_q
+            nq = None
         return nq
         
     @property
@@ -739,7 +731,7 @@ class Shot(object):
         
         self.phi_spacing = phi_spacing * (2.0 * np.pi / 360.) # conv. to radians
         self.q_spacing = q_spacing
-        
+
         self.q_min = np.min( self.detector.recpolar[:,0] )
         self.q_max = np.max( self.detector.recpolar[:,0] )
 
@@ -1986,7 +1978,7 @@ def simulate_shot(traj, num_molecules, detector, traj_weights=None,
     qy = detector.reciprocal[:,1].astype(np.float32)
     qz = detector.reciprocal[:,2].astype(np.float32)
     num_q = len(qx)
-    assert detector.num_q == num_q
+    assert detector.num_pixels == num_q
 
     # get cromer-mann parameters for each atom type
     # renumber the atom types 0, 1, 2, ... to point to their CM params
@@ -2014,7 +2006,7 @@ def simulate_shot(traj, num_molecules, detector, traj_weights=None,
         aid[ aZ == a ] = np.int32(i)
         
     # do the simulation, scan over confs., store in `intensities`
-    intensities = np.zeros(detector.num_q, dtype=np.float64) # should be double
+    intensities = np.zeros(detector.num_pixels, dtype=np.float64) # should be double
     
     for i,num in enumerate(num_per_shapshot):
         if int(num) > 0: # else, we can just skip...

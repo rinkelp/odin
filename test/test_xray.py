@@ -12,7 +12,7 @@ from odin.testing import skip, ref_file, gputest
 from mdtraj import trajectory, io
 
 try:
-    import gpuscatter
+    from odin import gpuscatter
     GPU = True
 except ImportError as e:
     GPU = False
