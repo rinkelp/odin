@@ -14,9 +14,9 @@ logging.basicConfig()
 logger = logging.getLogger(__name__)
 
 import cPickle
-import numpy as np
-from scipy import interpolate, fftpack
 from bisect import bisect_left
+import numpy as np
+from scipy import fftpack, interpolate
 
 from odin import utils
 from odin import stats # module used for Shotset method "inter"
@@ -543,7 +543,8 @@ class Detector(Beam):
         xyz = np.zeros(( polar.shape[0], 3 ))
         xyz[:,0] = polar[:,0] * np.cos(polar[:,1])
         xyz[:,1] = polar[:,0] * np.sin(polar[:,1])
-         
+        
+        beam = Beam(flux, energy=energy) 
         detector = Detector(xyz, l, beam, coord_type='polar')
 
         return detector
@@ -746,7 +747,8 @@ class Shot(object):
             # todo : check for rectangular grid and then use structured
             self._unstructured_interpolation()
         elif self.detector.xyz_type == 'implicit':
-            self._implicit_interpolation()
+            self._unstructured_interpolation()
+            #self._implicit_interpolation()
         else:
             raise RuntimeError('Invalid detector passed to Shot()')
                     
@@ -803,62 +805,65 @@ class Shot(object):
         position.
         """
         
+        return
+        
         # loop over all the arrays that comprise the detector and use
         # grid interpolation on each
-        int_start = 0 # start of intensity array correpsonding to `grid`
-        int_end   = 0 # end of intensity array correpsonding to `grid`
         
-        # generate a mask that is true where we successfully interpolated
-        inv_mask = np.zeros(self.num_datapoints, dtype=np.bool)
-        
-        # convert the polar to cartesian coords for comparison to detector
-        pgr = self.polar_grid_as_cart
-        
-        for k,grid in enumerate(self.detector._grid_list):
-            
-            basis, size, corner = grid
-            n_int = size[0] * size[1] * size[2]
-            int_end += n_int
-            
-            if basis[0] != 0.0:
-                x_pixels = np.arange(0, basis[0]*size[0], basis[0]) + corner[0]
-            else:
-                x_pixels = np.zeros( size[0] )
-
-            if basis[1] != 0.0:
-                y_pixels = np.arange(0, basis[1]*size[1], basis[1]) + corner[1]
-            else:
-                y_pixels = np.zeros( size[1] )
-
-            if basis[2] != 0.0:
-                z_pixels = np.arange(0, basis[2]*size[2], basis[2]) + corner[2]
-            else:
-                z_pixels = np.zeros( size[2] )
-            
-            i = self.intensities[int_start:int_end].reshape(size[0], size[1])
-            int_start += n_int
-            
-            # perform the interpolation. 
-            # Possible `kind` = {‘linear’, ‘cubic’, ‘quintic’}
-            f = interpolate.interp2d(x_pixels, y_pixels, i, kind='linear')
-            
-            # find the indices of the polar grid that are inside the boundaries
-            # of the current detector array we're interpolating over
-            p_inds = self._overlap(pgr, np.vstack((x_pixels, y_pixels)).T)
-            
-            if len(p_inds) == 0:
-                logger.warning('Detector array (%d/%d) had no pixels inside the \
-                interpolation area!' % (k+1, len(self.detector.grid_list)) )
-                continue
-            
-            # interpolate onto the polar grid & update the inverse mask
-            self.polar_intensities[p_inds] = f.ev(pgr[p_inds,0], pgr[p_inds,1])
-            inv_mask[p_inds] = np.bool(True)
-            
-        self.polar_mask += np.bool(True) - inv_mask
-        self._mask()
-        
-        return
+        # int_start = 0 # start of intensity array correpsonding to `grid`
+        # int_end   = 0 # end of intensity array correpsonding to `grid`
+        # 
+        # # generate a mask that is true where we successfully interpolated
+        # inv_mask = np.zeros(self.num_datapoints, dtype=np.bool)
+        # 
+        # # convert the polar to cartesian coords for comparison to detector
+        # pgr = self.polar_grid_as_cart
+        # 
+        # for k,grid in enumerate(self.detector._grid_list):
+        #     
+        #     basis, size, corner = grid
+        #     n_int = size[0] * size[1] * size[2]
+        #     int_end += n_int
+        #     
+        #     if basis[0] != 0.0:
+        #         x_pixels = np.arange(0, basis[0]*size[0], basis[0]) + corner[0]
+        #     else:
+        #         x_pixels = np.zeros( size[0] )
+        # 
+        #     if basis[1] != 0.0:
+        #         y_pixels = np.arange(0, basis[1]*size[1], basis[1]) + corner[1]
+        #     else:
+        #         y_pixels = np.zeros( size[1] )
+        # 
+        #     if basis[2] != 0.0:
+        #         z_pixels = np.arange(0, basis[2]*size[2], basis[2]) + corner[2]
+        #     else:
+        #         z_pixels = np.zeros( size[2] )
+        #     
+        #     i = self.intensities[int_start:int_end].reshape(size[0], size[1])
+        #     int_start += n_int
+        #     
+        #     # perform the interpolation. 
+        #     # Possible `kind` = {‘linear’, ‘cubic’, ‘quintic’}
+        #     f = interpolate.RectBivariateSpline(x_pixels, y_pixels, i, kind='linear')
+        #     
+        #     # find the indices of the polar grid that are inside the boundaries
+        #     # of the current detector array we're interpolating over
+        #     p_inds = self._overlap(pgr, np.vstack((x_pixels, y_pixels)).T)
+        #     
+        #     if len(p_inds) == 0:
+        #         logger.warning('Detector array (%d/%d) had no pixels inside the \
+        #         interpolation area!' % (k+1, len(self.detector.grid_list)) )
+        #         continue
+        #     
+        #     # interpolate onto the polar grid & update the inverse mask
+        #     self.polar_intensities[p_inds] = f.ev(pgr[p_inds,0], pgr[p_inds,1])
+        #     inv_mask[p_inds] = np.bool(True)
+        #     
+        # self.polar_mask += np.bool(True) - inv_mask
+        # self._mask()
+        # 
+        # return
         
         
     def _structured_interpolation(self):
@@ -2058,26 +2063,10 @@ def simulate_shot(traj, num_molecules, detector, traj_weights=None,
     
     # check for NaNs in output
     if np.isnan(np.sum(intensities)):
-        ind = np.where(np.isnan(intensities) == True)
-        n_nan = len(ind)
-        logger.critical('%d NaNs in output...' % n_nan)
-        if IGNORE_NAN:
-            intensities[ind] = 0.0
-            logger.critical('Set NaNs to zero... be careful!')
-            assert not np.isnan(np.sum(intensities))
-        else:
-            raise RuntimeError('Fatal error, NaNs detected in scattering output!')
+        raise RuntimeError('Fatal error, NaNs detected in scattering output!')
     
     # check for negative values in output
     if len(intensities[intensities < 0.0]) != 0:
-        ind = np.where(intensities < 0.0)[0]
-        n_neg = len(ind)
-        logger.critical('%d negative intensities in output..' % n_neg)
-        if IGNORE_NAN:
-            intensities[ind] = 0.0
-            logger.critical('Set negative values to zero... be careful!')
-            assert( len(intensities[intensities < 0.0]) == 0 )
-        else:
-            raise RuntimeError('Fatal error, negative intensities detected in scattering output!')
+        raise RuntimeError('Fatal error, negative intensities detected in scattering output!')
     
     return intensities
