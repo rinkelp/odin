@@ -15,8 +15,9 @@ logger = logging.getLogger(__name__)
 
 import cPickle
 from bisect import bisect_left
+
 import numpy as np
-from scipy import fftpack, interpolate
+from scipy import interpolate, fftpack
 
 from odin import utils
 from odin import stats # module used for Shotset method "inter"
@@ -437,7 +438,7 @@ class Detector(Beam):
         
         
     @classmethod
-    def generic(cls, spacing=1.0, lim=100.0, energy=10.0, flux=100.0, l=50.0, 
+    def generic(cls, spacing=0.25, lim=50.0, energy=10.0, flux=100.0, l=100.0, 
                 force_explicit=False):
         """
         Generates a simple grid detector that can be used for testing
@@ -545,6 +546,7 @@ class Detector(Beam):
         xyz[:,1] = polar[:,0] * np.sin(polar[:,1])
         
         beam = Beam(flux, energy=energy) 
+
         detector = Detector(xyz, l, beam, coord_type='polar')
 
         return detector
@@ -747,8 +749,8 @@ class Shot(object):
             # todo : check for rectangular grid and then use structured
             self._unstructured_interpolation()
         elif self.detector.xyz_type == 'implicit':
-            self._unstructured_interpolation()
             #self._implicit_interpolation()
+            self._unstructured_interpolation()
         else:
             raise RuntimeError('Invalid detector passed to Shot()')
                     
