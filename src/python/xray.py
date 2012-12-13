@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 import cPickle
 import numpy as np
-from scipy import interpolate, fftpack
+from scipy import interpolate, fftpack, ndimage
 from bisect import bisect_left
 
 from odin import utils
@@ -437,7 +437,7 @@ class Detector(Beam):
         
         
     @classmethod
-    def generic(cls, spacing=1.0, lim=100.0, energy=10.0, flux=100.0, l=50.0, 
+    def generic(cls, spacing=0.25, lim=50.0, energy=10.0, flux=100.0, l=100.0, 
                 force_explicit=False):
         """
         Generates a simple grid detector that can be used for testing
@@ -543,7 +543,8 @@ class Detector(Beam):
         xyz = np.zeros(( polar.shape[0], 3 ))
         xyz[:,0] = polar[:,0] * np.cos(polar[:,1])
         xyz[:,1] = polar[:,0] * np.sin(polar[:,1])
-         
+    
+        beam = Beam(flux, energy=energy)     
         detector = Detector(xyz, l, beam, coord_type='polar')
 
         return detector
@@ -746,7 +747,8 @@ class Shot(object):
             # todo : check for rectangular grid and then use structured
             self._unstructured_interpolation()
         elif self.detector.xyz_type == 'implicit':
-            self._implicit_interpolation()
+            #self._implicit_interpolation()
+            self._unstructured_interpolation()
         else:
             raise RuntimeError('Invalid detector passed to Shot()')
                     
@@ -838,10 +840,6 @@ class Shot(object):
             i = self.intensities[int_start:int_end].reshape(size[0], size[1])
             int_start += n_int
             
-            # perform the interpolation. 
-            # Possible `kind` = {‘linear’, ‘cubic’, ‘quintic’}
-            f = interpolate.interp2d(x_pixels, y_pixels, i, kind='linear')
-            
             # find the indices of the polar grid that are inside the boundaries
             # of the current detector array we're interpolating over
             p_inds = self._overlap(pgr, np.vstack((x_pixels, y_pixels)).T)
@@ -850,11 +848,29 @@ class Shot(object):
                 logger.warning('Detector array (%d/%d) had no pixels inside the \
                 interpolation area!' % (k+1, len(self.detector.grid_list)) )
                 continue
-            
-            # interpolate onto the polar grid & update the inverse mask
-            self.polar_intensities[p_inds] = f.ev(pgr[p_inds,0], pgr[p_inds,1])
+
             inv_mask[p_inds] = np.bool(True)
             
+            # interpolate onto the polar grid
+            
+            # RectBivariateSpline -- giving shitty results
+            #f = interpolate.RectBivariateSpline(x_pixels, y_pixels, i, kx=1, ky=1, s=0)
+            #self.polar_intensities[p_inds] = f.ev(pgr[p_inds,0], pgr[p_inds,1])
+
+            # map_coordinates
+            #self.polar_intensities[p_inds] = ndimage.map_coordinates(i, pgr[p_inds])
+
+            # cspline
+            #cj = signal.cspline2d( self.intensities[int_start:int_end] )
+            #self.polar_intensities[p_inds] = signal.sepfir2d(cj, pgr[p_inds], dx=basis[0], corner[0],
+            #                                                       dy=basis[1], y0=corner[1])
+                                             
+            # bisplrep
+            tck, fp, ier, msg = interpolate.bisplrep(x, y, z, task=-1, tx=x, ty=y, full_output=1)
+            if ier > 0:
+                 raise RuntimeError('interpolate.bisplrep failed with exit status %d: %s' % (ier, msg))
+            self.polar_intensities[p_inds] = interpolate.bisplev(xnew, ynew, tck)
+
         self.polar_mask += np.bool(True) - inv_mask
         self._mask()
         
