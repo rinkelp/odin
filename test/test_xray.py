@@ -146,8 +146,8 @@ class TestShot():
         if not GPU: raise SkipTest
         shot = xray.Shot.simulate(self.t, 512, self.d)
         
-    @skip
     def test_implicit_interpolation(self):
+        """ test implicit interpolation smoke test """
         s = xray.Shot(self.i, self.d)
         
     def test_unstructured_interpolation(self):
@@ -166,7 +166,6 @@ class TestShot():
         assert_allclose( ref_mean, s.intensities.mean(), rtol=1e-04 )
         assert_allclose( ref_mean, s.polar_intensities.mean(), rtol=0.1 )
         
-    @skip
     def test_mask2(self):
         """ test masking by ref. implementation """
         
