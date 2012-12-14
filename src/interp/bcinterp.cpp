@@ -3,6 +3,7 @@
 #include <stdexcept>
 #include <math.h>
 #include <assert.h>
+#include <omp.h>
 #include "bcinterp.hh"
 
 using namespace std;
