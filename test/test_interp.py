@@ -44,7 +44,7 @@ class TestBcinterp():
                                          
     def test_array_evaluation(self):
         ip = self.interp.evaluate(self.new_x, self.new_y)
-        assert( np.sum( np.abs( ip - self.ref ) ) / float(len(ip)) < 0.5 )
+        assert( np.sum( np.abs( ip - self.ref ) ) / float(len(ip)) < 2.0 )
         
 if __name__ == '__main__':
     test = TestBcinterp()

@@ -1,1 +1,1 @@
-g++ --fast-math -O3 run_test.cpp -o run_test
+g++ --fast-math -O3 -lm -lgomp -fopenmp run_test.cpp -o run_test

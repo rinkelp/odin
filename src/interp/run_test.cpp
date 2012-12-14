@@ -10,8 +10,8 @@ int main(){
 
     cout << "running test...\n";
 
-    int Xdim = 10;
-    int Ydim = 10;
+    int Xdim = 10000;
+    int Ydim = 10000;
     int Nvals = Xdim * Ydim;
         
     double * vals = new double [Nvals];
@@ -22,7 +22,7 @@ int main(){
     double x_space = 0.1;
     double y_space = 0.1;
 
-    Bcinterp bc ( Nvals, vals, x_space,  y_space, Xdim,  Ydim );
+    Bcinterp bc ( Nvals, vals, x_space,  y_space, Xdim,  Ydim, 0.0, 0.0 );
           
     double i, x, y;
     x = 1.01;
