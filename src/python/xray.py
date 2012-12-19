@@ -32,12 +32,6 @@ except ImportError as e:
     GPU = False
 
 
-# ---------------------------------------------------------------------------- #
-IGNORE_NAN = True
-#np.set_printoptions(threshold='nan')
-# ---------------------------------------------------------------------------- #
-
-
 # ------------------------------------------------------------------------------
 # FUNDAMENTAL CONSTANTS
 
@@ -782,8 +776,7 @@ class Shot(object):
         if self.detector.xyz_type == 'explicit':
             self._unstructured_interpolation()
         elif self.detector.xyz_type == 'implicit':
-            self._unstructured_interpolation()
-            #self._implicit_interpolation()
+            self._implicit_interpolation()
         else:
             raise RuntimeError('Invalid detector passed to Shot()')
         
@@ -927,8 +920,6 @@ class Shot(object):
             # interpolate onto the polar grid & update the inverse mask
             # perform the interpolation. 
             interp = Bcinterp(i, basis[0], basis[1], size[0], size[1], corner[0], corner[1])
-            print pgr[p_inds]
-            print interp.evaluate(pgr[p_inds,0], pgr[p_inds,1])
             
             self.polar_intensities[p_inds] = interp.evaluate(pgr[p_inds,0], pgr[p_inds,1])
             self.polar_mask[p_inds] = np.bool(False)
@@ -1294,9 +1285,8 @@ class Shot(object):
 	
         #	verify that q1 and q2 are of same type
     	if type(q1) != type(q2):
-    	    print "Arguments must both be an instance of the same type..."
-    	    print "Exiting function..."
-    	    return 0
+    	    raise ValueError("Arguments must both be an instance of the same "
+    	                     "type. Exiting function...")
 
         #	if q1,q2 are floats...
     	if isinstance(q1,float):
@@ -1317,10 +1307,8 @@ class Shot(object):
     	    n_theta = len(q1)
 
     	else:
-    	    print "The arguments are not of type 'float' or 'numpy.ndarray'."
-    	    print "Exiting function..."
-    	    return 0
-	
+    	    raise ValueError("The arguments are not of type 'float' or 'numpy.ndarray'."
+    	                     "Exiting function...")
         
     	xmean = x.mean()
     	ymean = y.mean()
@@ -1688,16 +1676,15 @@ class Shotset(Shot):
     	n_shots = len(shots)
 	
     	if n_shots == 1:
-    		print "Cannot compute inter shot correlations with 1 shot"
-    		print "Exiting..."
-    		return 0
+    		raise ValueError("Cannot compute inter shot correlations with 1 shot")
 		
-    #	I arbitrarily picked 0.6
+        # I arbitrarily picked 0.6
+        # TJL to DERMEN: what is this and do we need it?
     	if n_inter > 0.6 * (n_shots+1)*n_shots/2 :
     		print "Might take a long time to find",n_inter,"unique inter-shot pairs from",n_shots
     		print "shots. Please choose n_inter <",int(0.6 *  (n_shots+1)*n_shots/2 ),"."
-    		print "Exiting..."
-    		return 0
+    		raise RuntimeError()
+    		
 	
     	if n_inter==0:
     	    n_inter=n_shots
@@ -1709,9 +1696,9 @@ class Shotset(Shot):
     	    I1 = shot1.I_ring(q1)
     	    I2 = shot2.I_ring(q2)
 
-    #	    note: when the args passed to correlate_ring_brute are numpy.ndarrays
-    #	    the only call to self is self.phi_values, which should be the same for
-    #	    shot1 or shot2
+            # note: when the args passed to correlate_ring_brute are numpy.ndarrays
+            # the only call to self is self.phi_values, which should be the same for
+            # shot1 or shot2
     	    c12= shot1.correlate_ring_brute(I1,I2)[:,1]
     	    interCors.append( np.abs( np.fft.fft(c12,len(c12) ) ))
 	
