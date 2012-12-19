@@ -2142,15 +2142,7 @@ def simulate_shot(traj, num_molecules, detector, traj_weights=None,
                             cromermann, rand1[num_cpu:], rand2[num_cpu:], rand3[num_cpu:], num_q)
                 p_cpu = Process(target=multi_helper, args=('cpu', cpu_args))
                 p_cpu.start()
-                procs.append(p_cpu)
-                
-                # cpu_obj = cpuscatter.CPUScatter(num_cpu, qx, qy, qz,
-                #                                 rx, ry, rz, aid,
-                #                                 cromermann,
-                #                                 rand1, rand2, rand3, num_q)
-                # assert len(cpu_obj.this[1]) == num_q
-                # intensities += cpu_obj.this[1].astype(np.float64)
-                
+                procs.append(p_cpu)                
 
             if bpg > 0:
                 logger.debug('Sending calculation to GPU device...')
@@ -2159,12 +2151,6 @@ def simulate_shot(traj, num_molecules, detector, traj_weights=None,
                 p_gpu = Process(target=multi_helper, args=('gpu', gpu_args))
                 p_gpu.start()
                 procs.append(p_gpu)
-                
-                # gpu_obj = gpuscatter.GPUScatter(device_id,
-                #                                 bpg, qx, qy, qz,
-                #                                 rx, ry, rz, aid,
-                #                                 cromermann,
-                #                                 rand1, rand2, rand3, num_q)
                 
             # get all the data back from child processes
             for i in range(len(procs)):
