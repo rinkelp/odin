@@ -168,8 +168,8 @@ class TestShot():
         #assert_array_almost_equal( utils.arctan3(pgc[:,1], pgc[:,0]), pg[:,1] )
         maxq = self.shot.q_values.max()
         assert np.all( mag <= (maxq + 1e-6) )
-        
-    @skip
+
+    @skip    
     def test_pgr(self):
         """ test polar_grid_as_real_cart() property """
                 
