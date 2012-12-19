@@ -386,5 +386,4 @@ if __name__ == '__main__':
         warnings.simplefilter("error")
         test = TestShot()
         test.setup()
-        test.test_io()
-        test.test_i_profile()
+        test.test_mask()
