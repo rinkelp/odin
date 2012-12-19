@@ -78,24 +78,26 @@ cdef class Bcinterp:
             The values of the interpolation
         """
         
+        x_min = self.c.x_corner
+        x_max = self.c.x_corner + (self.c.Xdim-1) * self.c.x_space
+        y_min = self.c.y_corner
+        y_max = self.c.y_corner + (self.c.Ydim-1) * self.c.y_space
+        
         if np.isscalar(x) and np.isscalar(y):
-            # check boundaries of points
-            if (x - self.c.x_corner < 0.0) or (x - self.c.x_corner > self.Xdim*self.x_space):
+            if (x < x_min) or (x > x_max):
                 raise ValueError('x_point out of range of convex hull of '
                                  'interpolation')
-            elif (y - self.c.y_corner < 0.0) or (y - self.c.y_corner > self.Ydim*self.y_space):
+            elif (y < y_min) or (y > y_max):
                 raise ValueError('y_point out of range of convex hull of '
                                  'interpolation')
             else:
                 z = self._evaluate_point(x, y)
             
-            
         elif isinstance(x, np.ndarray) and isinstance(y, np.ndarray):
-            # check boundaries of points
-            if np.any(x - self.c.x_corner < 0.0) or np.any(x - self.c.x_corner > self.c.Xdim*self.c.x_space):
+            if np.any((x < x_min)) or np.any((x > x_max)):
                 raise ValueError('x_point out of range of convex hull of '
                                  'interpolation')
-            elif np.any(y - self.c.y_corner < 0.0) or np.any(y - self.c.y_corner > self.c.Ydim*self.c.y_space):
+            elif np.any((y < y_min)) or np.any((y > y_max)):
                 raise ValueError('y_point out of range of convex hull of '
                                  'interpolation')
             else:
