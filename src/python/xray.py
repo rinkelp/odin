@@ -2153,7 +2153,7 @@ def simulate_shot(traj, num_molecules, detector, traj_weights=None,
                 rand2 = np.random.rand(num_gpu).astype(np.float32)
                 rand3 = np.random.rand(num_gpu).astype(np.float32)
                 gpu_args = (device_id, bpg, qx, qy, qz, rx, ry, rz, aid,
-                            cromermann, rand1[num_cpu:], rand2[num_cpu:], rand3[num_cpu:], num_q)
+                            cromermann, rand1, rand2, rand3, num_q)
                 p_gpu = Process(target=multi_helper, args=('gpu', gpu_args))
                 p_gpu.start()
                 procs.append(p_gpu)
@@ -2165,8 +2165,6 @@ def simulate_shot(traj, num_molecules, detector, traj_weights=None,
             # ensure child processes have finished
             for p in procs:
                 p.join()
-                
-            print multi_output
                 
             if num_cpu > 0:
                 if 'cpu' not in multi_output.keys():
