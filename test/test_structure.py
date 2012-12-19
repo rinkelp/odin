@@ -27,6 +27,27 @@ def test_rm_com():
     for i in range(t.n_frames):
         assert_array_almost_equal(np.zeros(3), np.average(t.xyz[i,:,:], weights=masses, axis=0))
         
+def test_multiply_conformations():
+    traj = structure.load_coor(ref_file('goldBenchMark.coor'))
+    n_samples = 50
+    otraj = structure.multiply_conformations(traj, n_samples, 0.1)
+
+    # iterate over x,y,z and check if any of the bins are more than 2.25 STD from the mean
+    for i in [0,1,2]:
+        h = np.histogram(otraj.xyz[:,0,i])[0]
+        cutoff = h.std() * 2.25 # chosen arbitrarily
+        deviations = np.abs(h - h.mean())
+        print deviations / h.std()
+        if np.any( deviations > cutoff ):
+            raise RuntimeError('Highly unlikely centers of mass are randomly '
+                               'distributed in space. Test is stochastic, though, so'
+                               ' try running again to make sure you didn\'t hit a '
+                               'statistical anomaly')
+
+        # use the below to visualize the result
+        # plt.hist(otraj.xyz[:,0,i])
+        # plt.show()
+        
 def test_load_coor():
     
     s = structure.load_coor( ref_file('goldBenchMark.coor') )
