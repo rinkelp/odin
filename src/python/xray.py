@@ -2099,19 +2099,15 @@ def simulate_shot(traj, num_molecules, detector, traj_weights=None,
             # the remainder on the CPU
             if force_no_gpu or (not GPU):
                 num_cpu = num
+                num_gpu = 0
                 bpg = 0
                 logger.debug('Running CPU-only computation')
             else:
                 num_cpu = num % 512
-                num = num - num_cpu
-                bpg = num / 512 # this is 512 * the number we'll run on the GPU
+                num_gpu = num - num_cpu
+                bpg = num_gpu / 512 # this is 512 * the number we'll run on the GPU
             
             logger.info('Running %d molecules from snapshot %d...' % (num, i))  
-
-            # generate random numbers for the rotations in python (much easier)
-            rand1 = np.random.rand(num).astype(np.float32)
-            rand2 = np.random.rand(num).astype(np.float32)
-            rand3 = np.random.rand(num).astype(np.float32)
 
             # multiprocessing cannot return values, so generate a helper function
             # that will dump the output into a dir `multi_output`
@@ -2140,14 +2136,22 @@ def simulate_shot(traj, num_molecules, detector, traj_weights=None,
             # run dat shit
             if num_cpu > 0:
                 logger.debug('Running CPU scattering code (%d/%d)...' % (num_cpu, num))
+                # generate random numbers for the rotations in python (much easier)
+                rand1 = np.random.rand(num_cpu).astype(np.float32)
+                rand2 = np.random.rand(num_cpu).astype(np.float32)
+                rand3 = np.random.rand(num_cpu).astype(np.float32)
                 cpu_args = (num_cpu, qx, qy, qz, rx, ry, rz, aid,
-                            cromermann, rand1[:num_cpu], rand2[:num_cpu], rand3[:num_cpu], num_q)
+                            cromermann, rand1, rand2, rand3, num_q)
                 p_cpu = Process(target=multi_helper, args=('cpu', cpu_args))
                 p_cpu.start()
                 procs.append(p_cpu)                
 
             if bpg > 0:
                 logger.debug('Sending calculation to GPU device...')
+                # generate random numbers for the rotations in python (much easier)
+                rand1 = np.random.rand(num_gpu).astype(np.float32)
+                rand2 = np.random.rand(num_gpu).astype(np.float32)
+                rand3 = np.random.rand(num_gpu).astype(np.float32)
                 gpu_args = (device_id, bpg, qx, qy, qz, rx, ry, rz, aid,
                             cromermann, rand1[num_cpu:], rand2[num_cpu:], rand3[num_cpu:], num_q)
                 p_gpu = Process(target=multi_helper, args=('gpu', gpu_args))
