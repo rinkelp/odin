@@ -379,11 +379,20 @@ class TestShot():
             ref[i] = self.shot.correlate(q1, q2, delta)            
             
         assert_array_almost_equal(ring[:,1], ref, decimal=2)
-            
-    def test_simulate(self):
+     
+    def test_simulate_cpu_only(self):
+        d = xray.Detector.generic(spacing=0.6)
+        x = xray.Shot.simulate(self.t, 1, d)
+        
+    def test_simulate_gpu_only(self):
         if not GPU: raise SkipTest
-        d = xray.Detector.generic(spacing=0.4)
+        d = xray.Detector.generic(spacing=0.6)
         x = xray.Shot.simulate(self.t, 512, d)
+            
+    def test_simulate_gpu_and_cpu(self):
+        if not GPU: raise SkipTest
+        d = xray.Detector.generic(spacing=0.6)
+        x = xray.Shot.simulate(self.t, 513, d)
         
         
 class TestShotset():
