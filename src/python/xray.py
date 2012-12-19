@@ -2120,6 +2120,8 @@ def simulate_shot(traj, num_molecules, detector, traj_weights=None,
             multi_q = Queue()
             
             def multi_helper(name, fargs):
+                """ a helper function that performs either CPU or GPU calcs and 
+                    returns the output over a pipe `multi_q` """
                 logger.debug('multi_helper called with: %s' % str((name, fargs)))
                 
                 if name == 'cpu':
@@ -2139,7 +2141,7 @@ def simulate_shot(traj, num_molecules, detector, traj_weights=None,
             if num_cpu > 0:
                 logger.debug('Running CPU scattering code (%d/%d)...' % (num_cpu, num))
                 cpu_args = (num_cpu, qx, qy, qz, rx, ry, rz, aid,
-                            cromermann, rand1[num_cpu:], rand2[num_cpu:], rand3[num_cpu:], num_q)
+                            cromermann, rand1[:num_cpu], rand2[:num_cpu], rand3[:num_cpu], num_q)
                 p_cpu = Process(target=multi_helper, args=('cpu', cpu_args))
                 p_cpu.start()
                 procs.append(p_cpu)                
@@ -2147,7 +2149,7 @@ def simulate_shot(traj, num_molecules, detector, traj_weights=None,
             if bpg > 0:
                 logger.debug('Sending calculation to GPU device...')
                 gpu_args = (device_id, bpg, qx, qy, qz, rx, ry, rz, aid,
-                            cromermann, rand1[:num_cpu], rand2[:num_cpu], rand3[:num_cpu], num_q)
+                            cromermann, rand1[num_cpu:], rand2[num_cpu:], rand3[num_cpu:], num_q)
                 p_gpu = Process(target=multi_helper, args=('gpu', gpu_args))
                 p_gpu.start()
                 procs.append(p_gpu)
