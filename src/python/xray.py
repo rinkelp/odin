@@ -2183,7 +2183,10 @@ def simulate_shot(traj, num_molecules, detector, traj_weights=None,
                                        'terminate properly')
                 gpu_out = multi_output['gpu']
                 assert len(gpu_out) == num_q
-                intensities += gpu_out.astype(np.float64)
+                
+                # have to scale the intensities below to be consistent with the
+                # number of molecules in the beam
+                intensities += ( gpu_out.astype(np.float64) * num_cpu/512.0 )
                 logger.debug('Retrived data from GPU.')
         
     # check for NaNs in output
