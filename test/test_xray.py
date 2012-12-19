@@ -107,6 +107,10 @@ class TestDetector():
         assert_array_almost_equal(np.zeros(ref1.shape[0]), self.d.recpolar[:,1], err_msg='theta')
         assert_array_almost_equal(ref1[:,2], self.d.recpolar[:,2], err_msg='phi')
        
+    def test_reciprocal_to_real(self):
+        real = self.d._reciprocal_to_real(self.d.reciprocal)
+        assert_array_almost_equal(real, self.d.real)
+       
     def test_basis_factory(self):
         beam = xray.Beam(self.flux, energy=self.energy)
         basis = (self.spacing, self.spacing, 0.0)
@@ -131,7 +135,8 @@ class TestShot():
         self.d = xray.Detector.generic(spacing=0.4)
         self.i = np.abs( np.random.randn(self.d.xyz.shape[0]) )
         self.t = trajectory.load(ref_file('ala2.pdb'))
-        self.shot = xray.Shot.load(ref_file('refshot.shot'))
+        #self.shot = xray.Shot.load(ref_file('refshot.shot'))
+        self.shot = xray.Shot(self.i, self.d)
         
     def test_io(self):
         if os.path.exists('test.shot'): os.system('test.shot')
@@ -153,6 +158,43 @@ class TestShot():
     def test_unstructured_interpolation(self):
         d = xray.Detector.generic(spacing=0.4, force_explicit=True)
         s = xray.Shot(self.i, d)
+        
+    def test_pgc(self):
+        """ test polar_grid_as_cart() property """
+        pg = self.shot.polar_grid
+        pgc = self.shot.polar_grid_as_cart
+        mag = np.sqrt(np.sum(np.power(pgc,2), axis=1))
+        assert_array_almost_equal( mag, pg[:,0] )
+        #assert_array_almost_equal( utils.arctan3(pgc[:,1], pgc[:,0]), pg[:,1] )
+        maxq = self.shot.q_values.max()
+        assert np.all( mag <= (maxq + 1e-6) )
+        
+    @skip
+    def test_pgr(self):
+        """ test polar_grid_as_real_cart() property """
+                
+        pgr = self.shot.polar_grid_as_real_cart
+        pgr_z = np.zeros((pgr.shape[0],3))
+        pgr_z[:,:2] = pgr.copy()
+        pgr_z[:,2] = self.shot.detector.path_length
+        
+        S = self.d._unit_vector(pgr_z)
+        S0 = np.zeros_like(S)
+        S0[:,2] = np.ones(S0.shape[0])
+        pgq_z = self.shot.detector.k * (S - S0)
+        pgq = pgq_z[:,:2]
+        
+        ref = self.shot.polar_grid_as_cart
+        
+        maxq = self.shot.q_values.max()
+        assert np.all( np.sqrt(np.sum(np.power(ref,2), axis=1)) <= (maxq + 1e-6) )
+        assert np.all( np.sqrt(np.sum(np.power(pgq,2), axis=1)) <= (maxq + 1e-6) )
+        
+        print "pgq:", pgq
+        print "ref:", ref
+        print "diff", np.sum(np.abs(pgq - ref), axis=1)
+        
+        assert_array_almost_equal(pgq, ref)
         
     def test_mask(self):
         """ test masking by confirming some basic stuff is reasonable """
@@ -192,7 +234,10 @@ class TestShot():
         
     def test_nearests(self):
         
-        nq = self.shot._nearest_q(0.0199)
+        print "q", self.shot.q_values
+        print "phi", self.shot.phi_values
+        
+        nq = self.shot._nearest_q(0.019)
         assert_almost_equal(nq, 0.02)
         
         np = self.shot._nearest_phi(0.034)
@@ -386,4 +431,5 @@ if __name__ == '__main__':
         warnings.simplefilter("error")
         test = TestShot()
         test.setup()
-        test.test_mask()
+        test.test_pgc()
+        test.test_pgr()
