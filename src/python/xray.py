@@ -5,10 +5,6 @@
 Classes, methods, functions for use with xray scattering experiments.
 """
 
-# ---------------- #
-IGNORE_NAN = True  #
-# ---------------- #
-
 import logging
 logging.basicConfig()
 logger = logging.getLogger(__name__)
@@ -35,6 +31,11 @@ except ImportError as e:
                    ' Note that this may break some functionality!')
     GPU = False
 
+
+# ---------------------------------------------------------------------------- #
+IGNORE_NAN = True
+#np.set_printoptions(threshold='nan')
+# ---------------------------------------------------------------------------- #
 
 
 # ------------------------------------------------------------------------------
@@ -343,7 +344,7 @@ class Detector(Beam):
     @property
     def recpolar(self):
         a = self._real_to_recpolar(self.real)
-        a[:,1] = 0.0 # convention, re: Dermen
+        a[:,1] = 0.0 # convention, re: Dermen, TJL todo, don't think this is right... (flat ewald sphere)
         return a
         
         
@@ -360,6 +361,9 @@ class Detector(Beam):
         Convert the real-space to reciprocal-space in cartesian form.
         """
         
+        assert len(xyz.shape) == 2
+        assert xyz.shape[1] == 3
+        
         # generate unit vectors in the pixel direction, origin at sample
         S = self.real.copy()
         S = self._unit_vector(S)
@@ -367,6 +371,8 @@ class Detector(Beam):
         # generate unit vectors in the z-direction
         S0 = np.zeros(xyz.shape)
         S0[:,2] = np.ones(xyz.shape[0])
+        
+        assert S.shape == S0.shape
         
         q = self.k * (S - S0)
         
@@ -380,6 +386,32 @@ class Detector(Beam):
         """
         reciprocal_polar = self._to_polar( self._real_to_reciprocal(xyz) )
         return reciprocal_polar
+        
+        
+    def _reciprocal_to_real(self, qxyz):
+        """
+        Converts a q-space cartesian representation (`qxyz`) into a real-space
+        cartesian representation (`xyz`)
+        """
+        
+        assert len(qxyz.shape) == 2
+        xyz = np.zeros_like(qxyz)
+        
+        q_mag = self._norm(qxyz)
+        q_mag[q_mag == 0.0] = 1.0e-300
+        
+        h = self.path_length * np.tan( 2.0 * np.arcsin( qxyz[:,2] / q_mag ) )
+        q_xy = np.sqrt( np.sum( np.power(qxyz[:,:2], 2), axis=1 ) )
+        q_xy[q_xy == 0.0] = 1.0e-300
+        hn = ( h / q_xy )
+        
+        for i in range(2):
+            xyz[:,i] = qxyz[:,i] * hn
+
+        xyz[:,2] = self.path_length
+        xyz = xyz[::-1,:]  # for consistency with other methods
+        
+        return xyz
         
         
     def _norm(self, vector):
@@ -736,11 +768,12 @@ class Shot(object):
         self.phi_spacing = phi_spacing * (2.0 * np.pi / 360.) # conv. to radians
         self.q_spacing = q_spacing
 
-        self.q_min = np.min( self.detector.recpolar[:,0] )
-        self.q_max = np.max( self.detector.recpolar[:,0] )
+        mq = self.detector.recpolar[:,0]  # |q|
+        self.q_min = np.min( mq )
+        self.q_max = np.max( mq )
 
         self.polar_intensities = np.zeros(self.num_datapoints)
-        self._init_polar_mask()
+        self.polar_mask = np.zeros(self.num_datapoints, dtype=np.bool)
         
         # check to see what method we want to use to interpolate. Here,
         # `unstructured` is more general, but slower; implicit/structured assume
@@ -749,16 +782,20 @@ class Shot(object):
         if self.detector.xyz_type == 'explicit':
             self._unstructured_interpolation()
         elif self.detector.xyz_type == 'implicit':
-            self._implicit_interpolation()
+            self._unstructured_interpolation()
+            #self._implicit_interpolation()
         else:
             raise RuntimeError('Invalid detector passed to Shot()')
-                    
+        
+        self._apply_mask() # force masking of requested bad pixels
+        
         
     @property
     def polar_grid(self):
         """
         Return the pixels that comprise the polar grid in (q, phi) space.
         """
+        
         polar_grid = np.zeros((self.num_datapoints, 2))
         polar_grid[:,0] = np.tile(self.q_values, self.num_phi)
         polar_grid[:,1] = np.repeat(self.phi_values, self.num_q)
@@ -769,8 +806,10 @@ class Shot(object):
     @property
     def polar_grid_as_cart(self):
         """
-        Returns the pixels that comprise the polar grid in cartesian space
+        Returns the pixels that comprise the polar grid in q-cartesian space,
+        (q_x, q_y)
         """
+        
         pg = self.polar_grid
         pg_real = np.zeros( pg.shape )
         pg_real[:,0] = pg[:,0] * np.cos( pg[:,1] )
@@ -778,7 +817,28 @@ class Shot(object):
         
         return pg_real
         
-    
+        
+    @property
+    def polar_grid_as_real_cart(self):
+        """
+        Returns the pixels that comprise the polar grid in real cartesian space,
+        (x, y)
+        """
+        
+        pg  = self.polar_grid
+        pgr = np.zeros_like(pg)
+        k = self.detector.k
+        l = self.detector.path_length
+        
+        pg[ pg[:,0] == 0.0 ,0] = 1.0e-300
+        h = l * np.tan( 2.0 * np.arcsin( pg[:,0] / (2.0*k) ) )
+
+        pgr[:,0] = h * np.cos( pg[:,1] )
+        pgr[:,1] = h * np.sin( pg[:,1] )
+                
+        return pgr
+        
+        
     def _overlap(self, xy1, xy2):
         """
         Find the indicies of xy1 that overlap with xy2, where both are
@@ -795,7 +855,29 @@ class Shot(object):
         p_inds = np.intersect1d(p_ind_x, p_ind_y)
         
         return p_inds
-    
+        
+        
+    def _overlap_implicit(self, xy, grid):
+        """
+        xy   : ndarray, float, 2D
+        grid : (basis, size, corner)
+        """
+        assert xy.shape[1] == 2
+        
+        # grid:   corner       basis           size
+        min_x = grid[2][0]
+        max_x = grid[2][0] + grid[0][0] * (grid[1][0] - 1)
+        min_y = grid[2][1]
+        max_y = grid[2][1] + grid[0][1] * (grid[1][1] - 1)
+        
+        p_ind_x = np.intersect1d( np.where( xy[:,0] > min_x )[0], 
+                                  np.where( xy[:,0] < max_x )[0] )
+        p_ind_y = np.intersect1d( np.where( xy[:,1] > min_y )[0], 
+                                  np.where( xy[:,1] < max_y )[0] )                                    
+        p_inds = np.intersect1d(p_ind_x, p_ind_y)
+        
+        return p_inds
+        
         
     def _implicit_interpolation(self):
         """
@@ -804,6 +886,8 @@ class Shot(object):
         This detector geometry is specified by the x and y pixel spacing,
         the number of pixels in the x/y direction, and the top-left corner
         position.
+        
+        NOTE: The interpolation is performed in cartesian real (xyz) space.
         """
                 
         # loop over all the arrays that comprise the detector and use
@@ -812,17 +896,17 @@ class Shot(object):
         int_start = 0 # start of intensity array correpsonding to `grid`
         int_end   = 0 # end of intensity array correpsonding to `grid`
         
-        # generate a mask that is true where we successfully interpolated
-        inv_mask = np.zeros(self.num_datapoints, dtype=np.bool)
-        
         # convert the polar to cartesian coords for comparison to detector
-        pgr = self.polar_grid_as_cart
+        pgr = self.polar_grid_as_real_cart
         
         for k,grid in enumerate(self.detector._grid_list):
             
             basis, size, corner = grid
-            n_int = size[0] * size[1] * size[2]
+            n_int = int(size[0] * size[1])
             int_end += n_int
+        
+            if size[2] != 1:
+                logger.debug('Warning: Z dimension not flat')
         
             if (basis[1] == 0.0) or (basis[0] == 0.0):
                 raise RunTimeError('Implicit detector is flat in either x or y!'
@@ -831,23 +915,24 @@ class Shot(object):
             i = self.intensities[int_start:int_end]
             int_start += n_int
             
-            # find the indices of the polar grid that are inside the boundaries
-            # of the current detector array we're interpolating over
-            xyz_grid = self.detector._grid_from_implicit(*grid)
-            p_inds = self._overlap(pgr, np.vstack((xyz_grid[:,0], xyz_grid[:,1])).T)
+            # find the indices of the polar grid pixels that are inside the
+            # boundaries of the current detector array we're interpolating over
+            p_inds = self._overlap_implicit(pgr, grid)
             
             if len(p_inds) == 0:
                 logger.warning('Detector array (%d/%d) had no pixels inside the \
                 interpolation area!' % (k+1, len(self.detector.grid_list)) )
                 continue
-            
+                        
             # interpolate onto the polar grid & update the inverse mask
             # perform the interpolation. 
             interp = Bcinterp(i, basis[0], basis[1], size[0], size[1], corner[0], corner[1])
-            self.polar_intensities[p_inds] = interp.evaluate(pgr[p_inds,0], pgr[p_inds,1])
-            inv_mask[p_inds] = np.bool(True)
+            print pgr[p_inds]
+            print interp.evaluate(pgr[p_inds,0], pgr[p_inds,1])
             
-        self.polar_mask += np.bool(True) - inv_mask
+            self.polar_intensities[p_inds] = interp.evaluate(pgr[p_inds,0], pgr[p_inds,1])
+            self.polar_mask[p_inds] = np.bool(False)
+            
         self._mask()
         
         return
@@ -857,9 +942,11 @@ class Shot(object):
         """
         Perform an interpolation to polar coordinates assuming that the detector
         pixels do not form a rectangular grid.
+        
+        NOTE: The interpolation is performed in polar momentum (q) space.
         """
         
-        # interpolate onto polar grid : delauny triangulation + nearest neighbour
+        # interpolate onto polar grid : delauny triangulation + linear
         xy = np.zeros(( self.detector.polar.shape[0], 2 ))
         xy[:,0] = self.detector.k * np.sqrt( 2.0 - 2.0 * np.cos(self.detector.polar[:,1]) ) # |q|
         xy[:,1] = self.detector.polar[:,2] # phi
@@ -881,8 +968,9 @@ class Shot(object):
         # mask missing pixels (outside convex hull)
         nan_ind = np.where( np.isnan(z_interp) )[0]
         self.polar_intensities[nan_ind] = 0.0
+        not_nan_ind = np.delete(np.arange(z_interp.shape[0]), nan_ind)
         
-        self.polar_mask[nan_ind] = np.bool(True)
+        self.polar_mask[not_nan_ind] = np.bool(False)
         self._mask()
         
         return
@@ -904,12 +992,12 @@ class Shot(object):
         self.polar_intensities = np.array(self.polar_intensities)
         
         
-    def _init_polar_mask(self):
+    def _apply_mask(self):
         """
         Sets the polar mask to mask the pixels indicated by the mask argument.
         """
         
-        self.polar_mask = np.zeros(self.num_datapoints, dtype=np.bool)
+        # THIS FUNCTION WILL CHANGE TO ACCOMODATE MORE FLEXIBLE MASKING
         
         # if we have no work to do, let's escape!
         if np.sum(self.real_mask) == 0:

@@ -10,8 +10,8 @@ int main(){
 
     cout << "running test...\n";
 
-    int Xdim = 10000;
-    int Ydim = 10000;
+    int Xdim = 1000;
+    int Ydim = 1000;
     int Nvals = Xdim * Ydim;
         
     double * vals = new double [Nvals];

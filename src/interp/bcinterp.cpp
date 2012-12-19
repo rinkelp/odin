@@ -49,7 +49,7 @@ Bcinterp::Bcinterp( int Nvals, double *vals, double x_space_, double y_space_,
     double * I = vals; // for legacy reasons
 
     // compute the finite difference derivatives for interior of the grid	
-	#pragma omp parallel for shared(dx, dy, dxdy, dIdx, dIdy, dIdxdy) private(x, y)
+	//#pragma omp parallel for shared(dx, dy, dxdy, dIdx, dIdy, dIdxdy) private(x, y)
     for( y = 1; y < Ydim-1; y++ ) {
         for( x = 1; x < Xdim-1; x++ ) {
 
@@ -65,7 +65,7 @@ Bcinterp::Bcinterp( int Nvals, double *vals, double x_space_, double y_space_,
     }
 
 
-    #pragma omp parallel for shared(dx, dy, dxdy, dIdx, dIdy, dIdxdy) private(x)
+    //#pragma omp parallel for shared(dx, dy, dxdy, dIdx, dIdy, dIdxdy) private(x)
     for( x = 1; x < Xdim-1; x++ ) {
 
         // top row (no corners)
@@ -86,7 +86,7 @@ Bcinterp::Bcinterp( int Nvals, double *vals, double x_space_, double y_space_,
 	}
 
 
-    #pragma omp parallel for shared(dx, dy, dxdy, dIdx, dIdy, dIdxdy) private(y)
+    //#pragma omp parallel for shared(dx, dy, dxdy, dIdx, dIdy, dIdxdy) private(y)
     for( y = 1; y < Ydim-1; y++ ) {
 
         // do the left side (no corners)
@@ -146,7 +146,7 @@ Bcinterp::Bcinterp( int Nvals, double *vals, double x_space_, double y_space_,
 
 	
     for( x = 0; x < Xdim-1; x++ ) {
-        #pragma omp parallel for private(x, y) shared(dx, dy, dxdy, dIdx, dIdy, dIdxdy)
+        //#pragma omp parallel for private(x, y) shared(dx, dy, dxdy, dIdx, dIdy, dIdxdy)
         for( y = 0; y < Ydim-1; y++ ) {
 
 			a00 =    F(I,x,y);
@@ -185,8 +185,8 @@ Bcinterp::Bcinterp( int Nvals, double *vals, double x_space_, double y_space_,
             unsigned int k = 16*x*(Ydim-1) + 16*y;
             
             if( (k + 15) >= size_alphas ) {
-                cout << "accessing pos: " << k+15 << endl;
-                cout << "over-run range on alphas in Bcinterp constructor" << endl;
+                cout << "error accessing alphas element: " << k+15 << endl;
+                cout << "over-run array `alphas` in Bcinterp constructor" << endl;
                 throw std::out_of_range("over-run range on alphas in Bcinterp constructor");
             }
 
@@ -244,7 +244,7 @@ double Bcinterp::evaluate_point (double x, double y) {
         throw std::out_of_range("ym less than zero");
     }
 
-    // choose which square we're in by looking at the top-right
+    // choose which square we're in by looking at the bottom-left
     unsigned int i = floor(xm);
 	unsigned int j = floor(ym);
 
@@ -252,9 +252,12 @@ double Bcinterp::evaluate_point (double x, double y) {
 	// the polynomial function over the square)
 	unsigned int aStart = 16*i*(Ydim-1) + 16*j;
 	
-    if( (aStart + 15) >= size_alphas ) {
-        cout << "accessing pos: " << aStart+15 << endl;
-        cout << "over-run range on alphas in evaluate_point" << endl;
+    if( (aStart + 15) > size_alphas ) {
+        cout << "accessing alphas element: " << aStart+15 << endl;
+        cout << "size of alphas is only: " << size_alphas << endl;
+        cout << "evaluating at (x,y): " << x << "," << y << endl;
+        cout << "over-run array `alphas` in evaluate_point" << endl;
+        cout << "likely you are asking for a point that would require extrapolation" << endl;
         throw std::out_of_range("over-run range on alphas in evaluate_point");
     }
 	
@@ -298,7 +301,7 @@ void Bcinterp::evaluate_array(int dim_xa, double *xa, int dim_ya, double *ya,
         throw std::invalid_argument("xa, ya, za must all be same dimension");
     }
         
-    #pragma omp parallel for shared(za)
+    //#pragma omp parallel for shared(za)
     for( int i = 0; i < dim_za; i++ ) {
         za[i] = evaluate_point(xa[i], ya[i]);
     }

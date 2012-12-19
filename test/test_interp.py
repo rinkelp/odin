@@ -5,7 +5,7 @@ from odin.testing import skip, ref_file
 
 import numpy as np
 from scipy import interpolate
-from numpy.testing import assert_allclose, assert_almost_equal
+from numpy.testing import assert_allclose, assert_almost_equal, assert_array_almost_equal
  
 
 class TestBcinterp():
@@ -16,7 +16,7 @@ class TestBcinterp():
         dim1 = 100
         dim2 = 100
         
-        self.vals = np.random.randn(dim1 * dim2)
+        self.vals = np.abs(np.random.randn(dim1 * dim2))
         self.x_space = 0.1
         self.y_space = 0.1
         self.Xdim = dim1
@@ -40,11 +40,24 @@ class TestBcinterp():
         self.ref = interpolate.griddata( np.array([xx.flatten(),yy.flatten()]).T, 
                                          self.vals, 
                                          np.array([self.new_x, self.new_y]).T,
-                                         method='cubic' )
-                                         
+                                         method='linear' )
+        
+    def test_for_smoke(self):
+        """ smoke test to ensure we're not getting all zeros... """
+        ip = self.interp.evaluate(self.new_x, self.new_y)
+        if np.all( ip == 0.0 ):
+            print "Interpolator not working, likely cause: OMP failure."
+            raise Exception()
+    
+    def test_point_evaluation(self):
+        x = float(self.new_x[1])
+        y = float(self.new_y[1])
+        i = self.interp._evaluate_point(x,y)
+        assert_allclose( i, self.ref[1], rtol=0.5 )
+                                       
     def test_array_evaluation(self):
         ip = self.interp.evaluate(self.new_x, self.new_y)
-        assert( np.sum( np.abs( ip - self.ref ) ) / float(len(ip)) < 2.0 )
+        assert np.sum( np.abs(ip - self.ref) < 0.3 ) > 600
         
 if __name__ == '__main__':
     test = TestBcinterp()
