@@ -11,12 +11,14 @@ logger = logging.getLogger(__name__)
 
 import cPickle
 from bisect import bisect_left
+from multiprocessing import Process, Queue
 
 import numpy as np
 from scipy import interpolate, fftpack
 
 from odin import utils
 from odin import stats
+from odin import cpuscatter
 from odin.bcinterp import Bcinterp
 from odin.data import cromer_mann_params
 
@@ -180,8 +182,13 @@ class Detector(Beam):
                 raise ValueError('Implicit xyz pixels required, `xyz` must be list')
             self._xyz_type = 'implicit'
             
-            self._grid_list  = xyz
-            self.num_pixels = np.sum([ b[1][0]*b[1][1]*b[1][2] for b in self._grid_list ])
+            self._grid_list = xyz
+            for g in self._grid_list:
+                if (len(g) != 3) or (type(g) != tuple):
+                    logger.critical("self._grid_list: %s" % str(self._grid_list))
+                    raise ValueError('grid list not 3-tuple')
+            
+            self.num_pixels = int(np.sum([ b[1][0]*b[1][1]*b[1][2] for b in self._grid_list ]))
             self._pixels    = None
             
         else:
@@ -253,6 +260,11 @@ class Detector(Beam):
         """
         if type(grid_list) == tuple: # be generous...
             grid_list = [grid_list]
+        elif type(grid_list) == list:
+            if (not type(grid_list[0] == tuple)) and (len(grid_list[0]) == 3):
+                raise ValueError('grid_list must be a list of 3-tuples')
+        else:
+            raise ValueError('grid_list must be a list of 3-tuples')
         d = Detector(grid_list, path_length, k, xyz_type='implicit')
         return d
       
@@ -502,7 +514,7 @@ class Detector(Beam):
         if not force_explicit:
             
             basis = (spacing, spacing, 0.0)
-            dim = 2*(lim / spacing) + 1
+            dim = int(2*(lim / spacing) + 1)
             shape = (dim, dim, 1)
             corner = (-lim, -lim, 0.0)
             basis_list = [(basis, shape, corner)]
@@ -2073,26 +2085,27 @@ def simulate_shot(traj, num_molecules, detector, traj_weights=None,
     intensities = np.zeros(detector.num_pixels, dtype=np.float64) # should be double
     
     for i,num in enumerate(num_per_shapshot):
-        if int(num) > 0: # else, we can just skip...
-    
-            num = int(num)
-
+        num = int(num)
+        if num > 0: # else, we can just skip...
+        
             # pull xyz coords
             xyz = traj.xyz[i,:,:] * 10.0 # convert nm -> ang.
             rx = xyz[:,0].flatten().astype(np.float32)
             ry = xyz[:,1].flatten().astype(np.float32)
             rz = xyz[:,2].flatten().astype(np.float32)
 
-            # choose the number of molecules (must be multiple of 512)
-            num = num - (num % 512) # round down
-            bpg = num / 512
-
-            # todo : fix temporary fix
-            if bpg == 0:
-                bpg = 1
-                num = 512
-
-            logger.debug('GPU can only process multiples of 512 molecules.')
+            # choose the number of molecules & divide work between CPU & GPU
+            # GPU is fast but can only do multiples of 512 molecules - run
+            # the remainder on the CPU
+            if force_no_gpu or (not GPU):
+                num_cpu = num
+                bpg = 0
+                logger.debug('Running CPU-only computation')
+            else:
+                num_cpu = num % 512
+                num = num - num_cpu
+                bpg = num / 512 # this is 512 * the number we'll run on the GPU
+            
             logger.info('Running %d molecules from snapshot %d...' % (num, i))  
 
             # generate random numbers for the rotations in python (much easier)
@@ -2100,23 +2113,89 @@ def simulate_shot(traj, num_molecules, detector, traj_weights=None,
             rand2 = np.random.rand(num).astype(np.float32)
             rand3 = np.random.rand(num).astype(np.float32)
 
-            # run dat shit
-            if force_no_gpu:
-                logger.debug('Running CPU computation')
-                raise NotImplementedError('') # todo
+            # multiprocessing cannot return values, so generate a helper function
+            # that will dump the output into a dir `multi_output`
+            multi_output = {}
+            procs = []
+            multi_q = Queue()
+            
+            def multi_helper(name, fargs):
+                logger.debug('multi_helper called with: %s' % str((name, fargs)))
+                
+                if name == 'cpu':
+                    from odin.cpuscatter import CPUScatter
+                    function = CPUScatter
+                elif name == 'gpu':
+                    from odin.gpuscatter import GPUScatter
+                    function = GPUScatter
+                else:
+                    raise RuntimeError('cpu/gpu are the only names allowed, got: %s' % name)
+                
+                result = function(*fargs)
+                out_dict = {name: result.this[1]}
+                multi_q.put(out_dict)
 
-            else:
+            # run dat shit
+            if num_cpu > 0:
+                logger.debug('Running CPU scattering code (%d/%d)...' % (num_cpu, num))
+                cpu_args = (num_cpu, qx, qy, qz, rx, ry, rz, aid,
+                            cromermann, rand1[num_cpu:], rand2[num_cpu:], rand3[num_cpu:], num_q)
+                p_cpu = Process(target=multi_helper, args=('cpu', cpu_args))
+                p_cpu.start()
+                procs.append(p_cpu)
+                
+                # cpu_obj = cpuscatter.CPUScatter(num_cpu, qx, qy, qz,
+                #                                 rx, ry, rz, aid,
+                #                                 cromermann,
+                #                                 rand1, rand2, rand3, num_q)
+                # assert len(cpu_obj.this[1]) == num_q
+                # intensities += cpu_obj.this[1].astype(np.float64)
+                
+
+            if bpg > 0:
                 logger.debug('Sending calculation to GPU device...')
-                bpg = int(bpg)
-                out_obj = gpuscatter.GPUScatter(device_id,
-                                                bpg, qx, qy, qz,
-                                                rx, ry, rz, aid,
-                                                cromermann,
-                                                rand1, rand2, rand3, num_q)
+                gpu_args = (device_id, bpg, qx, qy, qz, rx, ry, rz, aid,
+                            cromermann, rand1[:num_cpu], rand2[:num_cpu], rand3[:num_cpu], num_q)
+                p_gpu = Process(target=multi_helper, args=('gpu', gpu_args))
+                p_gpu.start()
+                procs.append(p_gpu)
+                
+                # gpu_obj = gpuscatter.GPUScatter(device_id,
+                #                                 bpg, qx, qy, qz,
+                #                                 rx, ry, rz, aid,
+                #                                 cromermann,
+                #                                 rand1, rand2, rand3, num_q)
+                
+            # get all the data back from child processes
+            for i in range(len(procs)):
+                multi_output.update( multi_q.get() )
+                
+            # ensure child processes have finished
+            for p in procs:
+                p.join()
+                
+            print multi_output
+                
+            if num_cpu > 0:
+                if 'cpu' not in multi_output.keys():
+                    logger.critical('dict: output has no key `cpu`')
+                    raise RuntimeError('CPU output not found, process did not '
+                                       'terminate properly')
+                cpu_out = multi_output['cpu']
+                assert len(cpu_out) == num_q
+                intensities += cpu_out.astype(np.float64)
+                logger.debug('CPU scattering computation finished')
+                
+            if bpg > 0:
+                if 'gpu' not in multi_output.keys():
+                    logger.critical('dict: output has no key `gpu`')
+                    raise RuntimeError('GPU output not found, process did not '
+                                       'terminate properly')
+                gpu_out = multi_output['gpu']
+                assert len(gpu_out) == num_q
+                intensities += gpu_out.astype(np.float64)
                 logger.debug('Retrived data from GPU.')
-                assert len(out_obj.this[1]) == num_q
-                intensities += out_obj.this[1].astype(np.float64)
-    
+        
     # check for NaNs in output
     if np.isnan(np.sum(intensities)):
         raise RuntimeError('Fatal error, NaNs detected in scattering output!')
