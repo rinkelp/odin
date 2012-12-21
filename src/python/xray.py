@@ -2101,7 +2101,7 @@ def simulate_shot(traj, num_molecules, detector, traj_weights=None,
                 num_cpu = num
                 num_gpu = 0
                 bpg = 0
-                logger.debug('Running CPU-only computation')
+                logger.info('Running CPU-only computation')
             else:
                 num_cpu = num % 512
                 num_gpu = num - num_cpu
