@@ -134,7 +134,7 @@ def ref_simulate_shot(xyzlist, atomic_numbers, num_molecules, q_grid, rfloats=No
     
             I[i] += F.real*F.real + F.imag*F.imag
 
-    I /= float(num_molecules) # normalize
+    # I /= float(num_molecules) # normalize  # TJL got rid of this normalization
     if len(I[I<0.0]) != 0:
         raise Exception('neg values in CPU!')
 
@@ -365,9 +365,7 @@ class TestScatter():
         detector = Detector.generic()
 
         py_I = xray.simulate_shot(traj, num_molecules, detector)
-        
-        # todo: get reference, provide random seed
-
+        #assert not np.all( py_I == 0.0 )
        
 
 if __name__ == '__main__':

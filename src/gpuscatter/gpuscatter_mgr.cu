@@ -118,6 +118,7 @@ GPUScatter::GPUScatter (int device_id_,
     cudaError_t err = cudaSetDevice(device_id);
     if (err != cudaSuccess) {
         printf("Error setting device ID. CUDA error: %s\n", cudaGetErrorString(err));
+        printf("Tried to set device to: %d\n", device_id);
         exit(-1);
     }
 
