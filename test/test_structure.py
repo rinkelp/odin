@@ -29,7 +29,7 @@ def test_rm_com():
         
 def test_multiply_conformations():
     traj = structure.load_coor(ref_file('goldBenchMark.coor'))
-    n_samples = 50
+    n_samples = 100
     otraj = structure.multiply_conformations(traj, n_samples, 0.1)
 
     # iterate over x,y,z and check if any of the bins are more than 2.25 STD from the mean
