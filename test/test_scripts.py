@@ -23,7 +23,7 @@ except ImportError as e:
 # see if we are on Travis CI -- which for whatever reason does not play well with 
 # these tests that use subprocess. todo : find out why and see if we can fix it
 try:
-    if os.environ['TRAVIS'] = 'true':
+    if os.environ['TRAVIS'] == 'true':
         TRAVIS = True
     else:
         TRAVIS = False
