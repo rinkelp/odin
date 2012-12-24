@@ -326,7 +326,7 @@ class TestScatter():
         
         self.ref_I = ref_simulate_shot(self.xyzlist, self.atomic_numbers, 
                                        self.num_molecules, self.q_grid, self.rfloats)
-        
+    @skip    
     def test_gpu_scatter(self):
 
         if not GPU: raise SkipTest
@@ -365,7 +365,7 @@ class TestScatter():
         detector = Detector.generic()
 
         py_I = xray.simulate_shot(traj, num_molecules, detector)
-        #assert not np.all( py_I == 0.0 )
+        assert not np.all( py_I == 0.0 )
        
 
 if __name__ == '__main__':

@@ -8,6 +8,12 @@ from mdtraj import trajectory
 from odin import xray
 from odin.testing import skip, ref_file
 
+MPL = True
+try:
+    import matplotlib
+except:
+    MPL = False
+
 try:
     from odin import gpuscatter
     GPU = True
@@ -41,6 +47,7 @@ class TestShoot(object):
         
         
 def test_plotiq():
+    if not MPL: raise SkipTest
     cmd = 'plotiq -i %s -m 1.0 >& /dev/null' % ref_file('refshot.shot')
     subprocess.check_call(cmd, shell=True)
     if not os.path.exists('intensity_plot.pdf'):
@@ -50,6 +57,7 @@ def test_plotiq():
         
         
 def test_plotcorr():
+    if not MPL: raise SkipTest
     cmd = 'plotcorr -i %s >& /dev/null' % ref_file('refshot.shot')
     subprocess.check_call(cmd, shell=True)
     if not os.path.exists('correlation_plot.pdf'):

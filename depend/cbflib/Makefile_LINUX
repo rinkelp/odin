@@ -388,13 +388,12 @@ SETUP_PY = setup.py
 
 #########################################################
 #
-#  Appropriate compiler definitions for Linux
-#  with gcc version 4.2
+#  Appropriate compiler definitions for default (Linux)
 #
 #########################################################
 CC	= gcc
 C++	= g++
-CFLAGS  = -g -O2 -Wall -D_USE_XOPEN_EXTENDED -fno-strict-aliasing
+CFLAGS  = -g -O2 -Wall -D_USE_XOPEN_EXTENDED -fno-strict-aliasing -fPIC
 F90C = gfortran
 F90FLAGS = -g -fno-range-check
 F90LDFLAGS = 
@@ -430,7 +429,7 @@ GRAPHICS = $(ROOT)/html_graphics
 DATADIRI  = $(ROOT)/../CBFlib_$(VERSION)_Data_Files_Input
 DATADIRO  = $(ROOT)/../CBFlib_$(VERSION)_Data_Files_Output
 DATADIRS  = $(ROOT)/../CBFlib_$(VERSION)_Data_Files_Output_Sigs_Only
-INSTALLDIR  = $(HOME)
+INSTALLDIR  = ./build #$(HOME)
 
 #
 # URLs from which to retrieve the data directories
