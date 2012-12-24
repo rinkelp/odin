@@ -477,7 +477,7 @@ class Detector(Beam):
         
         
     @classmethod
-    def generic(cls, spacing=0.25, lim=50.0, energy=10.0, flux=100.0, l=100.0, 
+    def generic(cls, spacing=1.00, lim=100.0, energy=10.0, flux=100.0, l=50.0, 
                 force_explicit=False):
         """
         Generates a simple grid detector that can be used for testing
