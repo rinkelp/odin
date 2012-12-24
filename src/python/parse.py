@@ -1,12 +1,21 @@
 
 """
-Various parsers.
+Various parsers:
+-- CBF (crystallographic binary format)
+-- CXI (coherent xray imaging format)
 """
 
+import logging
+logging.basicConfig()
+logger = logging.getLogger(__name__)
+logger.setLevel("DEBUG")
 
 import inspect
 import tables
 import re
+import hashlib
+from base64 import b64encode
+
 import numpy as np
 
 import matplotlib.pyplot as plt
@@ -14,6 +23,292 @@ import matplotlib.cm as cm
 
 from odin import xray
 
+
+ENABLE_CBF = True
+try:
+    import pycbf
+except ImportError as e:
+    ENABLE_CBF = False
+    logger.warning('Could not find dependency `pycbf`. Install libcbf and'
+                   ' pycbf. See the ODIN documentation for more details.')
+
+
+class CBF(object):
+    """
+    A class for parsing CBF files. Depends on pycbf, which is a python-SWIG
+    wrapped cbflib.
+    """
+    
+    # --------------------------------------------------------------------------
+    # Warning: Rant Below
+    #
+    # cbflib is a peice of junk. The file format itself, while probably
+    # unnecessary, is fine. The library, however, is unnecessarily convoluted,
+    # obtuse, and painful to use. This should be a straightforward thing, i.e.
+    # load file and be done, but as evidenced in the code below, how to use the
+    # library involves voodoo that is COMPLETELY UNDOCUMENTED, and requires you
+    # to read the fucking C source code to find out what's going on. Whoever
+    # designed this peice of shit is clearly an engineer who needs to learn what
+    # humans are, and how to be a decent person.
+    #
+    # Fortunately, someone SWIG wrapped this mess, which at least makes the
+    # guess-and-check process necessary to use the code faster. Unfortunately
+    # the python version, pycbf, is also completely document/comment free, and
+    # of course it reflects the user-misleading pathologies of the parent 
+    # library.
+    #
+    # I can only pray that the code below works. If you run into problems send
+    # TJ an email at <tjlane@stanford.edu> and we can work together to cut
+    # through the BS.
+    #
+    # Stuff shouldn't be this hard....
+    #
+    # OK, hope you skipped that. Productive code below.
+    # --------------------------------------------------------------------------
+    
+    def __init__(self, filename):
+        logger.info('Reading: %s' % filename)
+        if not ENABLE_CBF:
+            raise ImportError('Require `libcbf` and `pycbf` to parse CBFs')
+        self.filename = filename
+        
+        self._get_header_data()
+        self.intensity_dtype = self._convert_dtype(self._info['X-Binary-Element-Type'])
+        self._get_array_data()
+        
+        # currently disabled, see comment in functoin
+        # if self.md5:
+        #     self._check_md5()
+            
+        logger.debug('loaded file')
+        
+    @property
+    def md5(self):
+        return self._info['Content-MD5']
+        
+    @property
+    def intensities_shape(self):
+        shp = (int(self._info['X-Binary-Size-Second-Dimension']), 
+               int(self._info['X-Binary-Size-Fastest-Dimension']))
+        return shp
+        
+    @property
+    def pixel_size(self):
+        p = self._info['Pixel_size'].split()
+        assert p[1].strip() == p[4].strip()
+        assert p[2].strip() == 'x'
+        return (float(p[0]), float(p[3]))
+        
+    @property
+    def path_length(self):
+        d, unit = self._info['Detector_distance'].split() # assume units are the same for all dims
+        return float(d)
+        
+    @property
+    def wavelength(self):
+        return float(self._info['Wavelength'].split()[0])
+        
+    @property
+    def polarization(self):
+        return float(self._info['Polarization'])
+    
+        
+    def _convert_dtype(self, dtype_str):
+        """
+        Converts `dtype_str`, straight from the cbf file, to the right numpy
+        dtype
+        """
+        
+        # TJL: I'm just guessing the names for most of these....
+        # the cbflib docs are useless!!
+        conversions = {'"signed 32-bit integer"' : np.int32,
+                       '"unsigned 32-bit integer"' : np.uint32,
+                       '"32-bit float"' : np.float32,
+                       '"64-bit float"' : np.float64}
+        
+        try:
+            dtype = conversions[dtype_str]
+        except KeyError as e:
+            raise ValueError('Binary-Element-Type: %s has no know numpy '
+                             'counterpart. Contact the dev team if you believe '
+                             'this is wrong -- it may be an unexpected string.'
+                             % dtype_str)
+        
+        return dtype
+        
+        
+    def _get_header_data(self):
+        """
+        Parse the flat-text header section for all the useful self._info
+        """
+        
+        logger.debug('Reading header info...')
+        
+        self._info = {} # everything gets dumped here
+        f = open(self.filename, 'rb')
+        st = str()
+        lines = list()
+        
+        # read char-by-char until we get to the binary header
+        # the first flat text section has to do with the detector & run params
+        loop_counter = 0 # saftey-check to prevent infinite loops
+        loop_cutoff = int(1e8)
+        
+        while True:
+            st += f.read(1)
+            if st == "--CIF-BINARY-FORMAT-SECTION--\r\n":
+                st = ""
+                break
+            elif st.endswith("\n"):
+                lines.append(st)
+                split = st.strip().split()
+                if len(split) > 0:
+                    if split[0] == "#":
+                        k = split[1].strip().lstrip(':')
+                        self._info[k] = ' '.join(split[2:])
+                st = ""
+            loop_counter += 1
+            if loop_counter > loop_cutoff:
+                raise RuntimeError('No break from parse loop -- file corrupted!')
+
+        # there is a second flat-text section that describes the binary data
+        logger.debug("Reading binary header")
+        loop_counter = 0
+        st = ""
+        
+        while True:
+            st += f.read(1)
+            if (st == "\r\n"): # or (st == "\r") or (st == "\n"):
+                break
+            elif st.endswith("\n"): # or st.endswith("\r"):
+                lines.append(st)
+                split = st.strip().split(':')
+                if len(split) == 2:
+                    try:
+                        self._info[split[0].strip()] = int(split[1])
+                    except:
+                        self._info[split[0].strip()] = split[1].strip()
+                st = ""
+            if loop_counter > loop_cutoff:
+                raise RuntimeError('No break from parse loop -- file corrupted!')
+
+        f.close()
+        return
+
+        
+    def _get_array_data(self):
+        """
+        Finds the numerical data in the CBF file and injects it into intensities.
+        Uses libcbf & pycbf to parse this info.
+        """
+        
+        logger.debug('Reading binary intensities...')
+        
+        # `_handle` is the c-struct object that holds all the CBF-file info
+        self._handle = pycbf.cbf_handle_struct()
+        self._handle.read_file(self.filename, pycbf.MSG_DIGEST)
+        self._handle.rewind_datablock()
+        
+        # some cbflib voodoo...
+        self._n_blocks = self._handle.count_datablocks()
+        self._handle.select_datablock(0)
+        self._block_name = self._handle.datablock_name()
+        logger.debug('Selected block %d, %s' % (0, self._block_name))
+        
+        self._handle.rewind_category()
+        self.n_categories = self._handle.count_categories()
+        
+        # I believe each "category" may contain a different image
+        # todo dblchk
+        for i in range(self.n_categories):
+            
+            self._handle.select_category(i)
+            category_name = self._handle.category_name()
+            logger.debug("Reading category %d, %s" % (i, category_name))
+
+            n_rows = self._handle.count_rows()
+            if n_rows > 1:
+                logger.warning("More than one `row` in CBF, parsing first only...")
+            elif n_rows == 0:
+                raise RuntimeError('No rows in CBF! Cannot parse.')
+                
+            n_cols = self._handle.count_columns()
+            logger.debug("rows/cols: %d/%d" % (n_rows, n_cols))
+
+            # step through each "column", I don't even know what those are...
+            self._handle.rewind_column()
+            while True:
+                logger.debug("column: %s" % self._handle.column_name())
+                try:
+                   self._handle.next_column()
+                except:
+                   break
+                
+            for k in range(n_cols):
+                col_name = self._handle.column_name()
+                self._handle.select_column(k)
+                
+                typeofvalue = self._handle.get_typeofvalue()
+                logger.debug("col: %d, name: %s, type: %s" % (k, col_name, typeofvalue))
+
+                if typeofvalue.find("bnry") > -1:
+                    logger.debug("Found binary data")
+                    try:
+                        s = self._handle.get_integerarray_as_string()
+                    except AttributeError as e:
+                        logger.critical("ERROR: %s" % e)
+                        raise AttributeError('CBF PARSE ERROR: Could not find intensity data in file!')
+                    d = np.fromstring(s, dtype=self.intensity_dtype)
+                    self.intensities = d.reshape(*self.intensities_shape) # (slow, fast)
+                else:
+                    pass
+                    #value = self._handle.get_value()
+                    #logger.debug("column value: %s", str(value))
+
+                        
+    def _check_md5(self):
+        """
+        Check the data are intact by computing the md5 checksum of the binary
+        data, and comparing it to an analagous md5 computed when the file was
+        generated.
+        """
+        
+        # This is a cute idea but I have no idea what data the md5 is performed
+        # on, or how to retrieve that data from the file. This function is
+        # currently broken (close to working)
+        
+        md5 = hashlib.md5()
+        md5.update(self.intensities.flatten().tostring()) # need to feed correct data in here...
+        data_md5 = b64encode(md5.digest())
+        if not md5.hexdigest() == self.md5:
+            logger.critical("Data MD5:    %s" % data_md5)
+            logger.critical("Header MD5:  %s" % self.md5)
+            raise RuntimeError('Data and stored md5 hashes do not match! Data corrupted.')
+            
+            
+    def as_shot(self):
+        """
+        Convert the CBF file to an ODIN shot representation.
+        
+        Returns
+        -------
+        cbf : odin.xray.Shot
+            The CBF file as an ODIN shot.
+        """
+        
+        # grid_list = (basis, shape, corner)
+        # todo : do we need to center the image, changing corner?
+        basis  = tuple( list(self.pixel_size) + [0.0] )
+        shape  = tuple( list(self.intensities_shape) + [1] ) # add z dim
+        corner = (0.0, 0.0, 0.0)
+        grid_list = [(basis, shape, corner )]
+        
+        b = xray.Beam(wavelength=self.wavelength, flux=100)
+        d = xray.Detector.from_basis(grid_list, self.path_length, b.k)
+        s = xray.Shot(self.intensities.flatten().astype(np.float64), d)
+        
+        return s
+        
 
 class CXI(object):
     """
