@@ -18,9 +18,6 @@ from base64 import b64encode
 
 import numpy as np
 
-import matplotlib.pyplot as plt
-import matplotlib.cm as cm
-
 from odin import xray
 
 
