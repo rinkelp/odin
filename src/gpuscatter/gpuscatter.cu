@@ -177,7 +177,7 @@ void __global__ kernel(float const * const __restrict__ q_x,
                 Qsum.y += fi*__cosf(qr);
             } // finished one molecule.
             
-            float fQ = (Qsum.x*Qsum.x + Qsum.y*Qsum.y) / numRotations;  
+            float fQ = (Qsum.x*Qsum.x + Qsum.y*Qsum.y); // / numRotations;  
             sdata[tid] = fQ;
             __syncthreads();
 
