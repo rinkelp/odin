@@ -102,7 +102,7 @@ void kernel( float const * const __restrict__ q_x,
         generate_random_quaternion(rand1, rand2, rand3, q0, q1, q2, q3);
 
         // for each q vector
-        #pragma omp parallel for shared(outQ, q0, q1, q2, q3)
+        // #pragma omp parallel for shared(outQ, q0, q1, q2, q3)
         for( int iq = 0; iq < nQ; iq++ ) {
             float qx = q_x[iq];
             float qy = q_y[iq];
@@ -155,8 +155,8 @@ void kernel( float const * const __restrict__ q_x,
             } // finished one molecule.
                         
             // add the output to the total intensity array
-            #pragma omp critical
-                outQ[iq] += (Qsumx*Qsumx + Qsumy*Qsumy) / n_rotations;
+            // #pragma omp critical
+            outQ[iq] += (Qsumx*Qsumx + Qsumy*Qsumy); // / n_rotations;
             
             // discrete photon statistics will go here, if implemented 
             // we'll need a different array to accumulate the results of each
