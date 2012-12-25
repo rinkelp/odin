@@ -650,6 +650,28 @@ class Detector(Beam):
         return d
 
 
+class ImageCenter(object):
+    """
+    A class that provides methods for finding the center and corners of an image.
+    """
+        
+    def __init__(self, intensities, intensities_shape=None):
+        return
+        
+        
+    def _find_center(self):
+        return
+        
+        
+    @property
+    def center(self):
+        return
+        
+    @property
+    def corner(self):
+        return
+
+
 class ImageFilter(object):
     """
     A pre-processor class that provides a set of 'filters' that generally
@@ -659,7 +681,6 @@ class ImageFilter(object):
         -- removing `hot` outlier pixels   (hot_pixels)
         -- correcting for polarization     (polarization)
         -- remove edges around ASICs       (mask_edges)
-        -- centering the data              (center)
         
     The way this class works is that you generate an ImageFilter object, 'turn
     on' the features from the list above you want, and then apply that filter
@@ -693,8 +714,7 @@ class ImageFilter(object):
     # Also don't forget to add your method to the self.apply() method, which
     # checks self._methods_to_apply for what to do.
         
-    def __init__(self, abs_std=None, polarization=None, edge_pixels=None, 
-                 center=False):
+    def __init__(self, abs_std=None, polarization=None, edge_pixels=None):
         """
         Initialize an image filter. Optional kwargs initialize the filter with
         some standard filters activated. Otherwise, you have to turn each filter
@@ -712,10 +732,6 @@ class ImageFilter(object):
         edge_pixels : int
             Filters this number of pixels around the border of each detector
             ASIC. ASICs are detected automatically.
-        
-        center : bool
-            Center the data, placing the origin where the beam would hit the
-            detector.
         """
         
         self._methods_to_apply = list()
@@ -756,7 +772,7 @@ class ImageFilter(object):
                 raise ValueError('Array `intensities` must be two-dimensional'
                                  ' or `intensities_shape` should be supplied.')
         
-        mask = np.zeros(intensities.shape, np.dtype=np.bool) # initialize mask
+        mask = np.zeros(intensities.shape, dtype=np.bool) # initialize mask
         
         # iterate through each possible filter method, and if it's called for
         # apply it
@@ -769,10 +785,7 @@ class ImageFilter(object):
         
         if 'mask_edges' in self._methods_to_apply:
             intensities, mask = self._apply_mask_edges(intensities, mask)
-            
-        if 'center' in self._methods_to_apply:
-            intensities = self._apply_center(intensities)
-        
+
         return filtered_intensities, mask
         
         
@@ -809,12 +822,15 @@ class ImageFilter(object):
         polarization_factor : float
             
         """
+        
         # TJL todo : is passing a detector really the best way (most user 
         # friendly) to do this?
+        
         self._thetas = detector.polar[:,1].copy() / 2.0 # this is the crystallographic theta
         self._phis   = detector.polar[:,2].copy()
         self._polarization_factor = polarization_factor
         self._methods_to_apply.append('polarization')
+        
         return
         
         
@@ -843,29 +859,11 @@ class ImageFilter(object):
         self._num_pixels = num_pixels
         self._methods_to_apply.append('mask_edges')
         return
-    
-    
+        
+        
     def _apply_mask_edges(self, i, mask):
         """
         Apply the edge mask filter to `i`
-        """
-        # todo
-        return
-        
-
-    def center(self):
-        """
-        Center the data, placing the origin where the beam would hit the 
-        detector. Performs this by locating a strong bragg ring and putting
-        the origin in the middle. Calling this method turns on the filter.
-        """
-        self._methods_to_apply.append('center')
-        return
-        
-        
-    def _apply_center(self, i):
-        """
-        Apply the center filter to `i`
         """
         # todo
         return
