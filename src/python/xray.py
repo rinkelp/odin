@@ -648,6 +648,227 @@ class Detector(Beam):
         hdf = io.loadh(filename)
         d = Detector._from_serial(hdf['detector'])        
         return d
+
+
+class ImageFilter(object):
+    """
+    A pre-processor class that provides a set of 'filters' that generally
+    improve the x-ray image data. The complete list of possibilities includes,
+    along with the function name that implements that functionality in (.):
+        
+        -- removing `hot` outlier pixels   (hot_pixels)
+        -- correcting for polarization     (polarization)
+        -- remove edges around ASICs       (mask_edges)
+        -- centering the data              (center)
+        
+    The way this class works is that you generate an ImageFilter object, 'turn
+    on' the features from the list above you want, and then apply that filter
+    to some raw intensity data.
+    
+    Example
+    -------
+    >>> if = ImageFilter()          # initialize class
+    >>> if.hot_pixels(abs_std=3.0)  # mask pixels more than 3 STD from the mean
+    >>> if.polarization(0.99)       # remove polarization
+    >>>
+    >>> # now apply the filter to some data
+    >>> new_intensities1, mask1 = if.apply(intensities1)
+    >>> new_intensities2, mask2 = if.apply(intensities2)
+        
+    For ease, the ImageFilter initialization method also takes kwargs that
+    instantiate a class with some filters already applied. Eg. the above filter
+    is equivalent to
+        
+    >>> if = ImageFilter(abs_std=3.0, polarization=0.99)
+    """
+        
+    # Note to programmer: here is how this class works. Each method consists
+    # of two parts, one public that "turns on" the method for the filter
+    # and one private that is called _apply_<filtername> that actually does
+    # the calcuation that makes the filter happen. The public method should
+    # store all necessary parameters as private attributes, append its name
+    # as a string to self._methods_to_apply. The private method should use
+    # those parameters and do the calculation.
+    #
+    # Also don't forget to add your method to the self.apply() method, which
+    # checks self._methods_to_apply for what to do.
+        
+    def __init__(self, abs_std=None, polarization=None, edge_pixels=None, 
+                 center=False):
+        """
+        Initialize an image filter. Optional kwargs initialize the filter with
+        some standard filters activated. Otherwise, you have to turn each filter
+        on one-by-one.
+        
+        Optional Parameters
+        -------------------
+        abs_std : float
+            Filter out any pixel that is further than `abs_std` * STD from the
+            mean (i.e. this an n-sigma cutoff).
+        
+        polarization : float
+            The polarization factor to apply to the data.
+        
+        edge_pixels : int
+            Filters this number of pixels around the border of each detector
+            ASIC. ASICs are detected automatically.
+        
+        center : bool
+            Center the data, placing the origin where the beam would hit the
+            detector.
+        """
+        
+        self._methods_to_apply = list()
+        
+        # parse the kwargs and turn them into filters
+        if abs_std:
+            self.hot_pixels(abs_std)
+        if polarization:
+            self.polarization(polarization)
+        if edge_pixels:
+            self.mask_edges(edge_pixels)
+        if center:
+            self.center
+            
+        return
+        
+        
+    def apply(self, intensities, intensities_shape=None):
+        """
+        Apply the `ImageFilter` to `intensities`.
+        
+        Parameters
+        ----------
+        intensities : ndarray, float
+            The intensity data.
+        
+        Optional Parameters
+        -------------------
+        intensities_shape : two-tuple
+            The shape of the intensities (a 2-d array). If passed, the
+            intensities array will be re-shaped to this shape.
+        """
+        
+        if intensities_shape != None:
+            intensities = intensities.flatten().reshape( intensities_shape )
+        else:
+            if len(intensities) != 2:
+                raise ValueError('Array `intensities` must be two-dimensional'
+                                 ' or `intensities_shape` should be supplied.')
+        
+        mask = np.zeros(intensities.shape, np.dtype=np.bool) # initialize mask
+        
+        # iterate through each possible filter method, and if it's called for
+        # apply it
+                                 
+        if 'hot_pixels' in self._methods_to_apply:
+            intensities, mask = self._apply_hot_pixels(intensities, mask)
+        
+        if 'polarization' in self._methods_to_apply:
+            intensities = self._apply_polarization(intensities)
+        
+        if 'mask_edges' in self._methods_to_apply:
+            intensities, mask = self._apply_mask_edges(intensities, mask)
+            
+        if 'center' in self._methods_to_apply:
+            intensities = self._apply_center(intensities)
+        
+        return filtered_intensities, mask
+        
+        
+    def hot_pixels(self, abs_std=3.0):
+        """
+        Filter out any pixel that is further than `abs_std` * STD from the
+        mean (i.e. this an n-sigma cutoff).
+        
+        Parameters
+        ----------
+        abs_std : float
+            The STD multiplication factor that sets the strength of the filter
+        """
+        self._abs_std = abs_std
+        self._methods_to_apply.append('hot_pixels')
+        return
+        
+        
+    def _apply_hot_pixels(self, i, mask):
+        """
+        Apply the hot pixel filter to `i`
+        """
+        cutoff = self._abs_std * i.std()
+        mask[ np.abs(i - i.mean()) > cutoff ] = np.bool(True)
+        return i, mask
+        
+        
+    def polarization(self, polarization_factor, detector):
+        """
+        Remove the effects of beam polarization on the detected intensities.
+        
+        Parameters
+        ----------
+        polarization_factor : float
+            
+        """
+        # TJL todo : is passing a detector really the best way (most user 
+        # friendly) to do this?
+        self._thetas = detector.polar[:,1].copy() / 2.0 # this is the crystallographic theta
+        self._phis   = detector.polar[:,2].copy()
+        self._polarization_factor = polarization_factor
+        self._methods_to_apply.append('polarization')
+        return
+        
+        
+    def _apply_polarization(self, i, mask):
+        """
+        Apply the polarization filter to `i`
+        """
+        # todo dbl chk math
+        cf  = ( self._polarization_factor )       * ( 1.0 - np.power( np.sin(self._thetas) * np.cos(self._phis), 2 ))
+        cf += ( 1.0 - self._polarization_factor ) * ( 1.0 - np.power( np.sin(self._thetas) * np.sin(self._phis), 2 ))
+        cf.reshape(i.shape)
+        i /= cf    
+        return i
+
+        
+    def mask_edges(self, num_pixels):
+        """
+        Mask the edges of each ASIC, to a width of `num_pixels`. These pixels
+        are sometimes likely to spike.
+        
+        Parameters
+        ----------
+        num_pixels : int
+            The width of the border around each ASIC to mask, in pixel units.
+        """
+        self._num_pixels = num_pixels
+        self._methods_to_apply.append('mask_edges')
+        return
+    
+    
+    def _apply_mask_edges(self, i, mask):
+        """
+        Apply the edge mask filter to `i`
+        """
+        # todo
+        return
+        
+
+    def center(self):
+        """
+        Center the data, placing the origin where the beam would hit the 
+        detector. Performs this by locating a strong bragg ring and putting
+        the origin in the middle. Calling this method turns on the filter.
+        """
+        self._methods_to_apply.append('center')
+        return
+        
+        
+    def _apply_center(self, i):
+        """
+        Apply the center filter to `i`
+        """
+        # todo
+        return
         
         
 class Shot(object):
