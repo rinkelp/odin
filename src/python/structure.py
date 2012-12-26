@@ -13,7 +13,7 @@ from mdtraj import trajectory
 from mdtraj.topology import Topology
 from mdtraj.pdb.element import Element
 
-from odin.data import periodic_table
+from odin.refdata import periodic_table
 
 import logging
 logger = logging.getLogger(__name__)
