@@ -17,10 +17,10 @@ import numpy as np
 from scipy import interpolate, fftpack
 
 from odin import utils
-from odin import stats
+from odin import math
 from odin import cpuscatter
 from odin.bcinterp import Bcinterp
-from odin.data import cromer_mann_params
+from odin.refdata import cromer_mann_params
 
 from mdtraj import trajectory, io
 
@@ -1921,7 +1921,7 @@ class Shotset(Shot):
     	    n_inter=n_shots
 	    	
     	interCors = []
-    	for s1,s2 in stats.randPairs(n_shots,n_inter):
+    	for s1,s2 in math.rand_pairs(n_shots,n_inter):
     	    shot1 = shots[s1]
     	    shot2 = shots[s2]
     	    I1 = shot1.I_ring(q1)

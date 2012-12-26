@@ -326,7 +326,7 @@ class TestScatter():
         
         self.ref_I = ref_simulate_shot(self.xyzlist, self.atomic_numbers, 
                                        self.num_molecules, self.q_grid, self.rfloats)
-    @skip    
+    
     def test_gpu_scatter(self):
 
         if not GPU: raise SkipTest

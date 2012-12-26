@@ -8,7 +8,7 @@ import warnings
 from nose import SkipTest
 
 from odin import xray, utils
-from odin.testing import skip, ref_file, gputest
+from odin.testing import skip, ref_file, expected_failure
 from mdtraj import trajectory, io
 
 try:
@@ -318,7 +318,7 @@ class TestShot():
         assert_array_almost_equal(qs, ind_code)                
         assert_allclose(p, p_code, rtol=1)
     
-    @skip
+    @expected_failure
     def test_correlation(self):
         
         # todo
@@ -358,9 +358,9 @@ class TestShot():
             ref = np.sum(x*y) / (n * x.std() * y.std())
         
             ans = self.shot.correlate(q1, q2, delta)        
-            assert_almost_equal(ans, ref, decimal=1)
+            assert_almost_equal(ans, ref, decimal=6)
         
-    @skip
+    @expected_failure
     def test_corr_ring(self):
                 
         # -------------------------------------------------------------------- #
