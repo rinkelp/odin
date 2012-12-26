@@ -16,8 +16,7 @@ from multiprocessing import Process, Queue
 import numpy as np
 from scipy import interpolate, fftpack
 
-from odin import utils
-from odin import math
+from odin.math import arctan3, rand_pairs, smooth
 from odin import cpuscatter
 from odin.bcinterp import Bcinterp
 from odin.refdata import cromer_mann_params
@@ -471,7 +470,7 @@ class Detector(Beam):
         
         polar[:,0] = self._norm(vector)
         polar[:,1] = np.arccos(vector[:,2] / (polar[:,0]+1e-16)) # cos^{-1}(z/r)
-        polar[:,2] = utils.arctan3(vector[:,1], vector[:,0])     # y first!
+        polar[:,2] = arctan3(vector[:,1], vector[:,0])     # y first!
         
         return polar
         
@@ -1427,7 +1426,7 @@ class Shot(object):
         
         # first, smooth; then, find local maxima based on neighbors
         intensity = self.intensity_profile()
-        a = utils.smooth(intensity[:,1], beta=smooth_strength)
+        a = smooth(intensity[:,1], beta=smooth_strength)
         maxima = np.where(np.r_[True, a[1:] > a[:-1]] & np.r_[a[:-1] > a[1:], True] == True)[0]
         
         return maxima
@@ -1921,7 +1920,7 @@ class Shotset(Shot):
     	    n_inter=n_shots
 	    	
     	interCors = []
-    	for s1,s2 in math.rand_pairs(n_shots,n_inter):
+    	for s1,s2 in rand_pairs(n_shots,n_inter):
     	    shot1 = shots[s1]
     	    shot2 = shots[s2]
     	    I1 = shot1.I_ring(q1)
