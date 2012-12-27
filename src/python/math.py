@@ -8,7 +8,9 @@ Various mathematical functions and operations.
 import logging
 logging.basicConfig()
 logger = logging.getLogger(__name__)
-logger.setLevel("DEBUG")
+
+import multiprocessing as mp
+from utils import parmap
 
 import numpy as np
 from random import randrange, seed
@@ -26,7 +28,7 @@ class CircularHough(object):
     well done! (https://gitorious.org/hough-circular-transform)
     """
     
-    def __init__(self, radii=10, threshold=0.001, stencil_width=1):
+    def __init__(self, radii=10, threshold=0.001, stencil_width=1, procs='all'):
         """
         Initialize the class.
         
@@ -47,6 +49,10 @@ class CircularHough(object):
             image features against. Bigger stencil yields less accurate results,
             but may allow more features to be found with fewer radii value
             evaluations.
+            
+        procs : int or str('all')
+            The number of processors to run in parallel on. If set to 'all'
+            (default), uses all available processors.
         """
         
         self.radii_parameter = radii
@@ -54,6 +60,14 @@ class CircularHough(object):
         self._stencil_width = stencil_width
         self.edge_list = []
         
+        # deal with the parallel settings
+        if procs == 'all':
+            self._procs = mp.cpu_count()
+        elif type(procs) == int:
+            self._procs = procs
+        else:
+            raise ValueError('Argument procs must be type int or str `all`')
+            
         return
         
        
@@ -91,7 +105,7 @@ class CircularHough(object):
         self.edge_list = np.array(temp_image.nonzero())
         
         self.density = float(self.edge_list[0].size)/temp_image.size
-        logger.debug("Singal density: %f" % self.density)
+        logger.debug("Signal density: %f" % self.density)
             
         self.accumulator = self._fft_Hough(temp_image)
             
@@ -163,7 +177,7 @@ class CircularHough(object):
         ----------
         edge_image : ndarray, 
             The image, pre-filtered to find edges by an appropriate algorithm.
-            
+                        
         Returns
         -------
         acc : ndarray, float
@@ -172,15 +186,39 @@ class CircularHough(object):
         """
 
         logger.debug("Using fft-method...")
-
+        
         radii = self.radii
-        acc = np.zeros( (radii.size, edge_image.shape[0], edge_image.shape[1]) )
-
-        # todo : parallelize loop
-        for i, r in enumerate(radii):
+        n_radii = len(self.radii)
+        
+        def compute_conv(i):
+            """
+            Multiprocessing helper function, computes the FFT-convolution and
+            inserts the result into the accumulator array. Should be threadsafe.
+            """
+            r = radii[i]
             C = self._get_circle(r, self._stencil_width)
-            acc[i,:,:] = fftconvolve(edge_image, C, 'same')
-    
+            result = fftconvolve(edge_image, C, 'same')
+            acc[i*result.size:(i+1)*result.size] = result.flatten()
+            return 0
+            
+        # if running in serial mode...
+        if self._procs == 1:
+            logger.debug('Running serial convolution loop...')
+            acc = np.zeros( (radii.size, edge_image.shape[0], edge_image.shape[1]) )
+            for i in range(n_radii):
+                C = self._get_circle(radii[i], self._stencil_width)
+                acc[i,:,:] = fftconvolve(edge_image, C, 'same')
+                
+        # else execute the parallel map
+        else:
+            acc = mp.Array( 'd', [0.0]*(radii.size * edge_image.shape[0] * edge_image.shape[1]) )
+            logger.debug('launching parallel processes')            
+            out = parmap( compute_conv, range(n_radii) )
+            if not out == [0] * n_radii:
+                raise RuntimeError('Process error in parallel execution of _fft_Hough()')
+                
+            acc = np.array(acc).reshape(radii.size, edge_image.shape[0], edge_image.shape[1])
+            
         return acc
         
 
