@@ -25,31 +25,10 @@ class CircularHough(object):
     well done! (https://gitorious.org/hough-circular-transform)
     """
     
-    def __init__(self, radii=None, threshold=None, stencil_width=None):
+    def __init__(self, radii=10, threshold=1e-4, stencil_width=1):
         """
         Initialize the class.
-        """
-        self.radii = radii
-        self._threshold = threshold
-        self._stencil_width = stencil_width
-        self.edge_list = []
         
-       
-    def __call__(self, image, radii=10, threshold=1e-4, stencil_width=1,
-                 concentric=False):
-        """
-        Find circles in an image, using  the Circular Hough Transform (CHT).
-        
-        This function returns circle objects parameterized by their
-        (radius, x_location, y_location). It should be fairly robust to noise,
-        and provides some parameters for improving results in low or high
-        noise environments.
-
-        Parameters
-        ----------
-        image : ndarray, float
-            A matrix representing the image.
-
         radii : int OR list/ndarray of floats
             The radii at which to scan for circles. If an integer, will compute
             that number of equally spaced radii for the image -- a higher number
@@ -67,6 +46,36 @@ class CircularHough(object):
             image features against. Bigger stencil yields less accurate results,
             but may allow more features to be found with fewer radii value
             evaluations.
+        """
+        
+        if type(radii) == int:
+            self.radii = self._compute_radii(radii)
+        elif (type(radii) == list) or (type(radii) == np.ndarray):
+            self.radii = np.array(radii)
+        else:
+            raise ValueError('Argument `radii` must be {int, list, np.ndarray}')
+        
+        self.radii = radii
+        self._threshold = threshold
+        self._stencil_width = stencil_width
+        self.edge_list = []
+        
+        return
+        
+       
+    def __call__(self, image, concentric=False):
+        """
+        Find circles in an image, using  the Circular Hough Transform (CHT).
+        
+        This function returns circle objects parameterized by their
+        (radius, x_location, y_location). It should be fairly robust to noise,
+        and provides some parameters for improving results in low or high
+        noise environments.
+
+        Parameters
+        ----------
+        image : ndarray, float
+            A matrix representing the image.
             
         concentric : bool
             If the image consists of concentric circles, and you just want to
@@ -84,15 +93,6 @@ class CircularHough(object):
         """
         
         self._image_shape = image.shape
-        
-        if type(radii) == int:
-            self.radii = self._compute_radii(radii)
-        elif (type(radii) == list) or (type(radii) == np.ndarray):
-            self.radii = np.array(radii)
-        else:
-            raise ValueError('Argument `radii` must be {int, list, np.ndarray}')
-        
-        self.__init__(self.radii, threshold, stencil_width)
         self._assert_sanity()
         
         temp_image = self._find_edges(image)

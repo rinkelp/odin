@@ -16,7 +16,7 @@ try:
 except ImportError as e:
     GPU = False
 
-from odin.data import cromer_mann_params
+from odin.refdata import cromer_mann_params
 from odin import xray
 from odin import cpuscatter
 from odin.xray import Detector
