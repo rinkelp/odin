@@ -8,6 +8,7 @@ Various mathematical functions and operations.
 import logging
 logging.basicConfig()
 logger = logging.getLogger(__name__)
+logger.setLevel("DEBUG")
 
 import multiprocessing as mp
 from utils import parmap
@@ -15,9 +16,14 @@ from utils import parmap
 import numpy as np
 from random import randrange, seed
 
-from scipy.signal import fftconvolve, convolve2d, correlate2d
-from scipy.ndimage import filters
+from scipy.signal import fftconvolve, fftconvolve, correlate2d
+from scipy.ndimage import filters, morphology
 from scipy import ndimage
+
+
+import numpy as np
+import scipy.ndimage.filters as filters
+import scipy.ndimage.morphology as morphology
 
 
 class CircularHough(object):
@@ -28,7 +34,7 @@ class CircularHough(object):
     well done! (https://gitorious.org/hough-circular-transform)
     """
     
-    def __init__(self, radii=10, threshold=0.001, stencil_width=1, procs='all'):
+    def __init__(self, radii=10, threshold=0.01, stencil_width=1, procs='all'):
         """
         Initialize the class.
         
@@ -99,21 +105,22 @@ class CircularHough(object):
         """
         
         self._image_shape = image.shape
+        self.mode = mode.lower()
         self._assert_sanity()
         
-        temp_image = self._find_edges(image)
-        self.edge_list = np.array(temp_image.nonzero())
+        image = self._find_edges(image)
+        self.edge_list = np.array(image.nonzero())
         
-        self.density = float(self.edge_list[0].size)/temp_image.size
+        self.density = float(self.edge_list[0].size)/image.size
         logger.debug("Signal density: %f" % self.density)
             
-        self.accumulator = self._fft_Hough(temp_image)
+        self.accumulator = self._fft_Hough(image)
             
-        if mode.lower() == 'all':
+        if self.mode == 'all':
             result = self._accumulator_maxima()
-        elif mode.lower() == 'sharpest':
+        elif self.mode == 'sharpest':
             result = self._global_accumulator_maxima()
-        elif mode.lower() == 'concentric':
+        elif self.mode == 'concentric':
             result = self._concentric_maxima()
         else:
             raise ValueError("Argument `mode` must be one of {'all', 'sharpest', 'concentric'}")
@@ -184,6 +191,11 @@ class CircularHough(object):
             The Hough accumulator. The first dimension of this array is the
             accumulator for each radius evaluated.
         """
+        
+        # NOTE to the programmer : in what follows, we make some checks to see
+        # if the mode is concentric. If mode == 'concentric', then we add
+        # the signal from each value of radii into a single array. This helps
+        # save a lot of memory.
 
         logger.debug("Using fft-method...")
         
@@ -198,26 +210,48 @@ class CircularHough(object):
             r = radii[i]
             C = self._get_circle(r, self._stencil_width)
             result = fftconvolve(edge_image, C, 'same')
-            acc[i*result.size:(i+1)*result.size] = result.flatten()
+        
+            if self.mode == 'concentric':
+                acc[:] += result.flatten()
+            else:
+                acc[i*result.size:(i+1)*result.size] = result.flatten()
             return 0
             
         # if running in serial mode...
         if self._procs == 1:
             logger.debug('Running serial convolution loop...')
-            acc = np.zeros( (radii.size, edge_image.shape[0], edge_image.shape[1]) )
+            
+            if self.mode == 'concentric':
+                acc = np.zeros( (edge_image.shape[0], edge_image.shape[1]) )
+            else:
+                acc = np.zeros( (radii.size, edge_image.shape[0], edge_image.shape[1]) )
+            
             for i in range(n_radii):
                 C = self._get_circle(radii[i], self._stencil_width)
-                acc[i,:,:] = fftconvolve(edge_image, C, 'same')
+                if self.mode == 'concentric':
+                    acc += fftconvolve(edge_image, C, 'same')
+                else:
+                    acc[i,:,:] = fftconvolve(edge_image, C, 'same')
                 
         # else execute the parallel map
         else:
-            acc = mp.Array( 'd', [0.0]*(radii.size * edge_image.shape[0] * edge_image.shape[1]) )
-            logger.debug('launching parallel processes')            
-            out = parmap( compute_conv, range(n_radii) )
+            logger.debug('Running parallel (%d procs) convolution loop...' % self._procs)
+            
+            if self.mode == 'concentric':
+                acc = mp.Array('d', [0.0]*(edge_image.shape[0] * edge_image.shape[1]) )
+            else:
+                acc = mp.Array('d', [0.0]*(radii.size * edge_image.shape[0] * edge_image.shape[1]) )
+            
+            out = parmap( compute_conv, range(n_radii), procs=self._procs )
+            
             if not out == [0] * n_radii:
+                print "Parallel process return codes:", out
                 raise RuntimeError('Process error in parallel execution of _fft_Hough()')
-                
-            acc = np.array(acc).reshape(radii.size, edge_image.shape[0], edge_image.shape[1])
+            
+            if self.mode == 'concentric':
+                acc = np.array(acc).reshape(edge_image.shape[0], edge_image.shape[1])
+            else:    
+                acc = np.array(acc).reshape(radii.size, edge_image.shape[0], edge_image.shape[1])
             
         return acc
         
@@ -250,6 +284,9 @@ class CircularHough(object):
         small_circle = template < (r - w)**2
         stencil = (large_circle - small_circle).astype(np.int8)
         
+        logger.debug("Created circle, radius %f, size (%d,%d)" % (r, stencil.shape[0],
+                                                                  stencil.shape[1]))
+        
         return stencil
         
 
@@ -261,24 +298,23 @@ class CircularHough(object):
         image -= image.min()
 
         image = image > image.max() * self._threshold
-
-        # if self._threshold > 0:
-        #     image = np.where(image > image.max()*self._threshold, image, 0)
         
         return image 
         
         
-    def _accumulator_maxima(self, neighborhood_size=100, threshold=200):
+    def _accumulator_maxima(self, neighborhood_size=100):
         """
         Search the accumulator for maxima.
         """
         
+        radii = self.radii
+        
         data_max = filters.maximum_filter(self.accumulator, neighborhood_size)
         maxima = (self.accumulator == data_max)
         data_min = filters.minimum_filter(self.accumulator, neighborhood_size)
-        diff = ((data_max - data_min) > threshold)
+        diff = ( ((data_max - data_min)/data_max) > self._threshold)
         maxima[diff == 0] = 0
-
+        
         labeled, num_objects = ndimage.label(maxima)
         logger.debug("Found: %d maxima" % num_objects)
         
@@ -288,7 +324,9 @@ class CircularHough(object):
             x_center = int( (dx.start + dx.stop - 1)/2 )
             y_center = int( (dy.start + dy.stop - 1)/2 )
             z_center = int( (dz.start + dz.stop - 1)/2 )
-            max_points.append((x_center, y_center, z_center))
+            # for some reason, the axes are swapped
+            # note that these returned values are the *indices*
+            max_points.append((radii[y_center], x_center, z_center))
             
         return max_points
         
@@ -315,7 +353,7 @@ class CircularHough(object):
 
         # identify the max radius/coordinate combo
         max_index = np.unravel_index(self.accumulator.argmax(), self.accumulator.shape)
-        max_coordaintes = (self.radii[max_index[0]], max_index[2], max_index[1])
+        max_coordaintes = (self.radii[max_index[0]], int(max_index[2]), int(max_index[1]))
         
         return max_coordaintes
         
@@ -335,8 +373,7 @@ class CircularHough(object):
             The indices of the image estimated to be the center of the
             concentric rings.
         """
-        flat_acc = self.accumulator.sum(axis=0) # sum over radial dim
-        max_index = np.unravel_index(flat_acc.argmax(), flat_acc.shape)
+        max_index = np.unravel_index(self.accumulator.argmax(), self.accumulator.shape)
         return max_index[::-1] # have to swap indices
         
 
