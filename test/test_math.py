@@ -56,6 +56,7 @@ class TestHough(object):
         cbf = parse.CBF("reference/test1.cbf")
         image = cbf.intensities.reshape( cbf.intensities_shape )
         CM = om.CircularHough(radii=np.arange(70,95,3))
-        maximum = CM(self.image, mode='concentric')
+        center = CM(self.image, mode='concentric')
+        
         
         

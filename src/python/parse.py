@@ -8,7 +8,6 @@ Various parsers:
 import logging
 logging.basicConfig()
 logger = logging.getLogger(__name__)
-logger.setLevel("DEBUG")
 
 import inspect
 import tables
@@ -19,7 +18,7 @@ from base64 import b64encode
 import numpy as np
 
 from odin import xray
-
+from odin.math import CircularHough
 
 ENABLE_CBF = True
 try:
@@ -108,7 +107,23 @@ class CBF(object):
     @property
     def polarization(self):
         return float(self._info['Polarization'])
-    
+        
+    @property
+    def center(self):
+        """
+        The indicies of the pixel nearest the center
+        """
+        if not hasattr(self, 'center'):
+            self._center = self._find_center()
+        return self._center
+        
+    @property
+    def corner(self):
+        """
+        The bottom left corner position, in real space.
+        """
+        #return (self.pixel_size[0] * self.center[0], self.pixel_size[1] * self.center[1])
+        return (0.0, 0.0)
         
     def _convert_dtype(self, dtype_str):
         """
@@ -283,6 +298,21 @@ class CBF(object):
             raise RuntimeError('Data and stored md5 hashes do not match! Data corrupted.')
             
             
+    def _find_center(self):
+        """
+        Find the center of any Bragg rings (aka the location of the x-ray beam)
+        using a Hough Transform.
+        
+        Returns
+        -------
+        center : tuple of ints
+            The indicies of the pixel nearest the center of the Bragg peaks.
+        """
+        CM = CircularHough(radii=10, threshold=0.1, stencil_width=1, procs=1)
+        center = CM(image, mode='concentric')
+        return center
+        
+        
     def as_shot(self):
         """
         Convert the CBF file to an ODIN shot representation.
@@ -297,7 +327,7 @@ class CBF(object):
         # todo : do we need to center the image, changing corner?
         basis  = tuple( list(self.pixel_size) + [0.0] )
         shape  = tuple( list(self.intensities_shape) + [1] ) # add z dim
-        corner = (0.0, 0.0, 0.0)
+        corner = self.corner
         grid_list = [(basis, shape, corner )]
         
         b = xray.Beam(wavelength=self.wavelength, flux=100)
@@ -325,6 +355,10 @@ class CXI(object):
     """
     
     def __init__(self, filename):
+        
+        # EEEK
+        raise NotImplementedError('CXI parser not complete, sorry')
+        
         self.filename = filename
         self._get_root()
         
