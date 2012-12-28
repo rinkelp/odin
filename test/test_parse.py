@@ -40,6 +40,17 @@ class TestCBF(object):
     def test_polarization(self):
         p = self.cbf.polarization
         assert p == 0.99
+        
+    def test_center(self):
+        c = self.cbf.center
+        assert 1
+        
+    def test_corner(self):
+        c = self.cbf.corner
+        x = self.cbf.pixel_size
+        y = self.cbf.center
+        ref = (x[0] * float(y[0]), x[1] * float(y[1]))
+        assert ref == c
 
     def test_as_shot(self):
         s = self.cbf.as_shot()

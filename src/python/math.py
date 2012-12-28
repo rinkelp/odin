@@ -16,14 +16,11 @@ from utils import parmap
 import numpy as np
 from random import randrange, seed
 
-from scipy.signal import fftconvolve, fftconvolve, correlate2d
-from scipy.ndimage import filters, morphology
 from scipy import ndimage
+from scipy.ndimage import filters
+from scipy.signal import fftconvolve
 
-
-import numpy as np
-import scipy.ndimage.filters as filters
-import scipy.ndimage.morphology as morphology
+import matplotlib.pyplot as plt
 
 
 class CircularHough(object):
@@ -64,7 +61,6 @@ class CircularHough(object):
         self.radii_parameter = radii
         self._threshold = threshold
         self._stencil_width = stencil_width
-        self.edge_list = []
         
         # deal with the parallel settings
         if procs == 'all':
@@ -109,11 +105,6 @@ class CircularHough(object):
         self._assert_sanity()
         
         image = self._find_edges(image)
-        self.edge_list = np.array(image.nonzero())
-        
-        self.density = float(self.edge_list[0].size)/image.size
-        logger.debug("Signal density: %f" % self.density)
-            
         self.accumulator = self._fft_Hough(image)
             
         if self.mode == 'all':
@@ -196,12 +187,17 @@ class CircularHough(object):
         # if the mode is concentric. If mode == 'concentric', then we add
         # the signal from each value of radii into a single array. This helps
         # save a lot of memory.
+        
+        # NOTE : todo --TJL. For some reason scipy.signal.fftconvolve uses
+        # large amounts of memory. Not sure if this is inherent or a memory
+        # leak. Check it out.
 
         logger.debug("Using fft-method...")
         
         radii = self.radii
         n_radii = len(self.radii)
         
+        # helper for parallel execution
         def compute_conv(i):
             """
             Multiprocessing helper function, computes the FFT-convolution and
@@ -212,7 +208,7 @@ class CircularHough(object):
             result = fftconvolve(edge_image, C, 'same')
         
             if self.mode == 'concentric':
-                acc[:] += result.flatten()
+                acc[:] += result.flatten() / float(len(radii))
             else:
                 acc[i*result.size:(i+1)*result.size] = result.flatten()
             return 0
@@ -291,14 +287,20 @@ class CircularHough(object):
         
 
     def _find_edges(self, image):
-        """ Method for handling selection of edge_filter and some more
-            pre-processing. """
+        """
+        Method for handling selection of edge_filter and some more
+        pre-processing.
+        """
 
-        image = filters.sobel(image, 0)**2 + filters.sobel(image, 1)**2 
+        image = np.abs(filters.sobel(image, 0)) + np.abs(filters.sobel(image, 1))
         image -= image.min()
-
-        image = image > image.max() * self._threshold
         
+        assert image.min() == 0
+        assert image.max() > 0
+
+        logger.debug('threshold value: %d' % (image.max() * self._threshold))
+        image = (image > (image.max() * self._threshold)).astype(np.int8)
+                
         return image 
         
         
@@ -374,7 +376,14 @@ class CircularHough(object):
             concentric rings.
         """
         max_index = np.unravel_index(self.accumulator.argmax(), self.accumulator.shape)
-        return max_index[::-1] # have to swap indices
+        xy = max_index[::-1] # have to swap indices
+        
+        # # test alternate
+        # x = self.accumulator.sum(axis=1).argmax()
+        # y = self.accumulator.sum(axis=0).argmax()
+        # xy = (x,y)
+        
+        return xy
         
 
 def smooth(x, beta=10.0, window_size=11):
@@ -383,14 +392,22 @@ def smooth(x, beta=10.0, window_size=11):
     
     Parameters
     ----------
-    x : ndarray
+    x : ndarray, float
         The array to smooth.
+        
+    Optional Parameters
+    -------------------
     beta : float
         Parameter controlling the strength of the smoothing -- bigger beta 
         results in a smoother function.
     window_size : int
         The size of the Kaiser window to apply, i.e. the number of neighboring
         points used in the smoothing.
+        
+    Returns
+    -------
+    smoothed : ndarray, float
+        A smoothed version of `x`.
     """
     
     # make sure the window size is odd
@@ -410,7 +427,9 @@ def smooth(x, beta=10.0, window_size=11):
 
 
 def arctan3(y, x):
-    """ like arctan2, but returns a value in [0,2pi] """
+    """
+    Compute the inverse tangent. Like arctan2, but returns a value in [0,2pi].
+    """
     theta = np.arctan2(y,x)
     theta[theta < 0.0] += 2 * np.pi
     return theta
@@ -448,7 +467,7 @@ def fft_acf(data):
         The autocorrelation function
     '''
     data = data - np.mean(data)
-    result = signal.fftconvolve(data, data[::-1])
+    result = fftconvolve(data, data[::-1])
     result = result[result.size / 2:] 
     acf = result / result[0]
     return acf
