@@ -2376,13 +2376,13 @@ def simulate_shot(traj, num_molecules, detector, traj_weights=None,
                 p_gpu.start()
                 procs.append(p_gpu)
                 
+            # ensure child processes have finished (TEST)
+            for p in procs:
+                p.join()
+                
             # get all the data back from child processes
             for i in range(len(procs)):
                 multi_output.update( multi_q.get() )
-                
-            # ensure child processes have finished
-            for p in procs:
-                p.join()
                 
             if num_cpu > 0:
                 if 'cpu' not in multi_output.keys():
@@ -2403,6 +2403,9 @@ def simulate_shot(traj, num_molecules, detector, traj_weights=None,
                 assert len(gpu_out) == num_q
                 intensities += gpu_out.astype(np.float64)
                 logger.debug('Retrived data from GPU.')
+        
+            # close off the queue
+            mulit_q.close()
         
     # check for NaNs in output
     if np.isnan(np.sum(intensities)):
