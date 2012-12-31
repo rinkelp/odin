@@ -177,7 +177,7 @@ class TestShot():
         maxq = self.shot.q_values.max()
         assert np.all( mag <= (maxq + 1e-6) )
 
-    @skip
+    @expected_failure
     def test_pgr(self):
         """ test polar_grid_as_real_cart() property """
         

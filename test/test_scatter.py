@@ -339,6 +339,7 @@ class TestScatter():
         
         assert_allclose(gpu_I, self.ref_I, rtol=1e-03,
                         err_msg='scatter: gpu/cpu reference mismatch')
+        assert not np.all( gpu_I == 0.0 )
                         
                         
     def test_cpu_scatter(self):
@@ -353,6 +354,7 @@ class TestScatter():
 
         assert_allclose(cpu_I, self.ref_I, rtol=1e-03,
                         err_msg='scatter: c-cpu/cpu reference mismatch')
+        assert not np.all( cpu_I == 0.0 )
         
                             
     def test_python_call(self):
