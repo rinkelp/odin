@@ -5,18 +5,19 @@ tests for odin/src/python/math.py
 
 import scipy
 import numpy as np
-import matplotlib.pyplot as plt
 from numpy.testing import assert_allclose
 
 from odin import parse
 from odin import math as om
 from odin.testing import ref_file, skip, expected_failure
 
+from scipy.ndimage import imread
+
 
 class TestHough(object):
     
     def setup(self):
-        self.image = plt.imread(ref_file('chough-test.png'))
+        self.image = imread(ref_file('chough-test.png'))
         self.CM = om.CircularHough(radii=np.arange(75,87,1), procs='all')
     
     @skip         
@@ -39,7 +40,7 @@ class TestHough(object):
         assert_allclose(maxima, (155, 143))
         
     def test_all_on_many_img(self):
-        image = plt.imread(ref_file('chough-test2.png'))
+        image = imread(ref_file('chough-test2.png'))
         CM = om.CircularHough(radii=np.arange(10,40,2))
         maxima = CM(image, mode='all')                          
         print "many circles:", maxima
