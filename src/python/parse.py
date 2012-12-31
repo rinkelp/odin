@@ -327,7 +327,7 @@ class CBF(object):
         # todo : do we need to center the image, changing corner?
         basis  = tuple( list(self.pixel_size) + [0.0] )
         shape  = tuple( list(self.intensities_shape) + [1] ) # add z dim
-        corner = self.corner
+        corner = tuple( list(self.corner) + [0.0] )
         grid_list = [(basis, shape, corner )]
         
         b = xray.Beam(wavelength=self.wavelength, flux=100)
