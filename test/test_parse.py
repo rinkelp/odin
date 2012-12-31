@@ -8,7 +8,7 @@ import warnings
 from nose import SkipTest
 
 from odin import parse, xray
-from odin.testing import skip, ref_file, gputest
+from odin.testing import skip, ref_file, gputest, expected_failure
 from mdtraj import trajectory, io
 
 
@@ -40,17 +40,20 @@ class TestCBF(object):
     def test_polarization(self):
         p = self.cbf.polarization
         assert p == 0.99
-        
+    
+    @expected_failure    
     def test_center(self):
         c = self.cbf.center
-        assert 1
-        
+        assert False
+    
+    @expected_failure    
     def test_corner(self):
         c = self.cbf.corner
         x = self.cbf.pixel_size
         y = self.cbf.center
         ref = (x[0] * float(y[0]), x[1] * float(y[1]))
         assert ref == c
+        assert False
 
     def test_as_shot(self):
         s = self.cbf.as_shot()
