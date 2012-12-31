@@ -90,7 +90,7 @@ if __name__ == '__main__':
     parser.add_argument('-m', '--max', type=float, default=0,
                         help='Maximum intensity to plot (simulated beamstop). Default: Value at 0.4 1/A')
     parser.add_argument('-o', '--output', default='correlation_plot.pdf',
-                        help='Image file to write. Append .pdf, .png, .jpg, etc. Default: intensity_plot.pdf')
+                        help='Image file to write. Append .pdf, .png, .jpg, etc. Default: correlation_plot.pdf')
 
     args = parser.parse_args()
     

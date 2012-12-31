@@ -4,7 +4,7 @@
 Randomly places molecules in space with a certain density, Boltzmann distribution.
 """
 
-from odin.structure import multiply_conformations
+from odin.structure import multiply_conformations, load_coor
 from odin.utils import odinparser
 from mdtraj import trajectory
 
@@ -38,7 +38,10 @@ if __name__ == '__main__':
     args = parser.parse_args()
     
     # load up files
-    input_traj = trajectory.load(args.input)
+    if args.input.endswith('.coor') or args.input.endswith('.xyz'):
+        input_traj = load_coor(args.input)
+    else:
+        input_traj = trajectory.load(args.input)
     
     if args.weights == 'NONE':
         weights = None
