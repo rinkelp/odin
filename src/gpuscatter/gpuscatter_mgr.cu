@@ -225,6 +225,12 @@ GPUScatter::GPUScatter (int device_id_,
         printf("Error freeing memory. CUDA error: %s\n", cudaGetErrorString(err));
         exit(-1);
     }
+
+    err = cudaDeviceReset();
+    if (err != cudaSuccess) {
+        printf("Error resetting device. CUDA error: %s\n", cudaGetErrorString(err));
+        exit(-1);
+    }
 }
 
 GPUScatter::~GPUScatter() {

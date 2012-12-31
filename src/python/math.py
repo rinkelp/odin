@@ -20,8 +20,6 @@ from scipy import ndimage
 from scipy.ndimage import filters
 from scipy.signal import fftconvolve
 
-import matplotlib.pyplot as plt
-
 
 class CircularHough(object):
     """
