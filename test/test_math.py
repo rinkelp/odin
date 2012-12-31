@@ -27,6 +27,7 @@ class TestHough(object):
         print "all:", maxmia
         assert (85.0, 155, 143) in maxima
         
+    @expected_failure
     def test_sharpest(self):
         maxima = self.CM(self.image, mode='sharpest')                          
         assert_allclose(maxima, (85.0, 156, 145))
