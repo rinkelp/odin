@@ -688,19 +688,19 @@ class ImageFilter(object):
     
     Example
     -------
-    >>> if = ImageFilter()          # initialize class
-    >>> if.hot_pixels(abs_std=3.0)  # mask pixels more than 3 STD from the mean
-    >>> if.polarization(0.99)       # remove polarization
+    >>> flt = ImageFilter()          # initialize class
+    >>> flt.hot_pixels(abs_std=3.0)  # mask pixels more than 3 STD from the mean
+    >>> flt.polarization(0.99)       # remove polarization
     >>>
     >>> # now apply the filter to some data
-    >>> new_intensities1, mask1 = if.apply(intensities1)
-    >>> new_intensities2, mask2 = if.apply(intensities2)
+    >>> new_intensities1, mask1 = flt.apply(intensities1)
+    >>> new_intensities2, mask2 = flt.apply(intensities2)
         
     For ease, the ImageFilter initialization method also takes kwargs that
     instantiate a class with some filters already applied. Eg. the above filter
     is equivalent to
         
-    >>> if = ImageFilter(abs_std=3.0, polarization=0.99)
+    >>> flt = ImageFilter(abs_std=3.0, polarization=0.99)
     """
         
     # Note to programmer: here is how this class works. Each method consists
@@ -726,8 +726,9 @@ class ImageFilter(object):
             Filter out any pixel that is further than `abs_std` * STD from the
             mean (i.e. this an n-sigma cutoff).
         
-        polarization : float
-            The polarization factor to apply to the data.
+        polarization : tuple (float, odin.xray.detector)
+            A 2-tuple of the polarization factor to apply to the data, and the
+            detector to employ.
         
         edge_pixels : int
             Filters this number of pixels around the border of each detector
@@ -740,13 +741,29 @@ class ImageFilter(object):
         if abs_std:
             self.hot_pixels(abs_std)
         if polarization:
-            self.polarization(polarization)
+            self.polarization(*polarization)
         if edge_pixels:
             self.mask_edges(edge_pixels)
-        if center:
-            self.center
             
         return
+        
+        
+    def __call__(self, intensities, intensities_shape=None):
+        """
+        Apply the `ImageFilter` to `intensities`. An alias for self.apply.
+        
+        Parameters
+        ----------
+        intensities : ndarray, float
+            The intensity data.
+        
+        Optional Parameters
+        -------------------
+        intensities_shape : two-tuple
+            The shape of the intensities (a 2-d array). If passed, the
+            intensities array will be re-shaped to this shape.
+        """
+        return self.apply(intensities, intensities_shape=intensities_shape)
         
         
     def apply(self, intensities, intensities_shape=None):
@@ -781,12 +798,12 @@ class ImageFilter(object):
             intensities, mask = self._apply_hot_pixels(intensities, mask)
         
         if 'polarization' in self._methods_to_apply:
-            intensities = self._apply_polarization(intensities)
+            intensities = self._apply_polarization(intensities, self._detector)
         
         if 'mask_edges' in self._methods_to_apply:
             intensities, mask = self._apply_mask_edges(intensities, mask)
 
-        return filtered_intensities, mask
+        return intensities, mask
         
         
     def hot_pixels(self, abs_std=3.0):
@@ -830,6 +847,7 @@ class ImageFilter(object):
         self._phis   = detector.polar[:,2].copy()
         self._polarization_factor = polarization_factor
         self._methods_to_apply.append('polarization')
+        self._detector = detector
         
         return
         
@@ -838,11 +856,10 @@ class ImageFilter(object):
         """
         Apply the polarization filter to `i`
         """
-        # todo dbl chk math
-        cf  = ( self._polarization_factor )       * ( 1.0 - np.power( np.sin(self._thetas) * np.cos(self._phis), 2 ))
+        cf  = ( self._polarization_factor ) * ( 1.0 - np.power( np.sin(self._thetas) * np.cos(self._phis), 2 ))
         cf += ( 1.0 - self._polarization_factor ) * ( 1.0 - np.power( np.sin(self._thetas) * np.sin(self._phis), 2 ))
-        cf.reshape(i.shape)
-        i /= cf    
+        i = i.flatten()
+        i /= cf
         return i
 
         
