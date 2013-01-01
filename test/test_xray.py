@@ -27,7 +27,7 @@ logger.setLevel(logging.DEBUG)
 logging.basicConfig()
 
 
-class TestBeam():
+class TestBeam(object):
     
     def setup(self):
         self.flux = 100.0
@@ -39,7 +39,7 @@ class TestBeam():
         assert_allclose(beam.wavenumber, (2.0 * np.pi)/12.398, rtol=1e-3)
     
         
-class TestDetector():
+class TestDetector(object):
     
     def setup(self):
         self.spacing = 0.05
@@ -129,7 +129,52 @@ class TestDetector():
         assert_array_almost_equal(d.xyz, self.d.xyz)
         
         
-class TestShot():
+class TestFilter(object):
+        
+    def setup(self):
+        self.d = xray.Detector.generic(spacing=0.4)
+        self.i = np.abs( np.random.randn(self.d.xyz.shape[0]) )
+        self.shot = xray.Shot(self.i, self.d)
+        self.i_shape = self.shot.detector._grid_list[0][1][:2]
+        
+        
+    @expected_failure    
+    def test_generic(self):
+        # will fail b/c edge_pixels not implemented yet
+        p_args = (0.9, self.shot.detector)
+        flt = xray.ImageFilter(abs_std=3.0, polarization=p_args, edge_pixels=5)
+        new_i = flt(self.i, intensities_shape=self.i_shape)
+        
+    def test_hot(self):
+        # currently just smoke test... todo : real test
+        flt = xray.ImageFilter()
+        flt.hot_pixels(abs_std=3.0)
+        new_i = flt(self.i, intensities_shape=self.i_shape)
+        
+    @expected_failure
+    def test_polarization(self):
+        # not getting same answer as derek, todo
+        P = 0.9 # arb. choice of polarization factor
+        flt = xray.ImageFilter()
+        flt.polarization(P, self.shot.detector)
+        new_i, mask = flt(self.i, intensities_shape=self.i_shape)
+        
+        qxyz = self.shot.detector.reciprocal
+        l = self.shot.detector.path_length
+        theta_x = np.arctan( qxyz[:,0] / l )
+        theta_y = np.arctan( qxyz[:,1] / l )
+        f_p = 0.5 * ( (1+P) * np.power(np.cos(theta_x),2) + (1-P) * np.power(np.cos(theta_y),2) )
+        ref_i = self.i * f_p
+        
+        assert np.all(mask == False)
+        assert_allclose(new_i, ref_i)
+        
+    def test_edges(self):
+        # todo : implement
+        pass
+        
+        
+class TestShot(object):
         
     def setup(self):
         self.d = xray.Detector.generic(spacing=0.4)
