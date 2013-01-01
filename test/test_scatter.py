@@ -218,7 +218,7 @@ def call_gpuscatter(xyzlist, atomic_numbers, num_molecules, qgrid, rfloats):
                                     cromermann,
                                     rand1, rand2, rand3, num_q)
     
-    output = out_obj.this[1].astype(np.float64)
+    output = out_obj.this[1].astype(np.float64).copy()
     return output
 
 # ------------------------------------------------------------------------------
@@ -340,6 +340,7 @@ class TestScatter():
         assert_allclose(gpu_I, self.ref_I, rtol=1e-03,
                         err_msg='scatter: gpu/cpu reference mismatch')
         assert not np.all( gpu_I == 0.0 )
+        assert not np.sum( gpu_I == np.nan )
                         
                         
     def test_cpu_scatter(self):
@@ -355,6 +356,7 @@ class TestScatter():
         assert_allclose(cpu_I, self.ref_I, rtol=1e-03,
                         err_msg='scatter: c-cpu/cpu reference mismatch')
         assert not np.all( cpu_I == 0.0 )
+        assert not np.sum( cpu_I == np.nan )
         
                             
     def test_python_call(self):
@@ -367,7 +369,9 @@ class TestScatter():
         detector = Detector.generic()
 
         py_I = xray.simulate_shot(traj, num_molecules, detector)
+        print py_I
         assert not np.all( py_I == 0.0 )
+        assert not np.isnan(np.sum( py_I ))
        
 
 if __name__ == '__main__':
