@@ -115,7 +115,14 @@ GPUScatter::GPUScatter (int device_id_,
     h_outQ = h_outQ_;
     
     // set the device
-    cudaError_t err = cudaSetDevice(device_id);
+    cudaError_t err = cudaThreadExit();
+    if (err != cudaSuccess) {
+        printf("Error setting device ID. CUDA error: %s\n", cudaGetErrorString(err));
+        printf("Tried to set device to: %d\n", device_id);
+        exit(-1);
+    }
+
+    err = cudaSetDevice(device_id);
     if (err != cudaSuccess) {
         printf("Error setting device ID. CUDA error: %s\n", cudaGetErrorString(err));
         printf("Tried to set device to: %d\n", device_id);
@@ -200,6 +207,7 @@ GPUScatter::GPUScatter (int device_id_,
     // copys the array to the output array passed as input
     cudaMemcpy(&h_outQ[0], d_outQ, nQ_size, cudaMemcpyDeviceToHost);
     cudaThreadSynchronize();
+    cudaDeviceSynchronize();
     err = cudaGetLastError();
     if (err != cudaSuccess) {
         printf("Error in memcpy from device --> host. CUDA error: %s\n", cudaGetErrorString(err));
@@ -226,7 +234,11 @@ GPUScatter::GPUScatter (int device_id_,
         exit(-1);
     }
 
-    err = cudaDeviceReset();
+    //err = cudaDeviceReset();
+    cudaThreadSynchronize();
+    cudaDeviceSynchronize();
+    cudaThreadExit();
+    err = cudaGetLastError();
     if (err != cudaSuccess) {
         printf("Error resetting device. CUDA error: %s\n", cudaGetErrorString(err));
         exit(-1);

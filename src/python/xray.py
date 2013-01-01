@@ -12,6 +12,7 @@ logger = logging.getLogger(__name__)
 import cPickle
 from bisect import bisect_left
 import multiprocessing as mp
+from threading import Thread
 
 import numpy as np
 from scipy import interpolate, fftpack
@@ -2300,9 +2301,9 @@ def simulate_shot(traj, num_molecules, detector, traj_weights=None,
         aid[ aZ == a ] = np.int32(i)
         
     # do the simulation, scan over confs., store in `intensities`
-    intensities = mp.Array( 'f', [0.0]*num_q )
-    #intensities = np.zeros(detector.num_pixels, dtype=np.float64) # should be double
-    
+    #intensities = mp.Array( 'f', [0.0]*num_q )
+    intensities = np.zeros(num_q, dtype=np.float32)    
+
     for i,num in enumerate(num_per_shapshot):
         num = int(num)
         if num > 0: # else, we can just skip...
@@ -2331,23 +2332,20 @@ def simulate_shot(traj, num_molecules, detector, traj_weights=None,
             # multiprocessing cannot return values, so generate a helper function
             # that will dump returned values into a shared array
             procs = []
-            
             def multi_helper(name, fargs):
-                """ a helper function that performs either CPU or GPU calcs and 
-                    returns the output over a pipe `multi_q` """
+                """ a helper function that performs either CPU or GPU calcs """
                 logger.debug('multi_helper called with: %s' % str((name, fargs)))
                 
                 if name == 'cpu':
-                    from odin.cpuscatter import CPUScatter
-                    function = CPUScatter
+                    function = cpuscatter.CPUScatter
                 elif name == 'gpu':
-                    from odin.gpuscatter import GPUScatter
-                    function = GPUScatter
+                    function = gpuscatter.GPUScatter
                 else:
                     raise RuntimeError('cpu/gpu are the only names allowed, got: %s' % name)
                 
                 result = function(*fargs)
                 intensities[:] += result.this[1]
+                return
 
             # run dat shit
             if num_cpu > 0:
@@ -2358,7 +2356,8 @@ def simulate_shot(traj, num_molecules, detector, traj_weights=None,
                 rand3 = np.random.rand(num_cpu).astype(np.float32)
                 cpu_args = (num_cpu, qx, qy, qz, rx, ry, rz, aid,
                             cromermann, rand1, rand2, rand3, num_q)
-                p_cpu = mp.Process(target=multi_helper, args=('cpu', cpu_args))
+                #p_cpu = mp.Process(target=multi_helper, args=('cpu', cpu_args))
+                p_cpu = Thread(target=multi_helper, args=('cpu', cpu_args))
                 p_cpu.start()
                 procs.append(p_cpu)                
 
@@ -2370,40 +2369,20 @@ def simulate_shot(traj, num_molecules, detector, traj_weights=None,
                 rand3 = np.random.rand(num_gpu).astype(np.float32)
                 gpu_args = (device_id, bpg, qx, qy, qz, rx, ry, rz, aid,
                             cromermann, rand1, rand2, rand3, num_q)
-                p_gpu = mp.Process(target=multi_helper, args=('gpu', gpu_args))
+                #p_gpu = mp.Process(target=multi_helper, args=('gpu', gpu_args))
+                p_gpu = Thread(target=multi_helper, args=('gpu', gpu_args))
                 p_gpu.start()
                 procs.append(p_gpu)
                 
-            # ensure child processes have finished (TEST)
+            # ensure child processes have finished
             for p in procs:
                 p.join()
-                
-            # get all the data back from child processes
-            # for i in range(len(procs)):
-            #     multi_output.update( multi_q.get() )
-                
-            if num_cpu > 0:
-                # if 'cpu' not in multi_output.keys():
-                #     logger.critical('dict: output has no key `cpu`')
-                #     raise RuntimeError('CPU output not found, process did not '
-                #                        'terminate properly')
-                # cpu_out = multi_output['cpu']
-                # assert len(cpu_out) == num_q
-                # intensities += cpu_out.astype(np.float64)
-                logger.debug('CPU scattering computation finished')
-                
-            if bpg > 0:
-                # if 'gpu' not in multi_output.keys():
-                #     logger.critical('dict: output has no key `gpu`')
-                #     raise RuntimeError('GPU output not found, process did not '
-                #                        'terminate properly')
-                # gpu_out = multi_output['gpu']
-                # assert len(gpu_out) == num_q
-                # intensities += gpu_out.astype(np.float64)
-                logger.debug('Retrived data from GPU.')
-        
+
     # convert output to numpy
-    intensities = np.array(intensities).astype(np.float64)
+    #intensities = np.array(intensities).astype(np.float64)
+
+    # normalize intensities
+    intensities /= intensities.sum()
         
     # check for NaNs in output
     if np.isnan(np.sum(intensities)):
@@ -2412,8 +2391,5 @@ def simulate_shot(traj, num_molecules, detector, traj_weights=None,
     # check for negative values in output
     if len(intensities[intensities < 0.0]) != 0:
         raise RuntimeError('Fatal error, negative intensities detected in scattering output!')    
-
-    # normalize intensities
-    intensities /= intensities.sum()
 
     return intensities
