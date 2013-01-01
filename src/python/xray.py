@@ -2331,7 +2331,7 @@ def simulate_shot(traj, num_molecules, detector, traj_weights=None,
 
             # multiprocessing cannot return values, so generate a helper function
             # that will dump returned values into a shared array
-            procs = []
+            threads = []
             def multi_helper(name, fargs):
                 """ a helper function that performs either CPU or GPU calcs """
                 logger.debug('multi_helper called with: %s' % str((name, fargs)))
@@ -2356,10 +2356,9 @@ def simulate_shot(traj, num_molecules, detector, traj_weights=None,
                 rand3 = np.random.rand(num_cpu).astype(np.float32)
                 cpu_args = (num_cpu, qx, qy, qz, rx, ry, rz, aid,
                             cromermann, rand1, rand2, rand3, num_q)
-                #p_cpu = mp.Process(target=multi_helper, args=('cpu', cpu_args))
-                p_cpu = Thread(target=multi_helper, args=('cpu', cpu_args))
-                p_cpu.start()
-                procs.append(p_cpu)                
+                t_cpu = Thread(target=multi_helper, args=('cpu', cpu_args))
+                t_cpu.start()
+                threads.append(t_cpu)                
 
             if bpg > 0:
                 logger.debug('Sending calculation to GPU device...')
@@ -2369,17 +2368,16 @@ def simulate_shot(traj, num_molecules, detector, traj_weights=None,
                 rand3 = np.random.rand(num_gpu).astype(np.float32)
                 gpu_args = (device_id, bpg, qx, qy, qz, rx, ry, rz, aid,
                             cromermann, rand1, rand2, rand3, num_q)
-                #p_gpu = mp.Process(target=multi_helper, args=('gpu', gpu_args))
-                p_gpu = Thread(target=multi_helper, args=('gpu', gpu_args))
-                p_gpu.start()
-                procs.append(p_gpu)
+                t_gpu = Thread(target=multi_helper, args=('gpu', gpu_args))
+                t_gpu.start()
+                threads.append(t_gpu)
                 
             # ensure child processes have finished
-            for p in procs:
-                p.join()
+            for t in threads:
+                t.join()
 
-    # convert output to numpy
-    #intensities = np.array(intensities).astype(np.float64)
+    # return data in most expected format
+    intensities = intensities.astype(np.float64)
 
     # normalize intensities
     intensities /= intensities.sum()
