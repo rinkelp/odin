@@ -8,6 +8,7 @@ Classes, methods, functions for use with xray scattering experiments.
 import logging
 logging.basicConfig()
 logger = logging.getLogger(__name__)
+logger.setLevel("DEBUG")
 
 import cPickle
 from bisect import bisect_left
@@ -16,6 +17,7 @@ from threading import Thread
 
 import numpy as np
 from scipy import interpolate, fftpack
+from scipy.ndimage import filters
 
 from odin.math import arctan3, rand_pairs, smooth
 from odin import cpuscatter
@@ -650,28 +652,6 @@ class Detector(Beam):
         return d
 
 
-class ImageCenter(object):
-    """
-    A class that provides methods for finding the center and corners of an image.
-    """
-        
-    def __init__(self, intensities, intensities_shape=None):
-        return
-        
-        
-    def _find_center(self):
-        return
-        
-        
-    @property
-    def center(self):
-        return
-        
-    @property
-    def corner(self):
-        return
-
-
 class ImageFilter(object):
     """
     A pre-processor class that provides a set of 'filters' that generally
@@ -693,8 +673,8 @@ class ImageFilter(object):
     >>> flt.polarization(0.99)       # remove polarization
     >>>
     >>> # now apply the filter to some data
-    >>> new_intensities1, mask1 = flt.apply(intensities1)
-    >>> new_intensities2, mask2 = flt.apply(intensities2)
+    >>> new_intensities1, mask1 = flt(intensities1)
+    >>> new_intensities2, mask2 = flt(intensities2)
         
     For ease, the ImageFilter initialization method also takes kwargs that
     instantiate a class with some filters already applied. Eg. the above filter
@@ -750,7 +730,7 @@ class ImageFilter(object):
         
     def __call__(self, intensities, intensities_shape=None):
         """
-        Apply the `ImageFilter` to `intensities`. An alias for self.apply.
+        Apply the `ImageFilter` to `intensities`. An alias for self.apply().
         
         Parameters
         ----------
@@ -880,10 +860,140 @@ class ImageFilter(object):
         
     def _apply_mask_edges(self, i, mask):
         """
-        Apply the edge mask filter to `i`
+        Apply the edge mask filter to `i`, the intensities.
         """
-        # todo
+        
         return
+        
+        
+    def _find_detector_mask(self, intensities, num_bins=10000, beta=10.0):
+        """
+        Find the detector regions by histogramming. The histogram of intensities 
+        should be bi-modal, so we need to split it into two groups. To do this,
+        smooth and choose the first local minimum.
+        """
+        
+        mask = np.zeros(intensities.shape, dtype=np.bool)
+        hist, bin_edges = np.histogram( intensities, bins=num_bins)
+        
+        a = smooth(hist, beta=beta)
+        minima = np.where(np.r_[True, a[1:] < a[:-1]] & np.r_[a[:-1] < a[1:], True] == True)[0]
+        cutoff = a[minima[0]]
+        
+        logger.debug("Mask cutoff: %f" % cutoff)
+        mask[ intensities < cutoff ]  = 1
+        mask[ intensities >= cutoff ] = 0
+                
+        return mask
+        
+        
+    def _find_detector_mask_by_region(self, intensities):
+        """
+        Return a mask representing the detector. This works by segmenting the
+        image along sharp edges, finding the means of each segment, and 
+        splitting the segments into two clusters (measured/mask) using 
+        a histogramming method.
+        """
+        
+        logger.debug("Locating detector mask regions...")
+        
+        # shape-check intensities
+        assert len(intensities.shape) == 2
+        
+        # find the detector edges, they will be 0's -- unclassified are -1's
+        classified = self._find_edges(intensities) - 1.0
+        
+        # loop over all non-edge pixels, and classify regions by lumping
+        # adjacent pixels into groups -- results in `classified`        
+        def adjacent(i,j):
+            """
+            Return a list of the indices of the unclassified pixels adjacent 
+            to (i,j).
+            """
+            logger.debug("Finding pixels adjacent to: %s" % str((i,j)))
+            l_adj = list()
+            for pixel in [ (i-1,j), (i+1,j), (i,j-1), (i,j+1) ]:
+                if (pixel[0] >= 0) and (pixel[0] < classified.shape[0]):
+                    if (pixel[1] >= 0) and (pixel[1] < classified.shape[1]):
+                        if (classified[pixel] == -1):
+                            l_adj.append( pixel )
+            return l_adj
+        
+        # we want to classify pixels by recursively growing adjacent regions
+        adjacents = list()
+        while (classified == -1).sum() > 0:
+            logger.debug("Unclassified remaining: %d" % (classified == -1).sum())
+            
+            # choose a new pixel to grow a region out of
+            for i in range(intensities.shape[0]):
+                for j in range(intensities.shape[1]):
+                    if classified[(i,j)] == -1:
+                        seed_pixel = (i,j)
+                        break
+                    break
+                    
+            logger.debug("Seed pixel: %s" % str(seed_pixel))
+            
+            # create a new region
+            classified[seed_pixel] = classified.max() + 1
+            adjacents.extend( adjacent(*seed_pixel) )
+            
+            # grow that region
+            while len(adjacents) > 0:
+                p = adjacents.pop()
+                classified[p] = classified.max()
+                adjacents.extend( adjacent(*p) )
+                
+        # next, compute the means of each region and histogram
+        num_regions = classified.max() # recall zero are the edges
+        means = np.zeros(num_regions)
+        for i in range(1,num_regions):
+            means[i] = np.mean( intensities[ classified == i ] )
+            
+        # histogram the means
+        num_bins = num_regions/10
+        if num_bins < 10: num_bins = 10
+        hist, bin_edges = np.histogram(means, bins=num_bins)
+        
+        # the result should be bi-modal, so we need to split it into two groups
+        # to do this, smooth and choose the central local minimum
+        
+        # todo dbl chk below
+        a = smooth(hist, beta=3.0) # fiddle
+        minima = np.where(np.r_[True, a[1:] < a[:-1]] & np.r_[a[:-1] < a[1:], True] == True)[0]
+        cutoff = minima[1]
+        
+        # now generate a mask, and use the above cutoff to classify regions
+        # as detector mask or not. Do this in-place on `classified`. Put
+        # `1` in measured places, `0` in edges/mask locations (recall 0 was
+        # previously for edges)
+        for i in range(1,num_regions):
+            if means[i] >= cutoff:
+                classified = 1
+            else:
+                classified = 0
+        
+        # we want the mask to be true at masked positions
+        classified = 1 - classified
+        
+        return classified
+        
+
+    def _find_edges(self, image, threshold=0.1):
+        """
+        Method to find the detector boundaries.
+        """
+
+        image = np.abs(filters.sobel(image, 0)) + np.abs(filters.sobel(image, 1))
+        image -= image.min()
+
+        assert image.min() == 0
+        assert image.max() > 0
+
+        logger.debug('threshold value: %d' % (image.max() * threshold))
+        image = (image > (image.max() * threshold)).astype(np.int8)
+
+        return image
         
         
 class Shot(object):
