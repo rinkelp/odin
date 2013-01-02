@@ -7,7 +7,7 @@ import os, sys
 import warnings
 from nose import SkipTest
 
-from odin import xray, utils
+from odin import xray, utils, parse
 from odin.testing import skip, ref_file, expected_failure
 from mdtraj import trajectory, io
 
@@ -135,14 +135,11 @@ class TestFilter(object):
         self.d = xray.Detector.generic(spacing=0.4)
         self.i = np.abs( np.random.randn(self.d.xyz.shape[0]) )
         self.shot = xray.Shot(self.i, self.d)
-        self.i_shape = self.shot.detector._grid_list[0][1][:2]
-        
-        
-    @expected_failure    
+        self.i_shape = self.shot.detector._grid_list[0][1][:2]        
+   
     def test_generic(self):
-        # will fail b/c edge_pixels not implemented yet
         p_args = (0.9, self.shot.detector)
-        flt = xray.ImageFilter(abs_std=3.0, polarization=p_args, edge_pixels=5)
+        flt = xray.ImageFilter(abs_std=3.0, polarization=p_args, border_pixels=4)
         new_i = flt(self.i, intensities_shape=self.i_shape)
         
     def test_hot(self):
@@ -169,9 +166,36 @@ class TestFilter(object):
         assert np.all(mask == False)
         assert_allclose(new_i, ref_i)
         
-    def test_edges(self):
-        # todo : implement
-        pass
+    def test_detector_mask(self):
+        # answer confirmed visually
+        cbf = parse.CBF( ref_file('test1.cbf') )
+        intensities = cbf.intensities.reshape(cbf.intensities_shape)
+        flt = xray.ImageFilter()
+        flt.detector_mask(border_pixels=4)
+        i, mask = flt(intensities)
+        ref_mask = np.load( ref_file('hist_mask_wborder.npz') )['arr_0']
+        assert_array_almost_equal(mask, ref_mask)
+        
+    def test_histgram_segmentation(self):
+        # answer confirmed visually
+        cbf = parse.CBF( ref_file('test1.cbf') )
+        intensities = cbf.intensities.reshape(cbf.intensities_shape)
+        flt = xray.ImageFilter()
+        flt._intensities_shape = cbf.intensities_shape
+        mask = flt._find_detector_mask(intensities)
+        ref_mask = np.load( ref_file('hist_mask.npz') )['arr_0']
+        assert_array_almost_equal(mask, ref_mask)
+        
+    def test_borders(self):
+        # answer confirmed visually
+        cbf = parse.CBF( ref_file('test1.cbf') )
+        intensities = cbf.intensities.reshape(cbf.intensities_shape)
+        flt = xray.ImageFilter()
+        flt._intensities_shape = cbf.intensities_shape
+        mask = flt._find_detector_mask(intensities)
+        mask = flt._mask_border(mask, 4)
+        ref_mask = np.load( ref_file('hist_mask_wborder.npz') )['arr_0']
+        assert_array_almost_equal(mask, ref_mask)
         
         
 class TestShot(object):

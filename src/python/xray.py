@@ -694,7 +694,7 @@ class ImageFilter(object):
     # Also don't forget to add your method to the self.apply() method, which
     # checks self._methods_to_apply for what to do.
         
-    def __init__(self, abs_std=None, polarization=None, edge_pixels=None):
+    def __init__(self, abs_std=None, polarization=None, border_pixels=None):
         """
         Initialize an image filter. Optional kwargs initialize the filter with
         some standard filters activated. Otherwise, you have to turn each filter
@@ -710,7 +710,7 @@ class ImageFilter(object):
             A 2-tuple of the polarization factor to apply to the data, and the
             detector to employ.
         
-        edge_pixels : int
+        border_pixels : int
             Filters this number of pixels around the border of each detector
             ASIC. ASICs are detected automatically.
         """
@@ -722,8 +722,8 @@ class ImageFilter(object):
             self.hot_pixels(abs_std)
         if polarization:
             self.polarization(*polarization)
-        if edge_pixels:
-            self.mask_edges(edge_pixels)
+        if border_pixels:
+            self.detector_mask(border_pixels)
             
         return
         
@@ -754,7 +754,7 @@ class ImageFilter(object):
         ----------
         intensities : ndarray, float
             The intensity data.
-        
+            
         Optional Parameters
         -------------------
         intensities_shape : two-tuple
@@ -762,26 +762,29 @@ class ImageFilter(object):
             intensities array will be re-shaped to this shape.
         """
         
-        if intensities_shape != None:
-            intensities = intensities.flatten().reshape( intensities_shape )
+        # we'll guarentee flat array, but make available the shape if necessary
+        if len(intensities.shape) == 1:
+            if intensities_shape == None:
+                raise ValueError('If `intensities` is flat, you must also '
+                                 'provide the `intensities_shape` argument.')
+            else:
+                self._intensities_shape = intensities_shape
         else:
-            if len(intensities) != 2:
-                raise ValueError('Array `intensities` must be two-dimensional'
-                                 ' or `intensities_shape` should be supplied.')
+            self._intensities_shape = intensities.shape
+            intensities = intensities.flatten()
         
-        mask = np.zeros(intensities.shape, dtype=np.bool) # initialize mask
+        # initialize mask
+        mask = np.zeros(self._intensities_shape, dtype=np.bool)
         
-        # iterate through each possible filter method, and if it's called for
-        # apply it
-                                 
+        # iterate through each filter method, if it's called for apply it
         if 'hot_pixels' in self._methods_to_apply:
             intensities, mask = self._apply_hot_pixels(intensities, mask)
         
         if 'polarization' in self._methods_to_apply:
             intensities = self._apply_polarization(intensities, self._detector)
         
-        if 'mask_edges' in self._methods_to_apply:
-            intensities, mask = self._apply_mask_edges(intensities, mask)
+        if 'detector_mask' in self._methods_to_apply:
+            intensities, mask = self._apply_detector_mask(intensities, mask)
 
         return intensities, mask
         
@@ -805,6 +808,7 @@ class ImageFilter(object):
         """
         Apply the hot pixel filter to `i`
         """
+        i = i.reshape(self._intensities_shape)
         cutoff = self._abs_std * i.std()
         mask[ np.abs(i - i.mean()) > cutoff ] = np.bool(True)
         return i, mask
@@ -843,47 +847,94 @@ class ImageFilter(object):
         return i
 
         
-    def mask_edges(self, num_pixels):
+    def detector_mask(self, border_pixels=1, num_bins=1e5, beta=1.0):
         """
-        Mask the edges of each ASIC, to a width of `num_pixels`. These pixels
-        are sometimes likely to spike.
+        Mask the detector mask and edges of each ASIC, to a width of 
+        `border_pixels`. These border pixels are sometimes likely to spike.
         
         Parameters
         ----------
-        num_pixels : int
+        border_pixels : int
             The width of the border around each ASIC to mask, in pixel units.
+            
+        Additional Parameters
+        ---------------------
+        num_bins : int
+            The number of bins to use in the histogram-based image segmentation 
+            used to find the mask regions. In tests, 10k worked well. If the
+            detector mask is not getting separated from the measured pixels,
+            increase this number.
+            
+        beta : float
+            The smoothing parameter used to smooth the histogram-based image 
+            segmentation. If the detector mask is not getting separated from the
+            measured pixels, lower this number. beta=10.0 worked well in tests.
         """
-        self._num_pixels = num_pixels
-        self._methods_to_apply.append('mask_edges')
+        self._border_pixels = border_pixels
+        self._num_bins = num_bins
+        self._beta = beta
+        self._methods_to_apply.append('detector_mask')
         return
         
         
-    def _apply_mask_edges(self, i, mask):
+    def _apply_detector_mask(self, i, mask):
         """
         Apply the edge mask filter to `i`, the intensities.
         """
+        dmask = self._find_detector_mask(i, num_bins=self._num_bins, 
+                                         beta=self._beta)
+        mask += self._mask_border(dmask, self._border_pixels)
+        return i, mask
         
-        return
         
-        
-    def _find_detector_mask(self, intensities, num_bins=10000, beta=10.0):
+    def _find_detector_mask(self, intensities, num_bins=1e5, beta=1.0):
         """
         Find the detector regions by histogramming. The histogram of intensities 
         should be bi-modal, so we need to split it into two groups. To do this,
         smooth and choose the first local minimum.
         """
         
+        # reshape intensties for convienence
+        intensities = intensities.reshape(self._intensities_shape)
+        
         mask = np.zeros(intensities.shape, dtype=np.bool)
-        hist, bin_edges = np.histogram( intensities, bins=num_bins)
+        hist, bin_edges = np.histogram( intensities, bins=num_bins )
         
         a = smooth(hist, beta=beta)
         minima = np.where(np.r_[True, a[1:] < a[:-1]] & np.r_[a[:-1] < a[1:], True] == True)[0]
         cutoff = a[minima[0]]
         
         logger.debug("Mask cutoff: %f" % cutoff)
-        mask[ intensities < cutoff ]  = 1
-        mask[ intensities >= cutoff ] = 0
-                
+        mask[ intensities < cutoff ]  = np.bool(True)
+        mask[ intensities >= cutoff ] = np.bool(False)
+        
+        mask = mask.reshape(self._intensities_shape) # ensure mask is square
+        
+        return mask
+        
+        
+    def _mask_border(self, mask, border_pixels):
+        """
+        Returns a version of `mask` with an additional `border_pixels` masked
+        around the masked region.
+        """
+        
+        if border_pixels < 1:
+            logger.warning('_mask_border() called with `border_pixels`=%d' % border_pixels)
+            return mask
+        
+        if len(mask.shape) == 1:
+            logger.critical("Mask shape: %s" % str(mask.shape))
+            raise ValueError('mask must be two-dimensional')
+        
+        # recall : in an array np.bool(True) + np.bool(True) = np.bool(True)
+        for i in range(1,border_pixels+1):
+            mask += np.roll(mask, i, axis=0)
+            mask += np.roll(mask, -i, axis=0)
+        
+            mask += np.roll(mask, i, axis=1)
+            mask += np.roll(mask, -i, axis=1)
+        
         return mask
         
         
@@ -896,6 +947,8 @@ class ImageFilter(object):
         """
         
         logger.debug("Locating detector mask regions...")
+        logger.warning("Finding the mask by region is (1) slow and (2) untested"
+                       ". Recommend using _find_detector_mask().")
         
         # shape-check intensities
         assert len(intensities.shape) == 2
@@ -977,7 +1030,7 @@ class ImageFilter(object):
         classified = 1 - classified
         
         return classified
-        
+    
 
     def _find_edges(self, image, threshold=0.1):
         """
