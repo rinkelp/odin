@@ -3,7 +3,13 @@
 #include <stdexcept>
 #include <math.h>
 #include <assert.h>
-#include <omp.h>
+
+#ifdef NO_OMP
+   #include <omp.h>
+#else
+   #define omp_get_thread_num() 0
+#endif
+
 #include "bcinterp.hh"
 
 using namespace std;
@@ -49,7 +55,7 @@ Bcinterp::Bcinterp( int Nvals, double *vals, double x_space_, double y_space_,
     double * I = vals; // for legacy reasons
 
     // compute the finite difference derivatives for interior of the grid	
-	//#pragma omp parallel for shared(dx, dy, dxdy, dIdx, dIdy, dIdxdy) private(x, y)
+	#pragma omp parallel for shared(dx, dy, dxdy, dIdx, dIdy, dIdxdy) private(x, y)
     for( y = 1; y < Ydim-1; y++ ) {
         for( x = 1; x < Xdim-1; x++ ) {
 
@@ -65,7 +71,7 @@ Bcinterp::Bcinterp( int Nvals, double *vals, double x_space_, double y_space_,
     }
 
 
-    //#pragma omp parallel for shared(dx, dy, dxdy, dIdx, dIdy, dIdxdy) private(x)
+    #pragma omp parallel for shared(dx, dy, dxdy, dIdx, dIdy, dIdxdy) private(x)
     for( x = 1; x < Xdim-1; x++ ) {
 
         // top row (no corners)
@@ -86,7 +92,7 @@ Bcinterp::Bcinterp( int Nvals, double *vals, double x_space_, double y_space_,
 	}
 
 
-    //#pragma omp parallel for shared(dx, dy, dxdy, dIdx, dIdy, dIdxdy) private(y)
+    #pragma omp parallel for shared(dx, dy, dxdy, dIdx, dIdy, dIdxdy) private(y)
     for( y = 1; y < Ydim-1; y++ ) {
 
         // do the left side (no corners)
@@ -146,7 +152,7 @@ Bcinterp::Bcinterp( int Nvals, double *vals, double x_space_, double y_space_,
 
 	
     for( x = 0; x < Xdim-1; x++ ) {
-        //#pragma omp parallel for private(x, y) shared(dx, dy, dxdy, dIdx, dIdy, dIdxdy)
+        #pragma omp parallel for private(x, y) shared(dx, dy, dxdy, dIdx, dIdy, dIdxdy)
         for( y = 0; y < Ydim-1; y++ ) {
 
 			a00 =    F(I,x,y);
@@ -301,7 +307,7 @@ void Bcinterp::evaluate_array(int dim_xa, double *xa, int dim_ya, double *ya,
         throw std::invalid_argument("xa, ya, za must all be same dimension");
     }
         
-    //#pragma omp parallel for shared(za)
+    #pragma omp parallel for shared(za)
     for( int i = 0; i < dim_za; i++ ) {
         za[i] = evaluate_point(xa[i], ya[i]);
     }
