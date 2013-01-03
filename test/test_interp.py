@@ -47,6 +47,7 @@ class TestBcinterp():
         ip = self.interp.evaluate(self.new_x, self.new_y)
         if np.all( ip == 0.0 ):
             print "Interpolator not working, likely cause: OMP failure."
+            print "Try reinstalling with no OMP: python setup.py install --no-openmp"
             raise Exception()
     
     def test_point_evaluation(self):
