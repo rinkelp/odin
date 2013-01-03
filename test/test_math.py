@@ -14,6 +14,7 @@ from odin.testing import ref_file, skip, expected_failure
 
 from scipy.ndimage import imread
 
+import matplotlib.pyplot as plt
 
 class TestHough(object):
     
@@ -71,5 +72,14 @@ class TestHough(object):
         sCM = om.CircularHough(radii=np.arange(70,95,3), procs=1)
         serial_maxima = self.CM(self.image, mode='sharpest')
         assert_allclose(parallel_maxima, serial_maxima)
+        
+    def test_limited_convolution(self):
+        arr1 = np.random.randn(100,100)
+        arr2 = np.random.randn(10,10)
+        CM = om.CircularHough(radii=1)
+        convl = CM._limited_convolution(arr1, arr2, 0.91)
+        ref   = scipy.signal.fftconvolve(arr1, arr2, 'valid')        
+        assert_allclose(convl, ref)
+        
         
         

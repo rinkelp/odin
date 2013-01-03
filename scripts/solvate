@@ -1,0 +1,67 @@
+#!/usr/bin/env python
+
+"""
+Surrounds a protein or other solute with solvent.
+"""
+
+from odin.utils import odinparser
+
+from simtk.openmm.app import * 
+from simtk.openmm import * 
+from simtk.unit import *
+
+def check_water_model(water_model):
+    possible = ['tip3p', 'tip4pew', 'tip5p', 'spce']
+    if water_model not in possible:
+        raise ValueError("Cannot understand water model: %s, must be one of: %s" % (water_model, str(possible)))
+    return
+        
+def main(input_fn, padding, water_model, output_fn):
+    
+    if not input_fn.endswith('.pdb'):
+        raise ValueError('Input must be in PDB format. Sorry! Trajectory support coming soon.')
+        
+    check_water_model(water_model)
+
+    print 'Loading: %s' % input_fn
+    pdb = PDBFile(input_fn)
+
+    water_model_xml = water_model + '.xml'
+    forcefield = ForceField('amber99sb.xml', water_model_xml)
+    modeller = Modeller(pdb.topology, pdb.positions)
+
+    print 'Adding any missing hydrogens...'
+    modeller.addHydrogens(forcefield)
+    
+    print 'Adding solvent (%s)...' % water_model
+    modeller.addSolvent(forcefield, model=water_model, padding=padding*nanometer)
+    
+    print 'Minimizing system energy...'
+    system = forcefield.createSystem(modeller.topology, nonbondedMethod=PME)
+    integrator = VerletIntegrator(0.001*picoseconds)
+    simulation = Simulation(modeller.topology, system, integrator)
+    simulation.context.setPositions(modeller.positions)
+    simulation.minimizeEnergy(maxIterations=1000)
+
+    positions = simulation.context.getState(getPositions=True).getPositions() 
+    PDBFile.writeFile(simulation.topology, positions, open(output_fn, 'w'))
+    print 'Saved: %s' % output_fn
+    
+    return
+
+
+if __name__ == '__main__':
+    parser = odinparser('Surrounds a protein or other solute with solvent.')
+    
+    parser.add_argument('-i', '--input', type=str, 
+                        help='A pdb file containing the molecular geometry.')
+    parser.add_argument('-p', '--padding', type=float, default=1.0,
+                        help='''How far to extend the solvent box around the 
+                                solute, in nanometers. Default: 1nm''')
+    parser.add_argument('-w', '--water', type=str, default='tip3p',
+                        help='The water model to use. Default: tip3p.')
+    parser.add_argument('-o', '--output', default='solvated.pdb', type=str,
+                        help='Trajectory/pdb to write output to. Default: replicated.pdb')
+                        
+    args = parser.parse_args()
+    main(args.input, padding, water_model, args.output)

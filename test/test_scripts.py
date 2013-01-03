@@ -8,9 +8,10 @@ from mdtraj import trajectory
 from odin import xray
 from odin.testing import skip, ref_file
 
-MPL = True
+
 try:
     import matplotlib
+    MPL = True
 except:
     MPL = False
 
@@ -20,6 +21,13 @@ try:
 except ImportError as e:
     GPU = False
 
+
+try:
+    import openmm
+    OPENMM = True
+except ImportError as e:
+    OPENMM = False
+    
 # see if we are on Travis CI -- which for whatever reason does not play well with 
 # these tests that use subprocess. todo : find out why and see if we can fix it
 try:
@@ -89,4 +97,27 @@ def test_replicate():
     else:
         o = trajectory.load('replicated.pdb')
         os.remove('replicated.pdb')
+        
+        
+def test_solvate():
+    if not OPENMM: raise SkipTest
+    if TRAVIS: raise SkipTest
+    cmd = 'solvate -i %s > /dev/null 2>&1' % ref_file('ala2.pdb')
+    subprocess.check_call(cmd, shell=True)
+    if not os.path.exists('solvated.pdb'):
+        raise RuntimeError('no output produced')
+    else:
+        o = trajectory.load('solvated.pdb')
+        os.remove('solvated.pdb')
+        
+        
+def test_cbf2shot():
+    if TRAVIS: raise SkipTest
+    cmd = 'cbf2shot -i %s -o test.shot > /dev/null 2>&1' % ref_file('test1.cbf')
+    subprocess.check_call(cmd, shell=True)
+    if not os.path.exists('test.shot'):
+        raise RuntimeError('no output produced')
+    else:
+        o = xray.Shotset.load('test.shot')
+        os.remove('test.shot')
         

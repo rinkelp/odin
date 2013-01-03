@@ -29,7 +29,8 @@ class CircularHough(object):
     well done! (https://gitorious.org/hough-circular-transform)
     """
     
-    def __init__(self, radii=10, threshold=0.01, stencil_width=1, procs='all'):
+    def __init__(self, radii=10, threshold=0.01, stencil_width=1, 
+                 center_region=1, procs='all'):
         """
         Initialize the class.
         
@@ -51,6 +52,10 @@ class CircularHough(object):
             but may allow more features to be found with fewer radii value
             evaluations.
             
+        center_region : float in (0,1]
+            The size of the region to search for circles in. Expressed as a
+            fraction of the total image size. `1` means search whole image.
+            
         procs : int or str('all')
             The number of processors to run in parallel on. If set to 'all'
             (default), uses all available processors.
@@ -59,6 +64,7 @@ class CircularHough(object):
         self.radii_parameter = radii
         self._threshold = threshold
         self._stencil_width = stencil_width
+        self._region = center_region
         
         # deal with the parallel settings
         if procs == 'all':
@@ -103,7 +109,7 @@ class CircularHough(object):
         self._assert_sanity()
         
         image = self._find_edges(image)
-        self.accumulator = self._fft_Hough(image)
+        self.accumulator = self._Hough(image)
             
         if self.mode == 'all':
             result = self._accumulator_maxima()
@@ -164,7 +170,7 @@ class CircularHough(object):
         return
         
                     
-    def _fft_Hough(self, edge_image):
+    def _Hough(self, edge_image):
         """
         Perform the Hough algorithm by convolving the edge-image with a
         circular stencil of the appropriate radius.
@@ -185,13 +191,7 @@ class CircularHough(object):
         # if the mode is concentric. If mode == 'concentric', then we add
         # the signal from each value of radii into a single array. This helps
         # save a lot of memory.
-        
-        # NOTE : todo --TJL. For some reason scipy.signal.fftconvolve uses
-        # large amounts of memory. Not sure if this is inherent or a memory
-        # leak. Check it out.
-
-        logger.debug("Using fft-method...")
-        
+                
         radii = self.radii
         n_radii = len(self.radii)
         
@@ -203,9 +203,15 @@ class CircularHough(object):
             """
             r = radii[i]
             C = self._get_circle(r, self._stencil_width)
-            result = fftconvolve(edge_image, C, 'same')
+        
+            if self._region != 1:
+                result = self._limited_convolution(edge_image, C, self._region)
+            else:
+                result = fftconvolve(edge_image, C, 'same')
         
             if self.mode == 'concentric':
+                acc[:] += result.flatten() / float(len(radii))
+            elif self.mode == 'concentric_limited':
                 acc[:] += result.flatten() / float(len(radii))
             else:
                 acc[i*result.size:(i+1)*result.size] = result.flatten()
@@ -222,10 +228,16 @@ class CircularHough(object):
             
             for i in range(n_radii):
                 C = self._get_circle(radii[i], self._stencil_width)
-                if self.mode == 'concentric':
-                    acc += fftconvolve(edge_image, C, 'same')
+                
+                if self._region != 1:
+                    result = self._limited_convolution(edge_image, C, self._region)
                 else:
-                    acc[i,:,:] = fftconvolve(edge_image, C, 'same')
+                    result = fftconvolve(edge_image, C, 'same')
+                    
+                if self.mode == 'concentric':
+                    acc += result
+                else:
+                    acc[i,:,:] = result
                 
         # else execute the parallel map
         else:
@@ -240,7 +252,7 @@ class CircularHough(object):
             
             if not out == [0] * n_radii:
                 print "Parallel process return codes:", out
-                raise RuntimeError('Process error in parallel execution of _fft_Hough()')
+                raise RuntimeError('Process error in parallel execution of _Hough()')
             
             if self.mode == 'concentric':
                 acc = np.array(acc).reshape(edge_image.shape[0], edge_image.shape[1])
@@ -374,14 +386,65 @@ class CircularHough(object):
             concentric rings.
         """
         max_index = np.unravel_index(self.accumulator.argmax(), self.accumulator.shape)
-        xy = max_index[::-1] # have to swap indices
-        
-        # # test alternate
-        # x = self.accumulator.sum(axis=1).argmax()
-        # y = self.accumulator.sum(axis=0).argmax()
-        # xy = (x,y)
-        
+        xy = max_index[::-1] # have to swap indices    
         return xy
+        
+        
+    def _limited_convolution(self, arr1, arr2, region=0.05):
+        """
+        Convolve arr1 with arr2, but only in the `region` precent of central
+        pixels of arr1.
+        
+        Returns
+        -------
+        convl : ndarray, float
+            The convolution of arr1 with arr2, computed for the central 
+            subregion `region` of arr1.
+        """
+        
+        # right now, arr2 must fit inside arr1
+        if (arr1.shape[0] < arr2.shape[0]) or (arr1.shape[1] < arr2.shape[1]):
+            raise ValueError('`arr2` must fit inside `arr1`')
+        
+        # find the central region
+        N = int(arr1.shape[0] * region) # range in dim-x
+        M = int(arr1.shape[1] * region) # range in dim-y
+        center = ( int(arr1.shape[0] / 2), int(arr1.shape[1] / 2) )
+        
+        # find the indicies of arr1 we'll scan over
+        start_x = int(center[0] - N/2)
+        end_x = start_x + N
+        
+        start_y = int(center[1] - M/2)
+        end_y = start_y + M
+        
+        # find the size of arr2, from the center
+        right = int( arr2.shape[0] / 2 )
+        left  = arr2.shape[0] - right
+        up    = int( arr2.shape[1] / 2 )
+        down  = arr2.shape[1] - up
+        
+        # initialize storage space for result
+        convl = np.zeros( (N,M) )
+        
+        # sanity check
+        if (start_x - left < 0) or (start_y - down < 0):
+            raise ValueError('Central region is too large for complete overlap.'
+                             ' Cannot compute convolution...')
+        if (end_x - start_x + right > arr1.shape[0]) or (end_y - start_y + up > arr1.shape[1]):
+            raise ValueError('Central region is too large for complete overlap.'
+                             ' Cannot compute convolution...')
+        
+        # compute convolution by multiplying arr2 with a slice of arr1
+        for i in range(start_x, end_x):
+            for j in range(start_y, end_y):
+                convl[i-start_x,j-start_y] = np.sum(arr1[i-left:i+right,j-down:j+up] * arr2)
+        
+        # pad the result with zeros to make it the same shape as `arr1
+        r_convl = np.zeros( arr1.shape )
+        r_convl[start_x:end_x,start_y:end_y] = convl
+        
+        return r_convl
         
 
 def smooth(x, beta=10.0, window_size=11):

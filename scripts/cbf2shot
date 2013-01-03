@@ -1,0 +1,56 @@
+#!/usr/bin/env python
+
+"""
+Convert crystallographic binary files (.cbf) to ODIN shot files.
+"""
+
+import os
+from glob import glob
+
+from odin.utils import odinparser
+from odin.xray import Shotset
+from odin.parse import CBF
+
+def main(input_fn, output_fn):
+    
+    if os.path.isdir(input_fn):
+        print "Locating CBF files in dir: %s" % input_fn
+        cbf_files = glob( os.path.join( input_fn, '*.cbf' ) )
+        print "Found %d CBF files" % len(cbf_files)
+        
+        shotlist = []
+        for cbf_f in cbf_files:
+            print "Converting: %s" % cbf_f
+            c = CBF(cbf_f)
+            shotlist.append( c.as_shot() )
+            
+        shotset = Shotset(shotlist)
+        shotset.save(output_fn)
+        print "Saved: %s" % output_fn
+        
+    else: # is file
+        print "Loading single file: %s" % input_fn
+        c = CBF(input_fn)
+        s = c.as_shot()
+        s.save(output_fn)
+        print "Saved: %s" % output_fn
+    
+    return
+    
+    
+if __name__ == '__main__':
+    
+    parser = odinparser('Convert crystallographic binary files (.cbf) to ODIN shot files (.shot).')
+    
+    parser.add_argument('-i', '--input', type=str, 
+                        help='''Either a single CBF file, or a directory 
+                                containing one or more CBF files. If a single
+                                file, just converts that file to an odin.Shot.
+                                If many files, converts them all into an 
+                                odin.Shotset file.''')
+    parser.add_argument('-o', '--output', default='shotset.shot',
+                        help='The output file name. Default: shotset.shot')
+
+    args = parser.parse_args()
+
+    main(args.input, args.output)
