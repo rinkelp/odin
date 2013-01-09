@@ -518,6 +518,127 @@ class TestShotset():
         i1 = np.array(self.shot.correlate_ring(q1, q2))
         i2 = np.array(self.shotset.correlate_ring(q1, q2))
         assert_array_almost_equal(i1, i2)
+        
+        
+class TestDebye(object):
+    
+    def test_against_reference_implementation(self):
+        
+        def debye_reference(trajectory, weights=None, q_values=None):
+            """
+            Computes the Debye scattering equation for the structures in `trajectory`,
+            producing the theoretical intensity profile.
+
+            Treats the object `trajectory` as a sample from a Boltzmann ensemble, and
+            averages the profile from each snapshot in the trajectory. If `weights` is
+            provided, weights the ensemble accordingly -- otherwise, all snapshots are
+            given equal weights.
+            
+            THIS IS A PYTHON REFERENCE IMPLEMENTATAION.
+
+            Parameters
+            ----------
+            trajectory : mdtraj.trajectory
+                A trajectory object representing a Boltzmann ensemble.
+
+
+            Optional Parameters
+            -------------------    
+            weights : ndarray, int
+                A one dimensional array indicating the weights of the Boltzmann ensemble.
+                If `None` (default), weight each structure equally.
+
+            q_values : ndarray, float
+                The values of |q| to compute the intensity profile for, in
+                inverse Angstroms. Default: np.arange(0.02, 6.0, 0.02)
+
+            Returns
+            -------
+            intensity_profile : ndarray, float
+                An n x 2 array, where the first dimension is the magnitude |q| and
+                the second is the average intensity at that point < I(|q|) >_phi.
+            """
+
+            # first, deal with weights
+            if weights == None:
+                weights = 1.0 # this will work later when we use array broadcasting
+            else:
+                if not len(weights) == trajectory.n_frames:
+                    raise ValueError('length of `weights` array must be the same as the'
+                                     'number of snapshots in `trajectory`')
+                weights /= weights.sum()
+
+            # next, construct the q-value array
+            if q_values == None:
+                q_values = np.arange(0.02, 6.0, 0.02)
+
+            intensity_profile = np.zeros( ( len(q_values) , 2) )
+            intensity_profile[:,0] = q_values
+
+            # array that will hold the contribution from each snapshot in `trajectory`
+            S = np.zeros(trajectory.n_frames)
+
+            # extract the atomic numbers, number each atom by its type
+            aZ = np.array([ a.element.atomic_number for a in trajectory.topology.atoms() ])
+            n_atoms = len(aZ)
+
+            atom_types = np.unique(aZ)
+            num_atom_types = len(atom_types)
+            cromermann = np.zeros(9*num_atom_types, dtype=np.float32)
+
+            aid = np.zeros( n_atoms, dtype=np.int32 )
+            atomic_formfactors = np.zeros( num_atom_types, dtype=np.float32 )
+
+            for i,a in enumerate(atom_types):
+                ind = i * 9
+                try:
+                    cromermann[ind:ind+9] = np.array(cromer_mann_params[(a,0)]).astype(np.float32)
+                except KeyError as e:
+                    logger.critical('Element number %d not in Cromer-Mann form factor parameter database' % a)
+                    raise ValueError('Could not get critical parameters for computation')
+                aid[ aZ == a ] = np.int32(i)
+
+            # iterate over each value of q and compute the Debye scattering equation
+            for q_ind,q in enumerate(q_values):
+                print q_ind, len(q_values)
+
+                # pre-compute the atomic form factors at this q
+                qo = np.power( q / (4. * np.pi), 2)
+                for ai in xrange(num_atom_types):                
+                    for i in range(4):
+                        atomic_formfactors[ai]  = cromermann[ai*9+8]
+                        atomic_formfactors[ai] += cromermann[ai*9+i] * np.exp( cromermann[ai*9+i+5] * qo)
+
+                # iterate over all pairs of atoms
+                for i in range(n_atoms):
+                    fi = atomic_formfactors[ aid[i] ]
+                    for j in range(i+1, n_atoms):
+                        fj = atomic_formfactors[ aid[j] ]
+
+                        # iterate over all snapshots 
+                        for k in range(trajectory.n_frames):
+                            r_ij = np.linalg.norm(trajectory.xyz[k,i,:] - trajectory.xyz[k,j,:])
+                            r_ij *= 10.0 # convert to angstroms.!
+                            S[k] += 2.0 * fi * fj * np.sin( q * r_ij ) / ( q * r_ij )
+
+                intensity_profile[q_ind,1] = np.sum( S * weights )
+
+            return intensity_profile
+            
+        s = structure.load_coor("reference/3lyz.xyz")
+        q_values = np.array([2.0, 3.0, 5.0])
+        ref  = debye_reference(s, q_values=qs)
+        calc = xray.debye(s, q_values=qs)
+        assert_allclose(calc, ref)
+        
+    def test_against_scattering_simulation(self):
+        if not GPU: raise SkipTest
+        d = xray.Detector.generic()
+        x = xray.Shot.simulate(self.t, 512, d)
+        sim_ip = x.intensity_profile()
+        debye = xray.debye(self.t, q_values=sim_ip[:,0])
+        assert_allclose(debye, sim_ip)
+        
 
 if __name__ == '__main__':
     with warnings.catch_warnings(record=True) as w:
