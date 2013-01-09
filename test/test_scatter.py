@@ -19,7 +19,7 @@ except ImportError as e:
 from odin.refdata import cromer_mann_params
 from odin import xray
 from odin import cpuscatter
-from odin.xray import Detector
+from odin.xray import Detector, atomic_formfactor
 from odin.structure import rand_rotate_molecule
 from odin.testing import skip, ref_file, gputest
 
@@ -373,6 +373,18 @@ class TestScatter():
         assert not np.all( py_I == 0.0 )
         assert not np.isnan(np.sum( py_I ))
        
+
+def test_atomic_formfactor():
+    
+    # this is a function in odin.xray, but the reference implementation
+    # was in this file, so testing it here
+    
+    for q_mag in np.arange(2.0, 6.0, 1.0):
+        for Z in [1, 8, 26, 79]:
+            q_unit = np.zeros(3)
+            q_unit[0] = q_mag
+            assert atomic_formfactor(Z, q_mag) == formfactor(Z, q_unit)
+
 
 if __name__ == '__main__':
         xyzQ = np.loadtxt(ref_file('3lyz.xyz'))

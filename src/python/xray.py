@@ -16,7 +16,7 @@ import multiprocessing as mp
 from threading import Thread
 
 import numpy as np
-from scipy import interpolate, fftpack
+from scipy import interpolate, fftpack, weave
 from scipy.ndimage import filters
 
 from odin.math import arctan3, rand_pairs, smooth
@@ -2571,3 +2571,177 @@ def simulate_shot(traj, num_molecules, detector, traj_weights=None,
         raise RuntimeError('Fatal error, negative intensities detected in scattering output!')    
 
     return intensities
+        
+        
+def atomic_formfactor(atomic_Z, q_mag):
+    """
+    Compute the (real part of the) atomic form factor.
+    
+    Parameters
+    ----------
+    atomic_Z : int
+        The atomic number of the atom to compute the form factor for.
+        
+    q_mag : float
+        The magnitude of the q-vector at which to evaluate the form factor.
+        
+    Returns
+    -------
+    fi : float
+        The real part of the atomic form factor.
+    """
+        
+    qo = np.power( q_mag / (4. * np.pi), 2)
+    cromermann = cromer_mann_params[(atomic_Z,0)]
+        
+    for i in range(4):
+        fi  = cromermann[8]
+        fi += cromermann[i] * np.exp( cromermann[i+5] * qo)
+        
+    return fi
+
+
+def debye(trajectory, weights=None, q_values=None):
+    """
+    Computes the Debye scattering equation for the structures in `trajectory`,
+    producing the theoretical intensity profile.
+
+    Treats the object `trajectory` as a sample from a Boltzmann ensemble, and
+    averages the profile from each snapshot in the trajectory. If `weights` is
+    provided, weights the ensemble accordingly -- otherwise, all snapshots are
+    given equal weights
+
+    Parameters
+    ----------
+    trajectory : mdtraj.trajectory
+        A trajectory object representing a Boltzmann ensemble.
+
+
+    Optional Parameters
+    -------------------    
+    weights : ndarray, int
+        A one dimensional array indicating the weights of the Boltzmann ensemble.
+        If `None` (default), weight each structure equally.
+
+    q_values : ndarray, float
+        The values of |q| to compute the intensity profile for, in
+        inverse Angstroms. Default: np.arange(0.02, 6.0, 0.02)
+
+    Returns
+    -------
+    intensity_profile : ndarray, float
+        An n x 2 array, where the first dimension is the magnitude |q| and
+        the second is the average intensity at that point < I(|q|) >_phi.
+    """
+
+    # first, deal with weights
+    if weights == None:
+        weights = np.ones(trajectory.n_frames)
+    else:
+        if not len(weights) == trajectory.n_frames:
+            raise ValueError('length of `weights` array must be the same as the'
+                             'number of snapshots in `trajectory`')
+        weights /= weights.sum()
+
+    # next, construct the q-value array
+    if q_values == None:
+        q_values = np.arange(0.02, 6.0, 0.02)
+
+    # extract the atomic numbers, number each atom by its type
+    aZ = np.array([ a.element.atomic_number for a in trajectory.topology.atoms() ])
+    n_atoms = len(aZ)
+
+    atom_types = np.unique(aZ)
+    num_atom_types = len(atom_types)
+    cromermann = np.zeros(9*num_atom_types, dtype=np.float32)
+
+    aid = np.zeros( n_atoms, dtype=np.int32 )
+    atomic_formfactors = np.zeros( num_atom_types, dtype=np.float32 )
+
+    for i,a in enumerate(atom_types):
+        ind = i * 9
+        try:
+            cromermann[ind:ind+9] = np.array(cromer_mann_params[(a,0)]).astype(np.float32)
+        except KeyError as e:
+            logger.critical('Element number %d not in Cromer-Mann form factor parameter database' % a)
+            raise ValueError('Could not get critical parameters for computation')
+        aid[ aZ == a ] = np.int32(i)
+
+    # construct pointers for weave code
+    xyz = trajectory.xyz.flatten().astype(np.float32) * 10.0 # convert to angstroms.!
+    n_frames = trajectory.n_frames
+    intensities = np.zeros(len(q_values), dtype=np.float32)
+    n_q_values = len(q_values)
+    q_values = q_values.astype(np.float32)
+    weights = weights.astype(np.float32)
+        
+    weave.inline(r"""
+    Py_BEGIN_ALLOW_THREADS
+    
+    // iterate over each value of q and compute the Debye scattering equation
+    
+    #pragma omp parallel for shared(intensities, atomic_formfactors, aid, weights, xyz, q_values, n_atoms, n_frames)
+    for (int qi = 0; qi < n_q_values; qi++) {
+    
+        // pre-compute the atomic form factors at this q
+        float q = q_values[qi];
+        float qo = q*q / (16.0 * M_PI * M_PI);
+
+        for (int ai = 0; ai < num_atom_types; ai++) {
+
+            int tind = ai * 9;
+            float f;
+
+            f =  cromermann[tind]   * exp(-cromermann[tind+4]*qo);
+            f += cromermann[tind+1] * exp(-cromermann[tind+5]*qo);
+            f += cromermann[tind+2] * exp(-cromermann[tind+6]*qo);
+            f += cromermann[tind+3] * exp(-cromermann[tind+7]*qo);
+            f += cromermann[tind+8];
+
+            atomic_formfactors[ai] = f;
+        }
+            
+        // iterate over all pairs of atoms
+        for (int i = 0; i < n_atoms; i++) {
+            float fi = atomic_formfactors[ aid[i] ];
+            for (int j = i+1; j < n_atoms; j++) {
+                float fj = atomic_formfactors[ aid[j] ];
+                
+                // iterate over all snapshots 
+                for (int k = 0; k < n_frames; k++) {
+                
+                    // compute the atom-atom distance
+                    float r_ij, S, d;
+                    
+                    r_ij = 0.0;
+                    for (int l = 0; l < 3; l++) {
+                        int ind_ri = k*n_atoms + i*3 + l;
+                        int ind_rj = k*n_atoms + j*3 + l;
+                        d = xyz[ind_ri] - xyz[ind_rj];
+                        r_ij += d*d;
+                    }
+                    r_ij = sqrt(r_ij);
+                    
+                    S = 2.0 * fi * fj * sin( q * r_ij ) / ( q * r_ij );
+                    
+                    // add the result to our final output array
+                    #pragma omp critical(intensities_update)
+                    intensities[qi] += S * weights[k];
+                }
+            }            
+        }
+    }
+    Py_END_ALLOW_THREADS
+    """, ['q_values', 'cromermann', 'aid', 'xyz', 'intensities', 
+          'atomic_formfactors', 'weights', 'n_q_values', 'num_atom_types', 
+          'n_atoms', 'n_frames'],
+          extra_link_args = ['-lgomp'],
+          extra_compile_args = ["-O3", "-fopenmp"] )
+
+    # tjl, later remove this and just stack the results
+    intensity_profile = np.zeros( ( len(q_values) , 2) )
+    intensity_profile[:,0] = q_values
+    intensity_profile[:,1] = intensities
+
+    return intensity_profile
+

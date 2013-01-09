@@ -56,9 +56,9 @@ class ExptDataCollection(object):
         self._values = np.array(values)
         self._errors = np.array(errors)
         
-        assert(len(self._values) == self._n_data)
-        assert(len(self._errors) == self._n_data)
-        assert(len(self._exptmeta) == self._n_data)
+        assert len(self._values) == self._n_data
+        assert len(self._errors) == self._n_data
+        assert len(self._exptmeta) == self._n_data
 
     @property
     def n_data(self):
@@ -147,44 +147,40 @@ class ExptDataCollection(object):
 
 class ExptData(object):
     """
-    Abstract base class for experimental data classes
+    Abstract base class for experimental data classes.
+        
+    All ExptData objects should have the following properties:
+    -- values (the experimental values)
+    -- errors (the STD error associated with values)
+        
+    Further, each ExptData inheretant should provide a self.predict(xyz) method,
+    that outputs an array of len(values) that is the *prediction* of the array
+    `values` given a molecular geometry `xyz`.
     """
-    
+        
     def __init__(self, directory):
         """
         Initialize the class, loading into memory all experimental data.
-        
-        
         """
         
-        self._filetypes = ''
         self._directory = directory
         
         self._files = []
-        for filetype in self._filetypes:
+        for filetype in self.acceptable_filetypes:
             self._files += glob(directory + '/*' + filetype)
             
-            
-        self._values = []
-        self._errors = []
-        self._metadata = []
         for fn in self._files:
-            values, errors, metadata = self.load(fn)
-            self._values.append(values)
-            self._errors.append(errors)
-            self._errors.append(metadata)
-        self._values = np.array(values)
-        self._errors = np.array(errors)
+            self._load_file(fn)
         
         self._n_data = len(self._values)
         
         assert(len(self._errors) == self._n_data)
         assert(len(self._metadata) == self._n_data)
         
-    
+    @property
     def n_data(self):
         return self._n_data
-    
+        
     @property
     def directory(self):
         return self._directory
@@ -198,60 +194,148 @@ class ExptData(object):
         """
         The measured values of each data point
         """
-        return self._values
-
+        return self._get_values()
+        
     @property
     def errors(self):
         """
         The errors associated with each experiment.
         """
-        return self._errors
+        return self._get_errors()
+        
+    @property
+    def acceptable_filetypes(self):
+        """
+        A list object of the file extensions this class knows how to load.
+        """
+        return self._acceptable_filetypes()
 
-    # TJL : need to figure out how ABC's work. All classes should have below methods
+    # TJL : need to figure out how ABC's work. 
+    # Classes that inherent from ExptData should implement all the methods below 
     @abstractplaceholder
     def _load_file(self, filename):
-        return values, errors, metadata
+        """
+        Load a file containing experimental data, and dump the relevant data,
+        errors, and metadata into the object in a smart/comprehendable manner.
+        """
+        return
         
     @abstractplaceholder
-    def _default_error():
-        """ estimates the error of the experiment (conservatively) in the
-            absence of explicit input """
-        return error_guess        
+    def predict(self, trajectory):
+        """
+        Method to predict the array `values` for each snapshot in `trajectory`.
+        
+        Parameters
+        ----------
+        trajectory : mdtraj.trajectory
+            A trajectory to predict the experimental values for.
+        
+        Returns
+        -------
+        prediction : ndarray, 2-D
+           The predicted values. Will be two dimensional, 
+           len(trajectory) X len(values).
+        """
+        return prediction
+        
+    @abstractplaceholder
+    def _default_error(self):
+        """
+        Method to estimate the error of the experiment (conservatively) in the
+        absence of explicit input.
+        """
+        return error_guess
+        
+    @abstractplaceholder
+    def _get_values(self):
+        """
+        Return an array `values`, in an order that ensures it will match up
+        with the method self.predict()
+        """
+        return values
 
+    @abstractplaceholder
+    def _get_errors(self):
+        """
+        Return an array `errors`, in an order that ensures it will match up
+        with the method self.predict()
+        """
+        return errors
+    
+    @abstractplaceholder    
+    def _acceptable_filetypes(self):
+        """
+        A list object of the file extensions this class knows how to load.
+        """
+        return list_of_extensions
+        
 
 class ScatteringData(ExptData):
-    
+    """
+    A class supporting x-ray scattering data.
+    """
+        
     def _load_file(self, filename):
+        """
+        Load a file containing experimental data, and dump the relevant data,
+        errors, and metadata into the object in a smart/comprehendable manner.
+        """
+        return
         
-        extension = filename.split('.')[-1]
-        if extension == '.cxi':
-            values, errors, metadata = self._load_cxi(filename)
-        else:
-            raise ValueError('Scattering data format must be one of: .cxi,')
         
-        return values, errors, metadata
+    def predict(self, trajectory):
+        """
+        Method to predict the array `values` for each snapshot in `trajectory`.
         
-    def _default_error():
-        """ estimates the error of the experiment (conservatively) in the
-            absence of explicit input """
+        Parameters
+        ----------
+        trajectory : mdtraj.trajectory
+            A trajectory to predict the experimental values for.
+        
+        Returns
+        -------
+        prediction : ndarray, 2-D
+           The predicted values. Will be two dimensional, 
+           len(trajectory) X len(values).
+        """
+        return prediction
+        
+        
+    def _default_error(self):
+        """
+        Method to estimate the error of the experiment (conservatively) in the
+        absence of explicit input.
+        """
         return error_guess
         
-    def _load_cxi(self, filename):
+        
+    def _get_values(self):
         """
-        Load a file in the CXI-database format.
+        Return an array `values`, in an order that ensures it will match up
+        with the method self.predict()
         """
-        shot = xray.Shotset.load(filename)
-        raise NotImplementedError()
+        return values
         
         
+    def _get_errors(self):
+        """
+        Return an array `errors`, in an order that ensures it will match up
+        with the method self.predict()
+        """
+        return errors
         
-    
+     
+    def _acceptable_filetypes(self):
+        """
+        A list object of the file extensions this class knows how to load.
+        """
+        return list_of_extensions
+
+        
+        
+
 class ChemShiftData(ExptData):
-    
-    def _load_file(self, filename):
-        return values, errors, metadata
-        
-    def _default_error():
-        """ estimates the error of the experiment (conservatively) in the
-            absence of explicit input """
-        return error_guess
+    """
+    A class supporting chemical shift data
+    """
+    pass
