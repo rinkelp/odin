@@ -1819,6 +1819,20 @@ class Shot(object):
         
         return correlation_ring
         
+        
+    def correlate_all_rings(self):
+        """
+        Automatically detects the position of scattering rings and performs the
+        correlation of all pairs of those rings.
+
+        Returns
+        -------
+        all_rings : odin.xray.CorrelationCollection
+            A CorrelationCollection object containing data for all combinations
+            of correlated rings.
+        """
+        return CorrelationCollection(self)
+        
     @classmethod
     def simulate(cls, traj, num_molecules, detector, traj_weights=None, 
                  force_no_gpu=False, device_id=0):
@@ -1972,9 +1986,16 @@ class Shotset(Shot):
     def __iter__(self):
         for i in xrange(self.num_shots):
             yield self.shots[i]
+        
             
     def __getitem__(self, key):
         return self.shots[key]
+        
+        
+    def __add__(self, other):
+        if not isinstance(other, Shotset):
+            raise ValueError('Cannot add types: %s and Shotset' % type(other))
+        return Shotset( self.shots.append(other.shots) )
         
         
     def _check_qvectors_same(self, epsilon=1e-6):
@@ -2191,6 +2212,7 @@ class Shotset(Shot):
         
         return correlation_ring
         
+            
     @classmethod
     def simulate(cls, traj, num_molecules, detector, num_shots,
                  traj_weights=None, force_no_gpu=False, device_id=0):
@@ -2373,6 +2395,80 @@ class Shotset(Shot):
 
         return Shotset(list_of_shots)
 
+
+class CorrelationCollection(object):
+    """
+    A class to manage a large set of ring correlations, likely computed from a
+    Shot or Shotset.
+    
+    The central data structure here is a dictionary self._correlation_data
+    that contains the correlation rings. This dict is keyed by the q-values 
+    for which each ring was computed, e.g.
+    
+        self._correlation_data[(q1,q2)] -> correlation_ring
+        
+    note len(correlation_ring) = len(phi_values), and it *must* be that
+    q1 >= q2.
+    """
+    
+    def __init__(self, shot, q_values=None):
+        """
+        Generate a CorrelationCollection from a shot or shotset class
+        
+        Parameters
+        ----------
+        shot : odin.xray.Shot OR odin.xray.shotset
+            The shot/shotset object from which to generate the 
+            CorrelationCollection.
+            
+        Optional Parameters
+        -------------------
+        q_values : ndarray OR list OF floats
+            The specific q-values (in inv. angstroms) at which to correlate. If
+            `None`, then will automatically locate Bragg rings and correlate
+            all combinations of those rings
+        """
+        
+        self._correlation_data = {}
+        
+        if q_values == None:
+            self.q_values = shot.intensity_maxima()
+        else:
+            self.q_values = q_values
+            
+        self.phi_values = shot.phi_values
+        
+        self.num_q   = len(self.q_values)
+        self.num_phi = len(self.phi_values)
+        
+        for i in range(num_q):
+            for j in range(i, num_q):
+                q1 = self.q_values[i]
+                q2 = self.q_values[j]
+                self._correlation_data[(q1,q2)] = shot.correlate_ring(q1, q2)
+        
+            
+    def ring(self, q1, q2):
+        """
+        Parameters
+        ----------
+        q1, q2 : float
+            The q-values (in inv. angstroms) for which to get the ring.
+        """
+        if q1 < q2:
+            return self._correlation_data[(q2,q1)]
+        else:
+            return self._correlation_data[(q1,q2)]
+            
+            
+    def legendre_coeffecients(self, order=None, epsilon=1e-6):
+        """
+        Project the correlation functions onto a set of legendre polynomials,
+        and return the coefficients of that projection.
+        
+        """
+        raise NotImplementedError()
+        
     
 def simulate_shot(traj, num_molecules, detector, traj_weights=None,
                   force_no_gpu=False, device_id=0):
@@ -2615,7 +2711,6 @@ def debye(trajectory, weights=None, q_values=None):
     ----------
     trajectory : mdtraj.trajectory
         A trajectory object representing a Boltzmann ensemble.
-
 
     Optional Parameters
     -------------------    

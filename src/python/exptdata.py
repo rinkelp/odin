@@ -273,6 +273,49 @@ class ExptData(object):
 class ScatteringData(ExptData):
     """
     A class supporting x-ray scattering data.
+    
+    Two kinds of experimental observables are currently supported by this class
+    and it's predict() method:
+    
+    -- intensity profiles
+         The observed x-ray scattering averaged over the azimuthal (radial)
+         angle on the detector. Also known as SAXS/WAXS data.
+    -- correlations
+         This is the correlation function of an intensity 'ring' on the detector.
+         These correlations promise to hold more structural information than
+         the intensity profile alone, but have an intrinsically greater error.
+         
+    The intensity profile is stored in self._intensity profile. This is the
+    average profile over all data files that get loaded. self._intensity is
+    a 2-d array, the first dimension is the list of q-values at which the
+    intensities were measured, the second is the intensity value at that q.
+    
+    The correlation data is stored in a 3-d array. Each element of that array
+    contains one value of the correlation function C(q_1, q_2, phi). Each
+    dimension scans across each parameter of that function C
+    
+        Dim 0: q_1 magnitude
+        Dim 1: q_1 magnitude
+        Dim 2: phi
+    
+    The values that each index corresponds to are held in two other arrays:
+        
+        self._correlated_q_mags
+        self._correlated_phis
+    
+    Such that, for example,
+    
+        self._correlations[2,3,10]
+    
+    corresponds to C(q1, q2, phi) for
+    
+        q1  = self._correlated_q_mags[2]
+        q1  = self._correlated_q_mags[3]
+        phi = self._correlated_phis[10]
+        
+    This mirrors the structure of the return value of 
+    xray.Shotset.correlate_all_rings(), which ultimately generates the data
+    arrays for this class.
     """
         
     def _load_file(self, filename):
@@ -329,7 +372,23 @@ class ScatteringData(ExptData):
         """
         A list object of the file extensions this class knows how to load.
         """
+        list_of_extensions = ['cxi', 'cbf', 'shot']
         return list_of_extensions
+        
+        
+    def _predict_intensity_profile(self, trajectory):
+        """
+        Return the predicted intensity profile, using the Debye equation.
+        Returns just the intensities, not the q-values (a 1-d array)
+        """
+        ip = xray.debye(trajectory, q_values=self._intensity_profile[:,0])
+        return ip[:,1]
+        
+        
+    def _predict_correlations(self, trajectory):
+        """
+        """
+        pass
 
         
         
