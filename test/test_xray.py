@@ -7,8 +7,9 @@ import os, sys
 import warnings
 from nose import SkipTest
 
-from odin import xray, utils, parse
+from odin import xray, utils, parse, structure
 from odin.testing import skip, ref_file, expected_failure
+from odin.refdata import cromer_mann_params
 from mdtraj import trajectory, io
 
 try:
@@ -472,6 +473,14 @@ class TestShotset():
         self.shotset = xray.Shotset([self.shot])
         self.t = trajectory.load(ref_file('ala2.pdb'))
         
+    def test_iter_n_slice(self):
+        s = self.shotset[0]
+        for s in self.shotset: print s
+        
+    def test_add_n_len(self):
+        ss = self.shotset + self.shotset
+        assert len(ss) == 2
+        
     def test_simulate(self):
         if not GPU: raise SkipTest
         d = xray.Detector.generic(spacing=0.4)
@@ -522,6 +531,7 @@ class TestShotset():
         
 class TestDebye(object):
     
+    @skip
     def test_against_reference_implementation(self):
         
         def debye_reference(trajectory, weights=None, q_values=None):
@@ -625,12 +635,13 @@ class TestDebye(object):
 
             return intensity_profile
             
-        s = structure.load_coor("reference/3lyz.xyz")
-        q_values = np.array([2.0, 3.0, 5.0])
+        s = structure.load_coor(ref_file("3lyz.xyz"))
+        qs = np.array([0.04, 2.0, 6.0])
         ref  = debye_reference(s, q_values=qs)
         calc = xray.debye(s, q_values=qs)
         assert_allclose(calc, ref)
-        
+    
+    @skip    
     def test_against_scattering_simulation(self):
         if not GPU: raise SkipTest
         d = xray.Detector.generic()
