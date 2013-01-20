@@ -149,7 +149,6 @@ class TestFilter(object):
         flt.hot_pixels(abs_std=3.0)
         new_i = flt(self.i, intensities_shape=self.i_shape)
         
-    @expected_failure
     def test_polarization(self):
         # not getting same answer as derek, todo
         P = 0.9 # arb. choice of polarization factor
@@ -388,11 +387,8 @@ class TestShot(object):
         assert_array_almost_equal(qs, ind_code)                
         assert_allclose(p, p_code, rtol=1)
     
-    @expected_failure
     def test_correlation(self):
-        
         # todo
-        
         # arb. parameters for testing
         q1 = 2.0
         q2 = 2.0
@@ -430,7 +426,6 @@ class TestShot(object):
             ans = self.shot.correlate(q1, q2, delta)        
             assert_almost_equal(ans, ref, decimal=6)
         
-    @expected_failure
     def test_corr_ring(self):
                 
         # -------------------------------------------------------------------- #
