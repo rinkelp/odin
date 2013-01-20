@@ -536,18 +536,41 @@ class TestCorrelationCollection(object):
         self.cc = xray.CorrelationCollection(self.shot)
         
     def test_ring(self):
-        q1 = 2.0
-        q2 = 3.0
+        q1 = self.cc.q_values[0]
+        q2 = self.cc.q_values[0]
         ring1 = self.cc.ring(q1, q2)
-        ring2 = self.shot.correlate_ring(q1, q2)
+        ring2 = self.shot.correlate_ring(q1, q2)[:,1]
         assert_allclose(ring1, ring2)
         
-    def test_coefficients(self):
-        cl = cc.legendre_coeffecients()
+    def test_coefficients_smoke(self):
+        cl = self.cc.legendre_coeffecients()
         
-    def test_coefficients_order(self):
-        cl = cc.legendre_coeffecients(order=5)
-        assert cl.shape[0] == 5
+    def test_coefficients(self):
+        order = 2000
+        cc = self.cc
+
+        # inject a simple test case into the cc
+        cc.q_values = np.array([1.0])
+        cc.num_q = 1
+
+        # compute the values of psi to use
+        t1 = np.arctan( 1.0 / (2.0*cc.k) )
+        t2 = np.arctan( 1.0 / (2.0*cc.k) )
+        psi = np.arccos( np.cos(t1)*np.cos(t2) + np.sin(t1)*np.sin(t2) \
+                         * np.cos( cc.phi_values * 2. * np.pi/float(cc.num_phi) ) )
+
+        # inject a cosine function as the correlation
+        correlation = np.cos( psi * 1000 )
+        cc._correlation_data = { (1.0, 1.0) : correlation }
+
+        # compute the coefficients and re-construct the cos function
+        cl = cc.legendre_coeffecients(order=order)
+        cl = cl[:,0,0]
+        c = np.zeros( 2 * cl.shape[0] )
+        c[::2] = cl
+        pred = np.polynomial.legendre.legval( np.cos(psi), c)
+
+        assert_allclose(pred, correlation, rtol=1e-01)
         
         
 class TestDebye(object):
