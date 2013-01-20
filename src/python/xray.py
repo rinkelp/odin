@@ -1811,11 +1811,11 @@ class Shot(object):
         ffy = fftpack.fft(y)
         iff = np.real(fftpack.ifft( ffx * ffy ))
         
-        correlation_ring[:,1] = iff # / (np.linalg.norm(x) * np.linalg.norm(y)) # (xstd * ystd)
+        correlation_ring[:,1] = iff / (np.linalg.norm(x) * np.linalg.norm(y))
         
-        m = correlation_ring[:,1].max()
-        for i in range(correlation_ring.shape[0]):
-            correlation_ring[i,1] = correlation_ring[i,1] / m
+        # m = correlation_ring[:,1].max()
+        # for i in range(correlation_ring.shape[0]):
+        #     correlation_ring[i,1] = correlation_ring[i,1] / m
         
         return correlation_ring
         
@@ -2432,7 +2432,7 @@ class CorrelationCollection(object):
         self._correlation_data = {}
         
         if q_values == None:
-            self.q_values = shot.intensity_maxima()
+            self.q_values = shot.q_values[shot.intensity_maxima()]
         else:
             self.q_values = q_values
             
@@ -2442,12 +2442,18 @@ class CorrelationCollection(object):
         self.num_q   = len(self.q_values)
         self.num_phi = len(self.phi_values)
         
-        for i in range(num_q):
-            for j in range(i, num_q):
+        for i in range(self.num_q):
+            for j in range(i, self.num_q):
                 q1 = self.q_values[i]
                 q2 = self.q_values[j]
-                self._correlation_data[(q1,q2)] = shot.correlate_ring(q1, q2)
-        
+                
+                if not hasattr(self, 'deltas'):
+                    self.deltas = shot.correlate_ring(q1, q2)[:,0]
+                else:
+                    assert np.all(self.deltas == shot.correlate_ring(q1, q2)[:,0])
+                    
+                self._correlation_data[(q1,q2)] = shot.correlate_ring(q1, q2)[:,1]
+                
             
     def ring(self, q1, q2):
         """
@@ -2462,7 +2468,7 @@ class CorrelationCollection(object):
             return self._correlation_data[(q1,q2)]
             
             
-    def legendre_coeffecients(self, order=None, epsilon=1e-3):
+    def legendre_coeffecients(self, order=20, report_error=False):
         """
         Project the correlation functions onto a set of legendre polynomials,
         and return the coefficients of that projection.
@@ -2472,57 +2478,52 @@ class CorrelationCollection(object):
         order : int
             The order at which to truncate the polynomial expansion. If none,
             will use epsilon parameter to decide order.
-            
-        epsilon : int
-            If `order` == None, then truncate after abs(correction - expansion)
-            < epsilon.
         """
         
-        Delta = self.phi_values # the phi1/phi2 difference values
-        
+        # initialize space for coefficients        
         Cl = np.zeros((order, self.num_q, self.num_q))
+            
+        for i in range(self.num_q):
+            for j in range(i,self.num_q):
+                
+                # compute psi, the angle between the scattering vectors
+                t1 = np.arctan( self.q_values[i] / (2.0*self.k) ) # theta1
+                t2 = np.arctan( self.q_values[j] / (2.0*self.k) ) # theta2
 
-        il = 0
-        not_converged = True
-        while not_converged:
-            
-            l = il*2
-            Pl = special.legendre(l)
-            
+                psi = np.arccos( np.cos(t1)*np.cos(t2) + np.sin(t1)*np.sin(t2) \
+                                 * np.cos( self.deltas * 2. * np.pi/float(self.num_phi) ) )
+                                                     
+                q1 = self.q_values[i]
+                q2 = self.q_values[j]
+                
+                x = order*2 - 1
+                c, fit_data = np.polynomial.legendre.legfit(np.cos(psi), 
+                                  self._correlation_data[(q1,q2)], x, full=True)
+                                  
+                assert len(c) == order * 2
+                c = c[::2]     # discard odd values
+                assert len(c) == Cl.shape[0]
+                
+                c /= c.sum()   # normalize
+                Cl[:,i,j] = c
+                Cl[:,j,i] = c  # copy it to the lower triangle too
+        
+        if report_error:
+            d = 0.0
             for i in range(self.num_q):
                 for j in range(i,self.num_q):
                     
-                    # compute psi, the angle between the scattering vectors
-                    t1 = np.arctan( self.q_values[i] / (2.0*self.k) ) # theta1
-                    t2 = np.arctan( self.q_values[j] / (2.0*self.k) ) # theta2
-
-                    psi = np.arccos( np.cos(t1)*np.cos(t2) + np.sin(t1)*np.sin(t2) \
-                                     * np.cos( Delta * 2. * pi/float(N) ) )
-                             
-                    Cl[il,i,j] = 2*pi*(2.*l + 1) * self._correlation_data[(q1,q2)] * Pl( np.cos(psi) ) * sin(psi)
+                    c = np.zeros( 2 * Cl.shape[0] )
+                    c[::2] = Cl[:,i,j]
+                    pred = np.polynomial.legendre.legval( np.cos(psi), c)
                     
-            # we computed only the upper triangle, so copy the solution
-            x = np.tril_indices(self.num_q,-1)] 
-            Cl[il,:,:][x] += Cl.T[il,:,:][x]
-            
-            il += 1
-            
-            # check for convergence by comparing the expansion to the real data
-            if order:
-                if il >= order:
-                    not_converged = False
-            else:
-                d = 0.0
+                    q1 = self.q_values[i]
+                    q2 = self.q_values[j]
+                    actu = self._correlation_data[(q1,q2)]
+
+                    d += np.sum(np.abs(pred - actu))
                 
-                for i in range(self.num_q):
-                    for j in range(i,self.num_q):
-                        pred = np.polynomial.legendre.legval(Delta, Cl[:,i,j])
-                        actu = self._correlation_data[(q1,q2)]
-                        d += np.abs(pred - actu)
-                   
-                logger.info('Expansion error: %f\t(tol: %f)' % (d, epsilon))    
-                if d < epsilon:
-                    not_converged = False
+            logger.info('Expansion error: %f' % (d,))    
                     
         return Cl
         
