@@ -8,7 +8,6 @@ Classes, methods, functions for use with xray scattering experiments.
 import logging
 logging.basicConfig()
 logger = logging.getLogger(__name__)
-logger.setLevel("DEBUG")
 
 import cPickle
 from bisect import bisect_left
@@ -16,8 +15,9 @@ import multiprocessing as mp
 from threading import Thread
 
 import numpy as np
-from scipy import interpolate, fftpack, weave
+from scipy import interpolate, fftpack, weave, special
 from scipy.ndimage import filters
+from scipy.misc import factorial
 
 from odin.math import arctan3, rand_pairs, smooth
 from odin import cpuscatter
@@ -2437,6 +2437,7 @@ class CorrelationCollection(object):
             self.q_values = q_values
             
         self.phi_values = shot.phi_values
+        self.k = shot.detector.k
         
         self.num_q   = len(self.q_values)
         self.num_phi = len(self.phi_values)
@@ -2461,13 +2462,69 @@ class CorrelationCollection(object):
             return self._correlation_data[(q1,q2)]
             
             
-    def legendre_coeffecients(self, order=None, epsilon=1e-6):
+    def legendre_coeffecients(self, order=None, epsilon=1e-3):
         """
         Project the correlation functions onto a set of legendre polynomials,
         and return the coefficients of that projection.
         
+        Optional Parameters
+        -------------------
+        order : int
+            The order at which to truncate the polynomial expansion. If none,
+            will use epsilon parameter to decide order.
+            
+        epsilon : int
+            If `order` == None, then truncate after abs(correction - expansion)
+            < epsilon.
         """
-        raise NotImplementedError()
+        
+        Delta = self.phi_values # the phi1/phi2 difference values
+        
+        Cl = np.zeros((order, self.num_q, self.num_q))
+
+        il = 0
+        not_converged = True
+        while not_converged:
+            
+            l = il*2
+            Pl = special.legendre(l)
+            
+            for i in range(self.num_q):
+                for j in range(i,self.num_q):
+                    
+                    # compute psi, the angle between the scattering vectors
+                    t1 = np.arctan( self.q_values[i] / (2.0*self.k) ) # theta1
+                    t2 = np.arctan( self.q_values[j] / (2.0*self.k) ) # theta2
+
+                    psi = np.arccos( np.cos(t1)*np.cos(t2) + np.sin(t1)*np.sin(t2) \
+                                     * np.cos( Delta * 2. * pi/float(N) ) )
+                             
+                    Cl[il,i,j] = 2*pi*(2.*l + 1) * self._correlation_data[(q1,q2)] * Pl( np.cos(psi) ) * sin(psi)
+                    
+            # we computed only the upper triangle, so copy the solution
+            x = np.tril_indices(self.num_q,-1)] 
+            Cl[il,:,:][x] += Cl.T[il,:,:][x]
+            
+            il += 1
+            
+            # check for convergence by comparing the expansion to the real data
+            if order:
+                if il >= order:
+                    not_converged = False
+            else:
+                d = 0.0
+                
+                for i in range(self.num_q):
+                    for j in range(i,self.num_q):
+                        pred = np.polynomial.legendre.legval(Delta, Cl[:,i,j])
+                        actu = self._correlation_data[(q1,q2)]
+                        d += np.abs(pred - actu)
+                   
+                logger.info('Expansion error: %f\t(tol: %f)' % (d, epsilon))    
+                if d < epsilon:
+                    not_converged = False
+                    
+        return Cl
         
     
 def simulate_shot(traj, num_molecules, detector, traj_weights=None,
@@ -2492,8 +2549,9 @@ def simulate_shot(traj, num_molecules, detector, traj_weights=None,
         the sample consists of a single homogenous structure, replecated 
         `num_molecules` times.
         
-    detector : odin.xray.Detector
-        A detector object the shot will be projected onto.
+    detector : odin.xray.Detector OR ndarray, float
+        A detector object the shot will be projected onto. Can alternatively be
+        just an n x 3 array of vectors to project onto.
         
     num_molecules : int
         The number of molecules estimated to be in the `beam`'s focus.
@@ -2512,7 +2570,6 @@ def simulate_shot(traj, num_molecules, detector, traj_weights=None,
     device_id : int
         The index of the GPU device to run on.
         
-
     Returns
     -------
     intensities : ndarray, float
@@ -2544,12 +2601,21 @@ def simulate_shot(traj, num_molecules, detector, traj_weights=None,
         
     num_per_shapshot = np.random.multinomial(num_molecules, traj_weights)
 
-    # get detector
-    qx = detector.reciprocal[:,0].astype(np.float32)
-    qy = detector.reciprocal[:,1].astype(np.float32)
-    qz = detector.reciprocal[:,2].astype(np.float32)
-    num_q = len(qx)
-    assert detector.num_pixels == num_q
+    # get detector vectors
+    
+    if isinstance(detector, Detector):    
+        qx = detector.reciprocal[:,0].astype(np.float32)
+        qy = detector.reciprocal[:,1].astype(np.float32)
+        qz = detector.reciprocal[:,2].astype(np.float32)
+        num_q = len(qx)
+        assert detector.num_pixels == num_q
+    elif isinstance(detector, np.ndarray):
+        qx = detector[:,0].astype(np.float32)
+        qy = detector[:,1].astype(np.float32)
+        qz = detector[:,2].astype(np.float32)
+        num_q = len(qx)
+    else:
+        raise ValueError('`detector` must be {odin.xray.Detector, np.ndarray}')
 
     # get cromer-mann parameters for each atom type
     # renumber the atom types 0, 1, 2, ... to point to their CM params
@@ -2597,7 +2663,7 @@ def simulate_shot(traj, num_molecules, detector, traj_weights=None,
                 num_cpu = num
                 num_gpu = 0
                 bpg = 0
-                logger.info('Running CPU-only computation')
+                logger.debug('Running CPU-only computation')
             else:
                 num_cpu = num % 512
                 num_gpu = num - num_cpu
@@ -2609,9 +2675,7 @@ def simulate_shot(traj, num_molecules, detector, traj_weights=None,
             # that will dump returned values into a shared array
             threads = []
             def multi_helper(name, fargs):
-                """ a helper function that performs either CPU or GPU calcs """
-                logger.debug('multi_helper called with: %s' % str((name, fargs)))
-                
+                """ a helper function that performs either CPU or GPU calcs """                
                 if name == 'cpu':
                     function = cpuscatter.CPUScatter
                 elif name == 'gpu':
@@ -2839,4 +2903,96 @@ def debye(trajectory, weights=None, q_values=None):
     intensity_profile[:,1] = intensities
 
     return intensity_profile
+
+
+def sph_hrm_coefficients(trajectory, weights=None, q_magnitudes=None, 
+                         num_coefficients=10):
+    """
+    Numerically evaluates the coefficients of the projection of a structure's
+    fourier transform onto the three-dimensional spherical harmonic basis. Can
+    be used to directly compare a proposed structure to the same coefficients
+    computed from correlations in experimentally observed scattering profiles.
+    
+    Parameters
+    ----------
+    trajectory : mdtraj.trajectory
+        A trajectory object representing a Boltzmann ensemble.
+        
+    weights : ndarray, float
+        A list of weights, for how to weight each snapshot in the trajectory.
+        If not provided, treats each snapshot with equal weight.
+        
+    q_magnitudes : ndarray, float
+        A list of the reciprocal space magnitudes at which to evaluate 
+        coefficients.
+        
+    num_coefficients : int
+        The order at which to truncate the spherical harmonic expansion
+    
+    Returns
+    -------
+    sph_coefficients : ndarray, float
+        A 3-dimensional array of coefficients. The first dimension indexes the
+        order of the spherical harmonic. The second two dimensions index the
+        array `q_magnitudes`.
+    """
+    
+    logger.info('Projecting image into spherical harmonic basis...')
+    
+    # first, deal with weights
+    if weights == None:
+        weights = np.ones(trajectory.n_frames)
+    else:
+        if not len(weights) == trajectory.n_frames:
+            raise ValueError('length of `weights` array must be the same as the'
+                             'number of snapshots in `trajectory`')
+        weights /= weights.sum()
+    
+    # initialize the q_magnitudes array
+    if q_magnitudes == None:
+        q_magnitudes = np.arange(1.0, 6.0, 0.02)
+    num_q_mags = len(q_magnitudes)
+    
+    # don't do odd values of ell
+    l_vals = range(0, 2*num_coefficients, 2)
+    
+    # initialize output space
+    sph_coefficients = np.zeros((num_coefficients, num_q_mags, num_q_mags))
+    Slm = np.zeros(( num_coefficients, 2*num_coefficients+1, num_q_mags ))
+    
+    # get the quadrature vectors we'll use, a 900 x 4 array : [q_x, q_y, q_z, w]
+    from odin.refdata import sph_quad_900
+    q_phi   = arctan3(sph_quad_900[:,1], sph_quad_900[:,0])
+        
+    # iterate over all snapshots in the trajectory
+    for i in range(trajectory.n_frames):
+        
+        for iq,q in enumerate(q_magnitudes):
+            logger.info('Computing coefficients for q=%f\t(%d/%d)' % (q, iq, num_q_mags))
+                    
+            # compute S, the single molecule scattering intensity
+            S = simulate_shot(trajectory, 1, sph_quad_900[:,:3] * q, 
+                              force_no_gpu=True)
+
+            # project S onto the spherical harmonics using spherical quadrature
+            for il,l in enumerate(l_vals):                
+                for m in range(-l, l+1):
+                    
+                    N = np.sqrt( 2. * l * factorial(l-m) / ( 4. * np.pi * factorial(l+m) ) )
+                    Plm = special.lpmv(m, l, sph_quad_900[:,2])
+                    Ylm = N * np.exp( 1j * m * q_phi ) * Plm
+                    
+                    Slm[il, m, iq] = np.sum( S * Ylm * sph_quad_900[:,3] )
+                    #Slm[il, m, iq] = np.sum( S * np.power(np.abs(Ylm), 2) * sph_quad_900[:,3] )
+    
+        # now, reduce the Slm solution to C_l(q1, q2)
+        for iq1, q1 in enumerate(q_magnitudes):
+            for iq2, q2 in enumerate(q_magnitudes):
+                for il, l in enumerate(l_vals):
+                    sph_coefficients[il, iq1, iq2] += weights[i] * np.real( np.sum( Slm[il,:,iq1] * np.conjugate(Slm[il,:,iq2]) ) )
+    
+    return sph_coefficients
+
+
+
 
