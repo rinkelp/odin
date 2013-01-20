@@ -533,14 +533,25 @@ class TestCorrelationCollection(object):
     
     def setup(self):
         self.shot = xray.Shot.load(ref_file('refshot.shot'))
+        self.cc = xray.CorrelationCollection(self.shot)
         
-    def test_init(self):
-        xray.CorrelationCollection(self.shot)
+    def test_ring(self):
+        q1 = 2.0
+        q2 = 3.0
+        ring1 = self.cc.ring(q1, q2)
+        ring2 = self.shot.correlate_ring(q1, q2)
+        assert_allclose(ring1, ring2)
+        
+    def test_coefficients(self):
+        cl = cc.legendre_coeffecients()
+        
+    def test_coefficients_order(self):
+        cl = cc.legendre_coeffecients(order=5)
+        assert cl.shape[0] == 5
         
         
 class TestDebye(object):
     
-    @skip
     def test_against_reference_implementation(self):
         
         def debye_reference(trajectory, weights=None, q_values=None):
@@ -650,7 +661,6 @@ class TestDebye(object):
         calc = xray.debye(s, q_values=qs)
         assert_allclose(calc, ref)
     
-    @skip    
     def test_against_scattering_simulation(self):
         if not GPU: raise SkipTest
         d = xray.Detector.generic()
