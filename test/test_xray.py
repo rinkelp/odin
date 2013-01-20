@@ -527,6 +527,15 @@ class TestShotset():
         i1 = np.array(self.shot.correlate_ring(q1, q2))
         i2 = np.array(self.shotset.correlate_ring(q1, q2))
         assert_array_almost_equal(i1, i2)
+    
+        
+class TestCorrelationCollection(object):
+    
+    def setup(self):
+        self.shot = xray.Shot.load(ref_file('refshot.shot'))
+        
+    def test_init(self):
+        xray.CorrelationCollection(self.shot)
         
         
 class TestDebye(object):

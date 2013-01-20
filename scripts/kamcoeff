@@ -1,0 +1,79 @@
+#!/usr/bin/env python
+
+"""
+Compute the theoretical coefficients for the expansion of a structure's
+three-dimensional fourier transform in spherical harmonics.
+"""
+
+from odin import xray, structure
+from mdtraj import trajectory
+from odin.utils import odinparser
+
+import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib.cm as cm
+
+def main(traj, num_coeff, output_fn):
+
+    q_min = 1.0
+    q_max = 2.5
+    q_space = 0.02
+    q_magnitudes = np.arange(q_min, q_max, q_space)
+
+    Cl = xray.sph_hrm_coefficients(traj, num_coefficients=num_coeff, 
+                                   q_magnitudes=q_magnitudes)
+
+    fig, ax = plt.subplots(figsize=(18,9), nrows=2, ncols=num_coeff/2)
+    plt.subplots_adjust(wspace=0.5)
+    
+    print "Rendering image..."
+    
+    for i in range(num_coeff):
+        
+        col = i / 2
+        row = i % 2
+                
+        extent = [q_min, q_max] * 2
+        ax[row, col].imshow(Cl[i,:,:].T, cmap=cm.jet, extent=extent)
+                            #interpolation='nearest')
+                            
+        ax[row, col].set_title(r'$C_{%d}(q_1, q_2)$' % (i*2,))
+        ax[row, col].set_xlabel(r'$q_1 / \AA^{-1}$')
+        ax[row, col].set_ylabel(r'$q_2 / \AA^{-1}$')
+
+    plt.show()
+    
+    if not output_fn.endswith('.pdf'):
+        output_fn += '.pdf'
+    print "Saved: %s" % output_fn
+    plt.savefig(output_fn)
+
+    return
+    
+    
+if __name__ == '__main__':
+    
+    parser = odinparser("""
+    Compute the theoretical coefficients for the expansion of a structure's
+    three-dimensional fourier transform in spherical harmonics.
+    """)
+
+    parser.add_argument('-s', '--structures', type=str,
+                        help='''A a PDB, coor, or trajectory file (.lh5 only 
+                        right now), defining the molecular geometrie(s) to expand.''')
+    parser.add_argument('-n', '--numcoeff', type=int, default=10,
+                        help='''The number of coefficients after which to
+                        truncate the expansion. Default: 10.''')
+    parser.add_argument('-o', '--output', default='sph_coeff.pdf',
+                        help='''The prefix to append to the output. Default: sph_coeff.pdf''')
+                        
+    args = parser.parse_args()
+    
+    # load up filenames
+    if args.structures.endswith('.coor') or args.structures.endswith('.xyz'):
+        traj = structure.load_coor(args.structures)
+    else:
+        traj = trajectory.load(args.structures)
+        
+    main(traj, args.numcoeff, args.output)
+    
