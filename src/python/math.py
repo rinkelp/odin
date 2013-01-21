@@ -533,14 +533,5 @@ def fft_acf(data):
     acf = result / result[0]
     return acf
 
-
-def sph_harm(l, m, theta, phi):
-    """
-    """
-    
-    Ylm = np.zeros(2*l+1)
-    
-    
-    return Ylm
     
     
