@@ -1472,8 +1472,8 @@ class Shot(object):
             logger.debug('Passed value `delta` not on grid -- using closest '
                          'possible value')
         return delta
-    
-    
+
+
     def _q_index(self, q):
         """
         Quick return of all self.polar_intensities with a specific `q`
@@ -1494,7 +1494,7 @@ class Shot(object):
         start = int(phi/self.phi_spacing) * self.num_q
         inds = np.arange(start, start+self.num_q)
         return inds
-    
+
         
     def _intensity_index(self, q, phi):
         """
@@ -1524,13 +1524,13 @@ class Shot(object):
         
         return index
         
-    
+
     def I(self, q, phi):
         """
         Return the intensity a (q,phi).
         """
         return np.array(self.polar_intensities)[self._intensity_index(q,phi)]
-        
+    
         
     def I_ring(self, q):
         """
@@ -1539,7 +1539,7 @@ class Shot(object):
         q = self._nearest_q(q)
         ind = self._q_index(q)
         return np.array(self.polar_intensities)[ind]
-        
+    
         
     def qintensity(self, q):
         """
@@ -1565,8 +1565,8 @@ class Shot(object):
         intensity = float( np.array( (self.polar_intensities[ind]).mean() ))
         
         return intensity
-        
-        
+    
+
     def intensity_profile(self):
         """
         Averages over the azimuth phi to obtain an intensity profile.
@@ -1585,8 +1585,8 @@ class Shot(object):
             intensity_profile[i,1] = np.float(self.qintensity(q))
 
         return intensity_profile
-        
-        
+
+    
     def intensity_maxima(self, smooth_strength=30.0):
         """
         Find the positions where the intensity profile is maximized.
@@ -1647,108 +1647,21 @@ class Shot(object):
         delta = self._nearest_phi(delta)
         
         i = int(delta / self.phi_spacing)
+        logger.debug('Correlating %d indicies away' % i)
         
         x = self.I_ring(q1)
         y = self.I_ring(q2)
         y = np.roll(y, i)
         
+        x -= x.mean()
+        y -= y.mean()
+        
         # this should work with masking
-        corr = ( (x-x.mean()) * (y-y.mean()) ).mean() / (x.std() * y.std())
+        corr = np.mean(x * y) / (x.std() * y.std())
         
         return corr
         
         
-    def correlate_ring_brute(self,q1,q2): 
-    	"""
-        Compute the correlation function C(q1, q2, delta) for the shot, averaged
-        for each measured value of the azimuthal angle phi, for many values
-        of delta. This is a brute-force method and requires order N**2 iterations.
-    
-        Parameters
-        ----------
-        q1 : float or numpy.ndarray
-            The magnitude of the first position to correlate.
-        or
-        The I_ring(q1) return value
-    
-        q2 : float or numpy.ndarray
-            The magnitude of the second position to correlate.
-        or
-        I_ring(q2) return value
-        
-        Returns
-        -------
-        cor : ndarray, float
-            A 2d array, where the first dimension is the value of the angle
-            delta employed, and the second is the correlation at that point.
-        
-        See Also
-        --------
-        odin.xray.Shot.correlate
-            Correlate for one value of delta
-        odin.xray.Shot.correlate_ring
-    	    Same as correlate_ring_brute but requires n*log(n) iterations          
-        """
-        
-    	# this step might be redundant because I_ring does the same thing
-    	#q1 = self._nearest_q(q1)
-            #q2 = self._nearest_q(q2)
-	
-        #	verify that q1 and q2 are of same type
-    	if type(q1) != type(q2):
-    	    raise ValueError("Arguments must both be an instance of the same "
-    	                     "type. Exiting function...")
-
-        #	if q1,q2 are floats...
-    	if isinstance(q1,float):
-    	    x = self.I_ring(q1)
-            if np.abs(q1 - q2) < 1e-6:
-                y = x.copy()
-            else:
-                y = self.I_ring(q2)
-            assert len(x) == len(y)
-            n_theta = len(x)
-
-	    logger.debug("Correlating rings brute at %f / %f" % (q1, q2))
-
-        #	if q1,q2 are np.arrays
-    	elif isinstance(q1,np.ndarray):
-    	    x=q1
-    	    y=q2
-    	    n_theta = len(q1)
-
-    	else:
-    	    raise ValueError("The arguments are not of type 'float' or 'numpy.ndarray'."
-    	                     "Exiting function...")
-        
-    	xmean = x.mean()
-    	ymean = y.mean()
-	
-    	x -= xmean
-        y -= ymean
-    
-        xstd = x.std() # might use as norm factors in future
-        ystd = y.std()
-	
-    	norm = n_theta*xmean*ymean
-
-        # todo : ensure a zero gets plugged in at all mask positions
-    
-        cor = np.zeros((n_theta, 2))
-        cor[:,0] = self.phi_values
-
-    	# for now, dont worry about gaps to speed things up
-
-    	for phi in xrange(n_theta):
-    	    for i in xrange(n_theta):
-    		j=i+phi
-    		if j>= n_theta: 
-    		    j=j-n_theta
-    		cor[phi,1]+= x[i]*y[j]/norm
-        
-    	return cor
-	
-
     def correlate_ring(self, q1, q2):
         """
         Compute the correlation function C(q1, q2, delta) for the shot, averaged
@@ -1786,36 +1699,29 @@ class Shot(object):
         q2 = self._nearest_q(q2)
         
         x = self.I_ring(q1)
-        if np.abs(q1 - q2) < 1e-6:
-            y = x.copy()
-        else:
-            y = self.I_ring(q2)
+        y = self.I_ring(q2)
         assert len(x) == len(y)
-        n_theta = len(x)
         
         logger.debug("Correlating rings at %f / %f" % (q1, q2))
-        
-        xstd = x.std()
-        ystd = y.std()
         
         x -= x.mean()
         y -= y.mean()
         
-        # todo : ensure a zero gets plugged in at all mask positions
-        
-        correlation_ring = np.zeros((n_theta, 2))
+        # plug in a zero at all mask positions
+        if np.ma.isMaskedArray(x):
+            x[x.mask] = 0.0
+        if np.ma.isMaskedArray(y):
+            y[y.mask] = 0.0
+                
+        correlation_ring = np.zeros((len(x), 2))
         correlation_ring[:,0] = self.phi_values
         
         # use d-FFT + convolution thm
         ffx = fftpack.fft(x)
         ffy = fftpack.fft(y)
-        iff = np.real(fftpack.ifft( ffx * ffy ))
+        iff = np.real(fftpack.ifft( ffx * np.conjugate(ffy) ))
         
         correlation_ring[:,1] = iff / (np.linalg.norm(x) * np.linalg.norm(y))
-        
-        # m = correlation_ring[:,1].max()
-        # for i in range(correlation_ring.shape[0]):
-        #     correlation_ring[i,1] = correlation_ring[i,1] / m
         
         return correlation_ring
         

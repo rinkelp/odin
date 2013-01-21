@@ -388,63 +388,50 @@ class TestShot(object):
         assert_allclose(p, p_code, rtol=1)
     
     def test_correlation(self):
-        # todo
+        
         # arb. parameters for testing
         q1 = 2.0
         q2 = 2.0
         
-        for delta in [0.0, np.pi/2, np.pi]:
+        x = self.shot.I_ring(q1)
+        y = self.shot.I_ring(q2)
+        assert len(x) == len(y)
         
-            delta = self.shot._nearest_delta(delta)
+        x -= x.mean()
+        y -= y.mean()
         
-            x = []
-            y = []
-        
-            masked = 0
-            for phi in self.shot.phi_values:
-                #if (  (q1,phi) not in self.shot.masked_polar_pixels ) and (  (q2,phi+delta) not in self.shot.masked_polar_pixels ):            
-                    x.append( self.shot.I(q1, phi) )
-                    y.append( self.shot.I(q2, phi+delta) )
-                # else:
-                #     masked += 1
+        ref = np.zeros(len(x))
+        for i in range(len(x)):
+            ref[i] = np.correlate(x, np.roll(y, i))
+        ref /= ref[0]
                 
-            x = np.array(x)
-            y = np.array(y)
-        
-            x -= x.mean()
-            y -= y.mean()
-        
-            assert_almost_equal( x.mean(), 0.0 )
-            assert_almost_equal( y.mean(), 0.0 )
-        
-            n = len(x)
-            assert len(y) == n
-        
-            # compute the correlation between x,y -- recall it is a *circular* correlation
-            ref = np.sum(x*y) / (n * x.std() * y.std())
-        
-            ans = self.shot.correlate(q1, q2, delta)        
-            assert_almost_equal(ans, ref, decimal=6)
+        for i in range(10):
+            delta = self.shot.phi_values[i]
+            ans = self.shot.correlate(q1, q2, delta)
+            assert_almost_equal(ans, ref[i], decimal=1)
         
     def test_corr_ring(self):
                 
-        # -------------------------------------------------------------------- #
-        # For some reason this test is failing ... suspect the FFT method
-        # has a finite error that is getting picked up. Not sure how to debug
-        # atm. todo. -- TJL 11.28.12
-        # -------------------------------------------------------------------- #
-        
         # arb. parameters for testing
         q1 = 2.0
         q2 = 2.0
         
         ring = self.shot.correlate_ring(q1, q2)
-        ref = np.zeros(ring.shape[0])
         
-        for i,delta in enumerate(ring[:,0]):
-            ref[i] = self.shot.correlate(q1, q2, delta)            
-            
-        assert_array_almost_equal(ring[:,1], ref, decimal=2)
+        # reference computation
+        x = self.shot.I_ring(q1)
+        y = self.shot.I_ring(q2)
+        assert len(x) == len(y)
+        
+        x -= x.mean()
+        y -= y.mean()
+        
+        ref = np.zeros(len(x))
+        for i in range(len(x)):
+            ref[i] = np.correlate(x, np.roll(y, i))
+        ref /= ref[0]
+                    
+        assert_allclose(ref, ring[:,1])
      
     def test_simulate_cpu_only(self):
         d = xray.Detector.generic(spacing=0.6)
