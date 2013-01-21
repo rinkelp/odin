@@ -55,7 +55,6 @@ Bcinterp::Bcinterp( int Nvals, double *vals, double x_space_, double y_space_,
     double * I = vals; // for legacy reasons
 
     // compute the finite difference derivatives for interior of the grid	
-	#pragma omp parallel for shared(dx, dy, dxdy, dIdx, dIdy, dIdxdy) private(x, y)
     for( y = 1; y < Ydim-1; y++ ) {
         for( x = 1; x < Xdim-1; x++ ) {
 
@@ -70,8 +69,6 @@ Bcinterp::Bcinterp( int Nvals, double *vals, double x_space_, double y_space_,
 		}
     }
 
-
-    #pragma omp parallel for shared(dx, dy, dxdy, dIdx, dIdy, dIdxdy) private(x)
     for( x = 1; x < Xdim-1; x++ ) {
 
         // top row (no corners)
@@ -91,8 +88,6 @@ Bcinterp::Bcinterp( int Nvals, double *vals, double x_space_, double y_space_,
 		dIdxdy[Xdim*(Ydim-1) + x] = dxdy;
 	}
 
-
-    #pragma omp parallel for shared(dx, dy, dxdy, dIdx, dIdy, dIdxdy) private(y)
     for( y = 1; y < Ydim-1; y++ ) {
 
         // do the left side (no corners)
@@ -152,7 +147,7 @@ Bcinterp::Bcinterp( int Nvals, double *vals, double x_space_, double y_space_,
 
 	
     for( x = 0; x < Xdim-1; x++ ) {
-        #pragma omp parallel for private(x, y) shared(dx, dy, dxdy, dIdx, dIdy, dIdxdy)
+        #pragma omp parallel for shared(x, dx, dy, dxdy, dIdx, dIdy, dIdxdy)
         for( y = 0; y < Ydim-1; y++ ) {
 
 			a00 =    F(I,x,y);
@@ -195,7 +190,9 @@ Bcinterp::Bcinterp( int Nvals, double *vals, double x_space_, double y_space_,
                 cout << "over-run array `alphas` in Bcinterp constructor" << endl;
                 throw std::out_of_range("over-run range on alphas in Bcinterp constructor");
             }
-
+            
+            #pragma omp critical
+            {
             alphas[k] = a00;
             alphas[k+1] = a10;
             alphas[k+2] = a20;
@@ -212,6 +209,7 @@ Bcinterp::Bcinterp( int Nvals, double *vals, double x_space_, double y_space_,
             alphas[k+13] = a13;
             alphas[k+14] = a23;
             alphas[k+15] = a33;
+            }
 	    }
 	}
 
