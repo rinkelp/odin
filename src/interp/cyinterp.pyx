@@ -47,8 +47,9 @@ cdef class Bcinterp:
         Bcinterp.ev : function
             Evaluate the interpolated function at one or more points
         """
-        self.c = new C_Bcinterp(len(vals), &vals[0], x_space, y_space,
-                                Xdim, Ydim, x_corner, y_corner)
+        with nogil:
+            self.c = new C_Bcinterp(len(vals), &vals[0], x_space, y_space,
+                                    Xdim, Ydim, x_corner, y_corner)
                 
     def __dealloc__(self):
         del self.c
@@ -57,11 +58,14 @@ cdef class Bcinterp:
             np.ndarray[ndim=1, dtype=np.double_t] y):
         assert len(x) == len(y)
         cdef np.ndarray[ndim=1, dtype=np.double_t] z = np.zeros_like(x)
-        self.c.evaluate_array(len(x), &x[0], len(y), &y[0], len(z), &z[0])
+        with nogil:
+            self.c.evaluate_array(len(x), &x[0], len(y), &y[0], len(z), &z[0])
         return z
         
     def _evaluate_point(self, double x, double y):
-        return self.c.evaluate_point(x, y)
+        with nogil:
+            pt = self.c.evaluate_point(x, y)
+        return pt
         
     def evaluate(self, x, y):
         """
