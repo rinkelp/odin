@@ -383,7 +383,7 @@ def test_atomic_formfactor():
         for Z in [1, 8, 26, 79]:
             q_unit = np.zeros(3)
             q_unit[0] = q_mag
-            assert atomic_formfactor(Z, q_mag) == formfactor(Z, q_unit)
+            assert atomic_formfactor(Z, q_mag) == form_factor(Z, q_unit)
 
 
 if __name__ == '__main__':
