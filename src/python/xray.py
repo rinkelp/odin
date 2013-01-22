@@ -31,8 +31,8 @@ GPU = True
 try:
     from odin import gpuscatter
 except ImportError as e:
-    logger.warning('Could not find `gpuscatter` module, proceeding without it.'
-                   ' Note that this may break some functionality!')
+    logger.debug('Could not find `gpuscatter` module, proceeding without it.'
+                 ' Note that this may break some functionality!')
     GPU = False
 
 
@@ -2746,7 +2746,7 @@ def debye(trajectory, weights=None, q_values=None):
     
     // iterate over each value of q and compute the Debye scattering equation
     
-    #pragma omp parallel for shared(intensities, atomic_formfactors, aid, weights, xyz, q_values, n_atoms, n_frames)
+    // #pragma omp parallel for shared(intensities, atomic_formfactors, aid, weights, xyz, q_values, n_atoms, n_frames)
     for (int qi = 0; qi < n_q_values; qi++) {
     
         // pre-compute the atomic form factors at this q
@@ -2865,7 +2865,8 @@ def sph_hrm_coefficients(trajectory, weights=None, q_magnitudes=None,
     
     # initialize output space
     sph_coefficients = np.zeros((num_coefficients, num_q_mags, num_q_mags))
-    Slm = np.zeros(( num_coefficients, 2*num_coefficients+1, num_q_mags ))
+    Slm = np.zeros(( num_coefficients, 2*num_coefficients+1, num_q_mags), 
+                     dtype=np.complex128 )
     
     # get the quadrature vectors we'll use, a 900 x 4 array : [q_x, q_y, q_z, w]
     from odin.refdata import sph_quad_900
@@ -2875,7 +2876,7 @@ def sph_hrm_coefficients(trajectory, weights=None, q_magnitudes=None,
     for i in range(trajectory.n_frames):
         
         for iq,q in enumerate(q_magnitudes):
-            logger.info('Computing coefficients for q=%f\t(%d/%d)' % (q, iq, num_q_mags))
+            logger.info('Computing coefficients for q=%f\t(%d/%d)' % (q, iq+1, num_q_mags))
                     
             # compute S, the single molecule scattering intensity
             S = simulate_shot(trajectory, 1, sph_quad_900[:,:3] * q, 
@@ -2890,13 +2891,14 @@ def sph_hrm_coefficients(trajectory, weights=None, q_magnitudes=None,
                     Ylm = N * np.exp( 1j * m * q_phi ) * Plm
                     
                     Slm[il, m, iq] = np.sum( S * Ylm * sph_quad_900[:,3] )
-                    #Slm[il, m, iq] = np.sum( S * np.power(np.abs(Ylm), 2) * sph_quad_900[:,3] )
     
         # now, reduce the Slm solution to C_l(q1, q2)
         for iq1, q1 in enumerate(q_magnitudes):
             for iq2, q2 in enumerate(q_magnitudes):
                 for il, l in enumerate(l_vals):
-                    sph_coefficients[il, iq1, iq2] += weights[i] * np.real( np.sum( Slm[il,:,iq1] * np.conjugate(Slm[il,:,iq2]) ) )
+                    sph_coefficients[il, iq1, iq2] += weights[i] * \
+                                                      np.real( np.sum( Slm[il,:,iq1] *\
+                                                      np.conjugate(Slm[il,:,iq2]) ) )
     
     return sph_coefficients
 
