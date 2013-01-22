@@ -13,6 +13,8 @@ import inspect
 import tables
 import re
 import hashlib
+import yaml
+import tables
 from base64 import b64encode
 
 import numpy as np
@@ -336,7 +338,160 @@ class CBF(object):
         
         return s
         
-
+        
+class KittyHD5(object):
+    """
+    A class that reads the output of kitty-enhanced psana.
+    """
+        
+    def __init__(self, yaml_file):
+        """
+        Load in a YAML file that describes a ShotSet collected on the LCLS.
+        
+        Parameters
+        ----------
+        yaml_file : str
+            The path to the yaml file describing the shotset to load. Assumes
+            the yaml file is of the following format:
+            
+              - filename:
+                energy:
+                ...
+                
+              - filename:
+                energy:
+                ...
+                
+                ...
+                
+            where each list field corresponds to a different shot.
+        """
+                
+        f = open(yaml_file, 'r')
+        self.yaml_data = yaml.load(f)
+        
+        # see if there is a single pixel map to be used for the entire shotset
+        # and if so, store it as a `master_detector` attribute. If not, we'll
+        # generate a different detector for each shot
+        try:
+            self.master_detector = self._convert_detector(self.yaml_data['geom_file'],
+                                                          self.yaml_data['photon_eV'],
+                                                          self.yaml_data['detector_mm'])
+            self.is_master_detector = True
+        except KeyError as e:
+            logger.info('YAML file lacks field: `geom_file`')
+            logger.info('Looking for pixel map data associated with each shot entry...')
+            self.is_master_detector = False
+    
+    
+    @property    
+    def essential_fields(self):
+        """
+        A static property, a list of the essential data fields that must be
+        provided for each shot to convert it into ODIN.
+        """
+        essentials = ['photon_eV', 'data_file', 'detector_mm']
+        return essentials
+        
+        
+    @property
+    def num_descriptors(self):
+        return len(self.descriptors)
+    
+        
+    def convert(self, image_filter=None, max_shot_limit=None):
+        """
+        Perform the conversion from LCLS h5 files to an odin shotset.
+        
+        Optional Parameters
+        -------------------
+        image_filter : odin.xray.ImageFilter
+            An image filter that will get applied to each shot.
+        
+        max_shot_limit : int
+            If provided, will truncate the conversion after this many shots.
+        
+        Returns
+        -------
+        shotset : odin.xray.ShotSet
+            A shotset containing all the shots described in the original yaml 
+            file.
+        """
+        
+        self.shot_list = []
+        if image_filter:
+            self.filter = image_filter
+        else:
+            self.filter = None
+        
+        if max_shot_limit:
+            logger.info('Discarding all but the last %d shots' % max_shot_limit)
+            for i in range(max_shot_limit):
+                self.shot_list.append(self._convert_shot(self.descriptors[i]))
+        else:
+            for i in range(self.num_descriptors):
+                s = self._convert_shot(self.descriptors[i])
+                self.shot_list.append(s)
+    
+        return xray.Shotset(self.shot_list)
+        
+    
+    def _convert_detector(self, detector_h5_file, energy, path_length):
+        """
+        Convert a pixel map, written as an LCLS h5 file, to an odin Detector
+        object. Stores that detector in 
+        """
+        
+        f = tables.File(detector_h5_file)
+        
+        xyz = vstack([ f.root.x.read().flatten(), 
+                       f.root.y.read().flatten(), 
+                       f.root.z.read().flatten() ]).T
+                       
+        b = xray.Beam(energy=energy)
+        d = xray.Detector( xyz, path_length, b.k )
+        
+        return d
+        
+                        
+    def _convert_shot(self, descriptor):
+        """
+        Convert a single shot from LCLS H5 into an odin.shot
+        
+        Returns
+        -------
+        shot : odin.xray.Shot
+            The converted shot corresponding to `descriptor`
+        """
+        
+        for field in self.essential_fields:
+            if field not in descriptor.keys():
+                raise ValueError('Essential data field %s not in YAML file!' % field)
+                
+        # load up the intensity data from the file indicated in the descriptor
+        f = tables.File(descriptor['data_file'])
+        intensities = f.root.data.data.read().flatten()
+        
+        # if we're using an image filter, apply it
+        if self.filter:
+            intensities = self.filter(intensities)
+        
+        # figure out what detector to use
+        if self.is_master_detector:
+            d = self.master_detector
+        else:            
+            if 'geom_file' not in descriptor.keys():
+                raise ValueError('Essential data field `geom_file` not in YAML file!')
+            d = self._convert_detector(descriptor['geom_file'],
+                                       descriptor['photon_eV'],
+                                       descriptor['detector_mm'])
+        
+        # generate a detector object 
+        shot = xray.Shot(intensities, d)
+        
+        return shot
+        
+        
 class CXI(object):
     """
     A parser for the coherent x-ray imaging file format.

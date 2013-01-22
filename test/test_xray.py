@@ -607,10 +607,10 @@ class TestDebye(object):
             if q_values == None:
                 q_values = np.arange(0.02, 6.0, 0.02)
 
-            intensity_profile = np.zeros( ( len(q_values) , 2) )
+            intensity_profile = np.zeros( ( len(q_values), 2) )
             intensity_profile[:,0] = q_values
 
-            # array that will hold the contribution from each snapshot in `trajectory`
+            # array to hold the contribution from each snapshot in `trajectory`
             S = np.zeros(trajectory.n_frames)
 
             # extract the atomic numbers, number each atom by its type
@@ -630,7 +630,7 @@ class TestDebye(object):
                     cromermann[ind:ind+9] = np.array(cromer_mann_params[(a,0)]).astype(np.float32)
                 except KeyError as e:
                     logger.critical('Element number %d not in Cromer-Mann form factor parameter database' % a)
-                    raise ValueError('Could not get critical parameters for computation')
+                    raise ValueError('Could not get CM parameters for computation')
                 aid[ aZ == a ] = np.int32(i)
 
             # iterate over each value of q and compute the Debye scattering equation
@@ -653,7 +653,7 @@ class TestDebye(object):
                         # iterate over all snapshots 
                         for k in range(trajectory.n_frames):
                             r_ij = np.linalg.norm(trajectory.xyz[k,i,:] - trajectory.xyz[k,j,:])
-                            r_ij *= 10.0 # convert to angstroms.!
+                            r_ij *= 10.0 # convert to angstroms!
                             S[k] += 2.0 * fi * fj * np.sin( q * r_ij ) / ( q * r_ij )
 
                 intensity_profile[q_ind,1] = np.sum( S * weights )
