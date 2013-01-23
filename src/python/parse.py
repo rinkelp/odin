@@ -442,6 +442,7 @@ class KittyHD5(object):
     
     def _convert_raw_shot(self, descriptor):
         """
+        Convert a Kitty-generated raw image h5 file to an odin.xray.Shot.
         """
         
         for field in self.essential_fields:
@@ -464,7 +465,8 @@ class KittyHD5(object):
         
         f = tables.File(descriptor['data_file'])
         path = descriptor['i_raw']
-        i = 0 # WORK
+        i = f.getNode(path).read()
+        f.close()
         
         # turn that data into a basis representation
         grid_list, flat_i = self._lcls_raw_to_basis(x, y, z, i)
@@ -481,17 +483,40 @@ class KittyHD5(object):
                         
     def _convert_asm_shot(self, descriptor, x_pixel_size=0.1, y_pixel_size=0.1):
         """
+        Convert a Kitty-generated assembled image h5 file to an odin.xray.Shot.
         """
         
         for field in self.essential_fields:
             if field not in descriptor.keys():
                 raise ValueError('Essential data field %s not in YAML file!' % field)
                 
-        # WORK
+        energy = float(descriptor['photon_eV'])
+        path_length = float(descriptor['detector_mm']) * 1000.0 # mm -> um
         
+        # extract intensity data
+        f = tables.File(descriptor['data_file'])
+        try:
+            path = descriptor['i_asm']
+        except KeyError as e:
+            raise ValueError('Essential data field `i_asm` not in YAML file!')
+        i = f.getNode(path).read()
+        f.close()
         
-        # generate a detector object 
-        shot = xray.Shot(intensities, d)
+        # find the center
+        # TODO / WORK
+        center = (0.0, 0.0, 0.0)
+        
+        # compile a grid_list object
+        basis = (x_pixel_size, y_pixel_size, 0.0)
+        shape = (i.shape[0], i.shape[1], 1)
+        grid_list = [( basis, shape, center )]
+        
+        # generate the detector object               
+        b = xray.Beam(100, energy=energy)
+        d = xray.Detector.from_basis( grid_list, path_length, b.k )
+        
+        # generate the shot
+        s = xray.Shot(flat_i, d)
         
         return shot
         
@@ -589,37 +614,7 @@ class KittyHD5(object):
 
         return grid_list, flat_intensities
         
-        
-    def assemble_image(self, grid_list, flat_intensities, num_x=1715, num_y=1715):
-        """
-        Assembles an image composed of many individual square grids into a single
-        interpolated grid.
-
-        Parameters
-        ----------
-        grid_list: list of tuples
-            A basis vector representation of the detector pixels
-                grid_list = [ ( basis, shape, corner ) ]
-
-        flat_intensities : ndarray, float
-            The intensity values.
-
-        num_x,num_y : int
-            The number of pixels in the x/y direction that will comprise the final
-            grid.
-        """
-
-        points = multi_grid(grid_list)[:,:2]
-
-        x = np.linspace(points[:,0].min(), points[:,0].max(), num_x)
-        y = np.linspace(points[:,1].min(), points[:,1].max(), num_y)
-        grid_x, grid_y = np.meshgrid(x,y)
-
-        grid_z = interpolate.griddata(points, flat_intensities, (grid_x, grid_y), 
-                                      method='nearest')
-
-        return grid_z
-        
+                
         
 class CXI(object):
     """

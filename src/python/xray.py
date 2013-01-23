@@ -334,30 +334,7 @@ class Detector(Beam):
         
         return xyz
         
-        
-    def _grid_from_gridlist(grid_list):
-        """
-        Transforms a gridlist (list of tuples describing grided detectors) into
-        an xyz representation of the detctor, aka the explicit coordiantes of each 
-        pixel.
-
-        Parameters
-        ----------
-        grid_list: list of tuples
-            A basis vector representation of the detector pixels
-                grid_list = [ ( basis, shape, corner ) ]
-
-        Returns
-        -------
-        xyz : ndarray, float, 3D
-            An n x 3 array of the coordinates of each pixel.
-        """
-        xyz_list = []
-        for g in grid_list:
-            xyz_list.append( grid_from_implicit(*g) )
-        return np.vstack(xyz_list)
-        
-        
+                
     @property
     def real(self):
         real = self.xyz.copy()
@@ -1832,6 +1809,39 @@ class Shot(object):
         """ Package the interpolation parameters for saving """
         interp_params = [self.phi_spacing, self.q_min, self.q_max, self.q_spacing]
         return np.array(interp_params)
+
+        
+    def assemble_image(self, num_x=1715, num_y=1715):
+        """
+        Assembles the Shot object into a real-space image.
+
+        Parameters
+        ----------
+        num_x,num_y : int
+            The number of pixels in the x/y direction that will comprise the final
+            grid.
+
+        Returns
+        -------
+        grid_z : ndarray, float
+            A 2d array representing the image one would see when viewing the
+            shot in real space. E.g., to visualize w/matplotlib:
+
+            >>> imshow(grid_z.T)
+            >>> show()
+            ...
+        """
+
+        points = self.detector.xyz[:,:2]
+
+        x = np.linspace(points[:,0].min(), points[:,0].max(), num_x)
+        y = np.linspace(points[:,1].min(), points[:,1].max(), num_y)
+        grid_x, grid_y = np.meshgrid(x,y)
+
+        grid_z = interpolate.griddata(points, self.intensities, (grid_x,grid_y), 
+                                      method='nearest')
+
+        return grid_z
         
         
     # So as to not duplicate code/logic, I am going to employ a wrapped version
@@ -2006,7 +2016,7 @@ class Shotset(Shot):
         return intensity_profile
 
 
-    def intra(self,q1,q2):
+    def intra_fft(self,q1,q2):
     	"""
     	computes intra-shot correlation ffts
     	"""
@@ -2016,7 +2026,7 @@ class Shotset(Shot):
     	return intraCors
 
 
-    def inter(self,q1,q2,n_inter=0):
+    def inter_fft(self,q1,q2,n_inter=0):
        	"""
     	computes inter-shot correlation ffts
 	
@@ -2326,8 +2336,8 @@ class Shotset(Shot):
         hdf.close
 
         return Shotset(list_of_shots)
-
-
+        
+        
 class CorrelationCollection(object):
     """
     A class to manage a large set of ring correlations, likely computed from a
