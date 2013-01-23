@@ -1064,7 +1064,8 @@ class Shot(object):
         across the collection
     """
         
-    def __init__(self, intensities, detector, mask=None, interpolated_values=None):
+    def __init__(self, intensities, detector, q_spacing=0.02, phi_spacing=1.0, 
+                 q_values=None, mask=None, interpolated_values=None):
         """
         Instantiate a Shot class.
         
@@ -1076,9 +1077,25 @@ class Shot(object):
         
         detector : odin.xray.Detector
             A detector object, containing the pixel positions in space.
-            
+
         Optional Parameters
         -------------------
+        q_spacing : float
+            For interpolation: The q-vector spacing, in inverse angstroms.
+        
+        phi_spacing : float
+            For interpolation:The azimuthal angle spacing, IN DEGREES.
+            
+        q_values : ndarray OR list OF floats
+            For interpolation:  If supplied, the interpolation will only be 
+            performed at these values of |q|, and the `q_spacing` parameter will
+            be ignored.
+            
+        mask : ndarray, np.bool
+            An array the same size (and shape -- 1d) as `intensities` with a
+            'np.True' in all indices that should be masked, and 'np.False'
+            everywhere else.
+            
         interpolated_values : tuple
             If the shot has previously been interpolated onto a polar grid,
             you can instantiate it by passing
@@ -1100,7 +1117,10 @@ class Shot(object):
             self.real_mask = np.zeros(intensities.shape, dtype=np.bool)
         
         if interpolated_values == None:
-            self.interpolate_to_polar() # also sets self.polar_mask
+            # interpolate_to_polar also sets self.polar_mask
+            self.interpolate_to_polar(q_spacing=q_spacing,
+                                      phi_spacing=phi_spacing, 
+                                      q_values=q_values)
         else:
             self.polar_intensities = interpolated_values[0]
             self.polar_mask        = interpolated_values[1]
@@ -1118,7 +1138,9 @@ class Shot(object):
         
     @property
     def q_values(self):
-        if hasattr(self, 'q_min') and hasattr(self, 'q_max') and hasattr(self, 'q_spacing'):
+        if hasattr(self, 'q_values'):
+            qv = self.q_values
+        elif hasattr(self, 'q_min') and hasattr(self, 'q_max') and hasattr(self, 'q_spacing'):
             qv = np.arange(self.q_min, self.q_max+self.q_spacing, self.q_spacing)
         else:
             qv = None
@@ -1134,9 +1156,9 @@ class Shot(object):
         
     @property
     def num_q(self):
-        if hasattr(self, 'q_min') and hasattr(self, 'q_max') and hasattr(self, 'q_spacing'): 
+        try:
             nq = len(self.q_values)
-        else:
+        except:
             nq = None
         return nq
         
@@ -1145,7 +1167,8 @@ class Shot(object):
         return self.num_phi * self.num_q
         
 
-    def interpolate_to_polar(self, q_spacing=0.02, phi_spacing=1.0):
+    def interpolate_to_polar(self, q_spacing=0.02, phi_spacing=1.0, 
+                             q_values=None):
         """
         Interpolate our (presumably) cartesian-based measurements into a binned
         polar coordiante system.
@@ -1166,6 +1189,10 @@ class Shot(object):
         
         phi_spacing : float
             The azimuthal angle spacing, IN DEGREES.
+            
+        q_values : ndarray OR list OF floats
+            If supplied, the interpolation will only be performed at these
+            values of |q|, and the `q_spacing` parameter will be ignored.
         
         Injects
         -------
@@ -1174,11 +1201,16 @@ class Shot(object):
         """
         
         self.phi_spacing = phi_spacing * (2.0 * np.pi / 360.) # conv. to radians
-        self.q_spacing = q_spacing
-
-        mq = self.detector.recpolar[:,0]  # |q|
-        self.q_min = np.min( mq )
-        self.q_max = np.max( mq )
+        
+        if q_values != None:
+            self.q_values = q_values
+            self.q_min = np.min( q_values )
+            self.q_max = np.max( q_values )
+        else:
+            self.q_spacing = q_spacing
+            mq = self.detector.recpolar[:,0]  # |q|
+            self.q_min = np.min( mq )
+            self.q_max = np.max( mq )
 
         self.polar_intensities = np.zeros(self.num_datapoints)
         self.polar_mask = np.zeros(self.num_datapoints, dtype=np.bool)
@@ -1333,9 +1365,11 @@ class Shot(object):
                         
             # interpolate onto the polar grid & update the inverse mask
             # perform the interpolation. 
-            interp = Bcinterp(i, basis[0], basis[1], size[0], size[1], corner[0], corner[1])
+            interp = Bcinterp(i, basis[0], basis[1], size[0], size[1], 
+                              corner[0], corner[1])
             
-            self.polar_intensities[p_inds] = interp.evaluate(pgr[p_inds,0], pgr[p_inds,1])
+            self.polar_intensities[p_inds] = interp.evaluate(pgr[p_inds,0], 
+                                                             pgr[p_inds,1])
             self.polar_mask[p_inds] = np.bool(False)
             
         self._mask()
@@ -1565,6 +1599,7 @@ class Shot(object):
         # the two-step type conversion below ensures that (1) masked values
         # aren't included in the calc, and (2) if all the values are masked
         # we get intensity = 0.0
+        
         intensity = float( np.array( (self.polar_intensities[ind]).mean() ))
         
         return intensity

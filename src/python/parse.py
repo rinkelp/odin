@@ -369,7 +369,10 @@ class KittyH5(object):
         mode : {'raw', 'asm'}
             Whether to load up the raw data or the assembled images.
         """
-                
+        
+        logger.info('Kitty Loader -- locked onto shot handle: %s' % yaml_file)
+        logger.info('Extracting %s-type data' % mode)
+        
         f = open(yaml_file, 'r')
         self.yaml_data = yaml.load(f)
         f.close()
@@ -382,7 +385,6 @@ class KittyH5(object):
             raise ValueError("`mode` must be one of {'raw', 'asm'}")
         
     
-    
     @property    
     def essential_fields(self):
         """
@@ -391,7 +393,7 @@ class KittyH5(object):
         """
         essentials = ['photon_eV', 'data_file', 'detector_mm']
         return essentials
-        
+    
         
     @property
     def num_descriptors(self):

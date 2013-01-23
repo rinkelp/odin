@@ -235,6 +235,12 @@ class TestShot(object):
         print "testing interpolation methods consistent"
         assert_allclose(s1.intensities, s2.intensities)
         
+    def test_specific_q_interpolation(self):
+        qv = [0.2, 1.0, 1.1]
+        s = xray.Shot(self.i, self.d, phi_spacing=2.0, q_values=qv)
+        assert s.num_q == len(qv)
+        assert np.all(s.q_values == np.array(qv))
+        
     def test_pgc(self):
         """ test polar_grid_as_cart() property """
         pg = self.shot.polar_grid
@@ -274,7 +280,7 @@ class TestShot(object):
         print "ref:", ref
         print "diff", np.sum(np.abs(pgq - ref), axis=1)
         
-        assert_array_almost_equal(pgq, ref, decimal=1)
+        assert_array_almost_equal(pgq, ref)
         
     def test_mask(self):
         """ test masking by confirming some basic stuff is reasonable """
