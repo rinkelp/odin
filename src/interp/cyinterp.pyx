@@ -21,12 +21,11 @@ cdef class Bcinterp:
         
     cdef C_Bcinterp* c
     
-    def __cinit__(self, np.ndarray[ndim=1, dtype=np.double_t] vals, double x_space,
-            double y_space, int Xdim, int Ydim, double x_corner, double y_corner):
+    def __init__(self, vals, x_space, y_space, Xdim, Ydim, x_corner, y_corner):
         """
         Generate a bicubic interpolator, given a set of observations `values`
         made on a 2D grid.
-        
+    
         Parameters
         ----------
         values : ndarray, float
@@ -47,6 +46,22 @@ cdef class Bcinterp:
         Bcinterp.ev : function
             Evaluate the interpolated function at one or more points
         """
+        
+        v = vals.astype(np.float64)
+        
+        if not (type(x_space) == float) and (type(y_space) == float):
+            raise ValueError('`x_space`, `y_space` must be type: float')
+        if not (type(Xdim) == int) and (type(Ydim) == int):
+            raise ValueError('`Xdim`, `Ydim` must be type: int')
+        if not (type(x_corner) == float) and (type(y_corner) == float):
+            raise ValueError('`x_corner`, `y_corner` must be type: float')
+        
+        self.__cinit(v, x_space, y_space, Xdim, Ydim, x_corner, y_corner)
+    
+    
+    def __cinit(self, np.ndarray[ndim=1, dtype=np.double_t] vals, double x_space,
+            double y_space, int Xdim, int Ydim, double x_corner, double y_corner):
+
         self.c = new C_Bcinterp(len(vals), &vals[0], x_space, y_space,
                                 Xdim, Ydim, x_corner, y_corner)
                 

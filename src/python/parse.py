@@ -339,7 +339,7 @@ class CBF(object):
         return s
         
         
-class KittyHD5(object):
+class KittyH5(object):
     """
     A class that reads the output of kitty-enhanced psana.
     """
@@ -376,7 +376,7 @@ class KittyHD5(object):
         
         self.descriptors = self.yaml_data['Shots']
         
-        if mode in ['raw', 'asm']
+        if mode in ['raw', 'asm']:
             self.mode = mode
         else:
             raise ValueError("`mode` must be one of {'raw', 'asm'}")
@@ -431,9 +431,9 @@ class KittyHD5(object):
             
         # convert the shots using the appropriate method
         for i in range(n):
-            if mode == 'raw':
+            if self.mode == 'raw':
                 s = self._convert_raw_shot(self.descriptors[i])
-            elif mode == 'asm':
+            elif self.mode == 'asm':
                 s = self._convert_asm_shot(self.descriptors[i])
             self.shot_list.append(s)
     
@@ -444,6 +444,8 @@ class KittyHD5(object):
         """
         Convert a Kitty-generated raw image h5 file to an odin.xray.Shot.
         """
+        
+        logger.info('Loading raw image in: %s' % descriptor['data_file'])
         
         for field in self.essential_fields:
             if field not in descriptor.keys():
@@ -478,13 +480,15 @@ class KittyHD5(object):
         # generate the shot
         s = xray.Shot(flat_i, d)
         
-        return 
+        return s
         
                         
     def _convert_asm_shot(self, descriptor, x_pixel_size=0.1, y_pixel_size=0.1):
         """
         Convert a Kitty-generated assembled image h5 file to an odin.xray.Shot.
         """
+        
+        logger.info('Loading assembled image in: %s' % descriptor['data_file'])
         
         for field in self.essential_fields:
             if field not in descriptor.keys():
@@ -516,9 +520,9 @@ class KittyHD5(object):
         d = xray.Detector.from_basis( grid_list, path_length, b.k )
         
         # generate the shot
-        s = xray.Shot(flat_i, d)
+        s = xray.Shot(i.flatten(), d)
         
-        return shot
+        return s
         
         
     def _lcls_raw_to_basis(self, x, y, z, intensities, x_asics=8, y_asics=8):
