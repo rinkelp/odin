@@ -8,6 +8,7 @@ Classes, methods, functions for use with xray scattering experiments.
 import logging
 logging.basicConfig()
 logger = logging.getLogger(__name__)
+#logger.setLevel('DEBUG')
 
 import cPickle
 from bisect import bisect_left
@@ -1138,8 +1139,8 @@ class Shot(object):
         
     @property
     def q_values(self):
-        if hasattr(self, 'q_values'):
-            qv = self.q_values
+        if hasattr(self, '_q_values'):
+            qv = self._q_values
         elif hasattr(self, 'q_min') and hasattr(self, 'q_max') and hasattr(self, 'q_spacing'):
             qv = np.arange(self.q_min, self.q_max+self.q_spacing, self.q_spacing)
         else:
@@ -1159,6 +1160,7 @@ class Shot(object):
         try:
             nq = len(self.q_values)
         except:
+            logger.critical('no q_values found')
             nq = None
         return nq
         
@@ -1203,7 +1205,7 @@ class Shot(object):
         self.phi_spacing = phi_spacing * (2.0 * np.pi / 360.) # conv. to radians
         
         if q_values != None:
-            self.q_values = q_values
+            self.q_values = _q_values
             self.q_min = np.min( q_values )
             self.q_max = np.max( q_values )
         else:
@@ -1328,6 +1330,8 @@ class Shot(object):
         
         NOTE: The interpolation is performed in cartesian real (xyz) space.
         """
+        
+        logger.debug('performing implicit interpolation...')
                 
         # loop over all the arrays that comprise the detector and use
         # grid interpolation on each
@@ -2972,6 +2976,83 @@ def sph_hrm_coefficients(trajectory, weights=None, q_magnitudes=None,
                                                       np.conjugate(Slm[il,:,iq2]) ) )
     
     return sph_coefficients
+    
+    
+def center_finder(Img, brag_ring_location):
+    """
+    Extracts a ring a certain distance from the `centerPoint` of the detector.
+
+    Parameters
+    ----------
+    centerPoint : tuple
+        The guess of the center
+
+    Img : ndarray
+        The 2d array of the image intensities
+
+    Contributed by Seva Ivanov
+    """
+
+    minR = brag_ring_location - 8
+    maxR = brag_ring_location + 8
+
+    # get ring
+    xcenter = int(Img.shape[0] / 2)
+    ycenter = int(Img.shape[1] / 2)
+
+    # find a region around the center to search
+    outercutoff = maxR + 5
+    outermini = xcenter - outercutoff-1
+    outermaxi = xcenter + outercutoff
+    outerminj = ycenter - outercutoff-1
+    outermaxj = ycenter + outercutoff
+
+    Ring = np.zeros((35000, 3))
+    count = 0
+
+    for j in range(outerminj, outermaxj):
+        i = np.arange(outermini, outermaxi)
+
+        Intensity = Img[i , j]
+        index = (Intensity>0)
+
+        xdif = (xcenter - i)
+        ydif = (ycenter - j)
+        Radius = np.sqrt(xdif**2 + ydif**2)
+
+        index = (Radius>minR)*(Radius<maxR)* index
+        add = np.sum(index)
+        #print add
+
+        if (add>0):
+            newcount = count + add
+
+            Ring[count:newcount, 0] = i[index]
+            Ring[count:newcount, 1] = j
+            Ring[count:newcount, 2] = Intensity[index]
+            count = newcount
+
+    Ring = Ring[0:(count), 0:3]
+
+    # initial parameter guesses
+    # (A, B, C, R, center_x, center_y)
+    # f = A + B * N(R, C)
+    # where N(mu, sigma) is a Gaussian
+    b0 = np.array([1000, 4000, 2, brag_ring_location, xcenter, ycenter])
+
+    def residuals(beta , Int , x, y):
+        """
+        The objective function: the residuals of the Gaussian fit.
+        """
+        A, B, C, R, x0, y0 = beta
+        a = x - x0
+        b = y - y0
+        rad = np.sqrt(a**2 + b**2)
+        predInt = A + B*np.exp(-( (rad - R)**2)/(2*C**2) )
+        return (Int-predInt)
+
+    beta = leastsq(residuals, b0, args=(Ring[:,2], Ring[:,0], Ring[:,1]))
+    return beta
 
 
 
