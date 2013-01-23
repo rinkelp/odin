@@ -204,7 +204,6 @@ class TestShot(object):
         self.d = xray.Detector.generic(spacing=0.4)
         self.i = np.abs( np.random.randn(self.d.xyz.shape[0]) )
         self.t = trajectory.load(ref_file('ala2.pdb'))
-        #self.shot = xray.Shot.load(ref_file('refshot.shot'))
         self.shot = xray.Shot(self.i, self.d)
         
     def test_io(self):
@@ -553,6 +552,17 @@ class TestCorrelationCollection(object):
         pred = np.polynomial.legendre.legval( np.cos(psi), c)
 
         assert_allclose(pred, correlation, rtol=1e-01)
+        
+        
+class TestSphHrm(object):
+    
+    def test_vs_reference(self):
+        qs = np.arange(2, 3.52, 0.02)
+        silver = structure.load_coor(ref_file('SilverSphere.coor'))
+        cl = xray.sph_hrm_coefficients(silver, q_magnitudes=qs, 
+                                       num_coefficients=2)[1,:,:]
+        ref = np.loadtxt(ref_file('ag_kam.dat')) # computed in matlab
+        assert_allclose(cl, ref)
         
         
 class TestDebye(object):
