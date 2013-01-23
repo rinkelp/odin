@@ -305,19 +305,22 @@ class Detector(Beam):
         assert self.xyz_type == 'implicit'
         
         if basis[0] != 0.0:
-            x_pixels = np.arange(0, basis[0]*size[0], basis[0])
+            x_pixels = np.arange(0, basis[0]*size[0], basis[0])[:size[0]]
         else:
             x_pixels = np.zeros( size[0] )
+        assert len(x_pixels) == size[0]
         
         if basis[1] != 0.0:
-            y_pixels = np.arange(0, basis[1]*size[1], basis[1])
+            y_pixels = np.arange(0, basis[1]*size[1], basis[1])[:size[1]]
         else:
             y_pixels = np.zeros( size[1] )
+        assert len(y_pixels) == size[1]
         
         if basis[2] != 0.0:
-            z_pixels = np.arange(0, basis[2]*size[2], basis[2])
+            z_pixels = np.arange(0, basis[2]*size[2], basis[2])[:size[2]]
         else:
             z_pixels = np.zeros( size[2] )
+        assert len(z_pixels) == size[2]
         
         x = np.repeat(x_pixels, size[1]*size[2])
         y = np.tile( np.repeat(y_pixels, size[2]), size[0] )
@@ -330,6 +333,29 @@ class Detector(Beam):
         assert xyz.shape[1] == 3
         
         return xyz
+        
+        
+    def _grid_from_gridlist(grid_list):
+        """
+        Transforms a gridlist (list of tuples describing grided detectors) into
+        an xyz representation of the detctor, aka the explicit coordiantes of each 
+        pixel.
+
+        Parameters
+        ----------
+        grid_list: list of tuples
+            A basis vector representation of the detector pixels
+                grid_list = [ ( basis, shape, corner ) ]
+
+        Returns
+        -------
+        xyz : ndarray, float, 3D
+            An n x 3 array of the coordinates of each pixel.
+        """
+        xyz_list = []
+        for g in grid_list:
+            xyz_list.append( grid_from_implicit(*g) )
+        return np.vstack(xyz_list)
         
         
     @property
@@ -2901,7 +2927,6 @@ def sph_hrm_coefficients(trajectory, weights=None, q_magnitudes=None,
                                                       np.conjugate(Slm[il,:,iq2]) ) )
     
     return sph_coefficients
-
 
 
 

@@ -344,7 +344,7 @@ class KittyHD5(object):
     A class that reads the output of kitty-enhanced psana.
     """
         
-    def __init__(self, yaml_file):
+    def __init__(self, yaml_file, mode='asm'):
         """
         Load in a YAML file that describes a ShotSet collected on the LCLS.
         
@@ -354,34 +354,33 @@ class KittyHD5(object):
             The path to the yaml file describing the shotset to load. Assumes
             the yaml file is of the following format:
             
-              - filename:
-                energy:
+              - data_file:
+                photon_eV:
                 ...
                 
-              - filename:
-                energy:
+              - data_file:
+                photon_eV:
                 ...
                 
                 ...
                 
             where each list field corresponds to a different shot.
+            
+        mode : {'raw', 'asm'}
+            Whether to load up the raw data or the assembled images.
         """
                 
         f = open(yaml_file, 'r')
         self.yaml_data = yaml.load(f)
+        f.close()
         
-        # see if there is a single pixel map to be used for the entire shotset
-        # and if so, store it as a `master_detector` attribute. If not, we'll
-        # generate a different detector for each shot
-        try:
-            self.master_detector = self._convert_detector(self.yaml_data['geom_file'],
-                                                          self.yaml_data['photon_eV'],
-                                                          self.yaml_data['detector_mm'])
-            self.is_master_detector = True
-        except KeyError as e:
-            logger.info('YAML file lacks field: `geom_file`')
-            logger.info('Looking for pixel map data associated with each shot entry...')
-            self.is_master_detector = False
+        self.descriptors = self.yaml_data['Shots']
+        
+        if mode in ['raw', 'asm']
+            self.mode = mode
+        else:
+            raise ValueError("`mode` must be one of {'raw', 'asm'}")
+        
     
     
     @property    
@@ -426,70 +425,200 @@ class KittyHD5(object):
         
         if max_shot_limit:
             logger.info('Discarding all but the last %d shots' % max_shot_limit)
-            for i in range(max_shot_limit):
-                self.shot_list.append(self._convert_shot(self.descriptors[i]))
+            n = max_shot_limit
         else:
-            for i in range(self.num_descriptors):
-                s = self._convert_shot(self.descriptors[i])
-                self.shot_list.append(s)
+            n = self.num_descriptors
+            
+        # convert the shots using the appropriate method
+        for i in range(n):
+            if mode == 'raw':
+                s = self._convert_raw_shot(self.descriptors[i])
+            elif mode == 'asm':
+                s = self._convert_asm_shot(self.descriptors[i])
+            self.shot_list.append(s)
     
         return xray.Shotset(self.shot_list)
         
     
-    def _convert_detector(self, detector_h5_file, energy, path_length):
+    def _convert_raw_shot(self, descriptor):
         """
-        Convert a pixel map, written as an LCLS h5 file, to an odin Detector
-        object. Stores that detector in 
         """
         
-        f = tables.File(detector_h5_file)
+        for field in self.essential_fields:
+            if field not in descriptor.keys():
+                raise ValueError('Essential data field %s not in YAML file!' % field)
         
-        xyz = vstack([ f.root.x.read().flatten(), 
-                       f.root.y.read().flatten(), 
-                       f.root.z.read().flatten() ]).T
-                       
-        b = xray.Beam(energy=energy)
-        d = xray.Detector( xyz, path_length, b.k )
+        energy = float(descriptor['photon_eV'])
+        path_length = float(descriptor['detector_mm']) * 1000.0 # mm -> um
         
-        return d
+        # load all the relevant data from many h5s... (dumb)
+        f = tables.File(descriptor['x_raw'])
+        x = f.root.data.data.read()
+        f.close()
+        
+        f = tables.File(descriptor['y_raw'])
+        y = f.root.data.data.read()
+        f.close()
+        
+        z = np.zeros_like(x)
+        
+        f = tables.File(descriptor['data_file'])
+        path = descriptor['i_raw']
+        i = 0 # WORK
+        
+        # turn that data into a basis representation
+        grid_list, flat_i = self._lcls_raw_to_basis(x, y, z, i)
+        
+        # generate the detector object               
+        b = xray.Beam(100, energy=energy)
+        d = xray.Detector.from_basis( grid_list, path_length, b.k )
+        
+        # generate the shot
+        s = xray.Shot(flat_i, d)
+        
+        return 
         
                         
-    def _convert_shot(self, descriptor):
+    def _convert_asm_shot(self, descriptor, x_pixel_size=0.1, y_pixel_size=0.1):
         """
-        Convert a single shot from LCLS H5 into an odin.shot
-        
-        Returns
-        -------
-        shot : odin.xray.Shot
-            The converted shot corresponding to `descriptor`
         """
         
         for field in self.essential_fields:
             if field not in descriptor.keys():
                 raise ValueError('Essential data field %s not in YAML file!' % field)
                 
-        # load up the intensity data from the file indicated in the descriptor
-        f = tables.File(descriptor['data_file'])
-        intensities = f.root.data.data.read().flatten()
+        # WORK
         
-        # if we're using an image filter, apply it
-        if self.filter:
-            intensities = self.filter(intensities)
-        
-        # figure out what detector to use
-        if self.is_master_detector:
-            d = self.master_detector
-        else:            
-            if 'geom_file' not in descriptor.keys():
-                raise ValueError('Essential data field `geom_file` not in YAML file!')
-            d = self._convert_detector(descriptor['geom_file'],
-                                       descriptor['photon_eV'],
-                                       descriptor['detector_mm'])
         
         # generate a detector object 
         shot = xray.Shot(intensities, d)
         
         return shot
+        
+        
+    def _lcls_raw_to_basis(self, x, y, z, intensities, x_asics=8, y_asics=8):
+        """
+        This is a specific function that converts a set of ASICS from the LCLS
+        into a grid-basis vector representation. This representation is less
+        flexible, but much more efficient computationally.
+        
+        Parameters
+        ----------
+        x,y,z : ndarray
+            The x/y/z pixel coordinates. Assumed to be 2d arrays.
+
+        x_asics, y_asics : int
+            The number of asics in the x/y directions.
+
+        intensities : ndarray, float
+            The intensity data.
+
+        Returns
+        -------
+        grid_list: list of tuples
+            A basis vector representation of the detector pixels
+                grid_list = [ ( basis, shape, corner ) ]
+        """
+
+        if not (x.shape == y.shape) and (x.shape == z.shape) and (x.shape == intensities.shape):
+            raise ValueError('x, y, z, intensities shapes do not match!')
+
+        # do some sanity checking on the shape
+        s = x.shape
+        if not s[0] % x_asics == 0:
+            raise ValueError('`x_asics` does not evenly divide the x-dimension!')
+        if not s[1] % y_asics == 0:
+            raise ValueError('`y_asics` does not evenly divide the y-dimension!')
+
+        # determine the spacing
+        x_spacing = s[0] / x_asics
+        y_spacing = s[1] / y_asics
+
+        # grid list to hold the output grid_list = [ ( basis, shape, corner ) ]
+        grid_list = []
+        flat_intensities = np.zeros( np.product(intensities.shape) )
+
+        # iterate through each asic and extract the basis vectors
+        for ix in range(x_asics):
+            for iy in range(y_asics):
+
+                # initialize data structures
+                basis = []
+
+                # the indicies to slice the array on
+                x_start  = x_spacing * ix
+                x_finish = x_spacing * (ix+1)
+
+                y_start  = y_spacing * iy
+                y_finish = y_spacing * (iy+1)
+
+                # slice
+                xa = x[x_start:x_finish,y_start:y_finish]
+                ya = y[x_start:x_finish,y_start:y_finish]
+                za = z[x_start:x_finish,y_start:y_finish]
+                ia = intensities[x_start:x_finish,y_start:y_finish]
+
+                # determine the pixel spacing
+                for a in [xa, ya]:
+                    s1 = np.abs(a[0,0] - a[0,1])
+                    s2 = np.abs(a[0,0] - a[1,0])
+                    basis.append( max(s1, s2) )
+
+                # add the z-basis
+                basis.append(0.0)
+                assert len(basis) == 3
+                basis = tuple(basis)
+
+                # assemble the grid_tuple
+                shape = (x_spacing, y_spacing, 1)
+
+                corner = ( xa.flatten()[np.argmin(xa)], 
+                           ya.flatten()[np.argmin(ya)], 
+                           za[0,0] )
+
+                grid_tuple = (basis, shape, corner)
+                grid_list.append(grid_tuple)
+
+                # store the flatten-ed intensities in the correct order
+                spacing = x_spacing * y_spacing
+                start  = spacing * (ix + iy*x_asics)
+                finish = spacing * (ix + iy*x_asics + 1)
+                flat_intensities[start:finish] = ia.flatten()
+
+        assert len(grid_list) == x_asics * y_asics
+
+        return grid_list, flat_intensities
+        
+        
+    def assemble_image(self, grid_list, flat_intensities, num_x=1715, num_y=1715):
+        """
+        Assembles an image composed of many individual square grids into a single
+        interpolated grid.
+
+        Parameters
+        ----------
+        grid_list: list of tuples
+            A basis vector representation of the detector pixels
+                grid_list = [ ( basis, shape, corner ) ]
+
+        flat_intensities : ndarray, float
+            The intensity values.
+
+        num_x,num_y : int
+            The number of pixels in the x/y direction that will comprise the final
+            grid.
+        """
+
+        points = multi_grid(grid_list)[:,:2]
+
+        x = np.linspace(points[:,0].min(), points[:,0].max(), num_x)
+        y = np.linspace(points[:,1].min(), points[:,1].max(), num_y)
+        grid_x, grid_y = np.meshgrid(x,y)
+
+        grid_z = interpolate.griddata(points, flat_intensities, (grid_x, grid_y), 
+                                      method='nearest')
+
+        return grid_z
         
         
 class CXI(object):

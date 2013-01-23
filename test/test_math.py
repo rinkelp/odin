@@ -30,19 +30,19 @@ class TestHough(object):
         print "all:", maxmia
         assert (85.0, 155, 143) in maxima
         
-    @expected_failure
+    @skip
     def test_sharpest(self):
         maxima = self.CM(self.image, mode='sharpest')                          
         assert_allclose(maxima, (85.0, 156, 145))
     
-    @expected_failure
+    @skip
     # for some reason this seems to be stochastic?!?
     # todo : fix that. its not good.
     def test_concentric(self):
         maxima = self.CM(self.image, mode='concentric')
         assert_allclose(maxima, (155, 143))
         
-    @expected_failure
+    @skip
     def test_all_on_many_img(self):
         image = imread(ref_file('chough-test2.png'))
         CM = om.CircularHough(radii=np.arange(10,40,2))
