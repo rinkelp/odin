@@ -219,6 +219,12 @@ class TestShot(object):
         if not GPU: raise SkipTest
         shot = xray.Shot.simulate(self.t, 512, self.d)
         
+    def test_q_values(self):
+        q_max = np.max(self.shot.detector.recpolar[:,0])
+        spacing = self.shot.q_spacing
+        qv_ref = np.arange(spacing, q_max+spacing, spacing)
+        assert_array_almost_equal(self.shot.q_values, qv_ref)
+        
     def test_implicit_interpolation_smoke(self):
         s = xray.Shot(self.i, self.d)
         
@@ -281,6 +287,25 @@ class TestShot(object):
         print "diff", np.sum(np.abs(pgq - ref), axis=1)
         
         assert_array_almost_equal(pgq, ref)
+        
+        
+    def test_pgr2(self):
+        """ test polar_grid_as_real_cart() property against ref implementation"""
+        
+        pg  = self.shot.polar_grid
+        ref_pgr = np.zeros_like(pg)
+        k = self.shot.detector.k
+        l = self.shot.detector.path_length
+        
+        pg[ pg[:,0] == 0.0 ,0] = 1.0e-300
+        h = l * np.tan( 2.0 * np.arcsin( pg[:,0] / (2.0*k) ) )
+        
+        ref_pgr[:,0] = h * np.cos( pg[:,1] )
+        ref_pgr[:,1] = h * np.sin( pg[:,1] )
+        
+        pgr = self.shot.polar_grid_as_real_cart
+        
+        assert_array_almost_equal(pgr, ref_pgr)        
         
     def test_mask(self):
         """ test masking by confirming some basic stuff is reasonable """
