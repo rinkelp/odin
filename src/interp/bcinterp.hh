@@ -5,19 +5,19 @@ class Bcinterp
 {
     
 public:    
-    Bcinterp(int Nvals, double *vals, double x_space_, double y_space_, int Xdim_, 
-             int Ydim_, double x_corner_, double y_corner_);
-    double evaluate_point(double x, double y);
-    void evaluate_array(int dim_xa, double *xa, int dim_ya, double *ya, 
-                        int dim_za, double *za);
+    Bcinterp(int Nvals, float *vals, float x_space_, float y_space_, int Xdim_, 
+             int Ydim_, float x_corner_, float y_corner_);
+    float evaluate_point(float x, float y);
+    void evaluate_array(int dim_xa, float *xa, int dim_ya, float *ya, 
+                        int dim_za, float *za);
                         
-    double x_space, y_space, x_corner, y_corner;
+    float x_space, y_space, x_corner, y_corner;
     int Xdim, Ydim;
 
     ~Bcinterp();
     
 private:
-    std::vector<double> alphas;
+    std::vector<float> alphas;
     unsigned int size_alphas;
-    double F(double vals[], int i, int j);
+    float F(float vals[], int i, int j);
 };
