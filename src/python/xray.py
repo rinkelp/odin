@@ -1235,8 +1235,6 @@ class Shot(object):
             An array of the intensities I(|q|, phi)
         """
         
-        logger.debug('interpolate_to_polar method...')
-        
         self.phi_spacing = phi_spacing * (2.0 * np.pi / 360.) # conv. to radians
         
         if q_values != None:
@@ -1255,7 +1253,6 @@ class Shot(object):
         # `unstructured` is more general, but slower; implicit/structured assume
         # the detectors are grids, and are therefore faster but specific
         
-        logger.debug('calling interpolator...')
         if self.detector.xyz_type == 'explicit':
             self._unstructured_interpolation()
         elif self.detector.xyz_type == 'implicit':
@@ -1362,8 +1359,6 @@ class Shot(object):
         
         NOTE: The interpolation is performed in cartesian real (xyz) space.
         """
-        
-        logger.debug('Performing implicit interpolation...')
                 
         # loop over all the arrays that comprise the detector and use
         # grid interpolation on each
@@ -1373,7 +1368,6 @@ class Shot(object):
         
         # convert the polar to cartesian coords for comparison to detector
         pgr = self.polar_grid_as_real_cart
-        logger.debug('post pgr')
         
         for k,grid in enumerate(self.detector._grid_list):
             
@@ -1399,12 +1393,10 @@ class Shot(object):
                         
             # interpolate onto the polar grid & update the inverse mask
             # perform the interpolation. 
-            logger.debug('computing coefficients')
             interp = Bcinterp(self.intensities[int_start:int_end], 
                               basis[0], basis[1], size[0], size[1], 
                               corner[0], corner[1])
             
-            logger.debug('evaluating points...')
             self.polar_intensities[p_inds] = interp.evaluate(pgr[p_inds,0], 
                                                              pgr[p_inds,1])
             self.polar_mask[p_inds] = np.bool(False)
