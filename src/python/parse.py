@@ -516,8 +516,8 @@ class KittyH5(object):
                                                     descriptor['data_file']))
         
         # find the center (center is in pixel units)
-        dgeo = xray.DetectorGeometry(i, bragg_peak_radius)
-        center = dgeo.center
+        #dgeo = xray.DetectorGeometry(i)
+        center = (853.,861.) #dgeo.center
         corner = ( -center[0] * x_pixel_size, -center[1] * y_pixel_size, 0.0 )
         logger.debug('Found center: %s' % str(center))
         
@@ -529,6 +529,7 @@ class KittyH5(object):
         # generate the detector object               
         b = xray.Beam(100, energy=energy)
         d = xray.Detector.from_basis( grid_list, path_length, b.k )
+
         logger.debug('Generated detector object...')
         
         # generate the shot
