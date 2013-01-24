@@ -11,9 +11,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
-def main(shotset_fn, qvalues, num_shots):
+def main(shotset_fn, q_value, num_shots):
     
-    ss = xray.ShotSet.load(shotset_fn)
+    ss = xray.Shotset.load(shotset_fn)
     
     fig = plt.figure()
     
@@ -23,10 +23,10 @@ def main(shotset_fn, qvalues, num_shots):
         phis = ss[i].phi_values
         ir = ss[i].I_ring(q_value)
         plt.plot(phis, ir + offset, lw=2, color='b')
-        offset += ip[:,1].max()
+        offset += ir.max() * 1.5
         
-    plt.x_label(r'$\phi$ / Degrees')
-    plt.y_label('Intensity')
+    plt.xlabel(r'$\phi$ / Degrees')
+    plt.ylabel('Intensity')
     
     plt.show()
     

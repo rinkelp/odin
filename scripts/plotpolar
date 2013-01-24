@@ -11,17 +11,18 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
-def main(shotset_fn, qvalues, num_shots):
+def main(shotset_fn):
     
-    ss = xray.ShotSet.load(shotset_fn)
+    ss = xray.Shotset.load(shotset_fn)
     s = ss[0]
     
     fig = plt.figure()
     
-    polar_i = s.polar_intensities.reshape(s.num_q, s.num_phi)
+    polar_i = s.polar_intensities.reshape(s.num_phi, s.num_q)
+    plt.imshow(polar_i)
 
-    plt.x_label(r'$\phi$ / Degrees')
-    plt.y_label(r'q / $\AA^{-1}$')
+    plt.xlabel(r'$\phi$ / Degrees')
+    plt.ylabel(r'q / $\AA^{-1}$')
     
     plt.show()
     
@@ -34,11 +35,7 @@ if __name__ == '__main__':
 
     parser.add_argument('-s', '--shotset',
                         help='An ODIN shot file to plot')
-    parser.add_argument('-q', '--qvalue', type=float,
-                        help='The q-value to plot the ring at.')
-    parser.add_argument('-n', '--numshots', type=int, default=5,
-                        help='The number of shots to plot. Default: 5.')
                         
     args = parser.parse_args()
     
-    main(args.shotset, args.qvalue, args.numshots)
+    main(args.shotset)

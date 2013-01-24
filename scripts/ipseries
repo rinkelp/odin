@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 
 def main(shotset_fn, num_shots):
     
-    ss = xray.ShotSet.load(shotset_fn)
+    ss = xray.Shotset.load(shotset_fn)
     
     fig = plt.figure()
     
@@ -24,8 +24,8 @@ def main(shotset_fn, num_shots):
         plt.plot(ip[:,0], ip[:,1] + offset, lw=2, color='b')
         offset += ip[:,1].max()
         
-    plt.x_label(r'q / $\AA^{-1}$')
-    plt.y_label('Intensity')
+    plt.xlabel(r'q / $\AA^{-1}$')
+    plt.ylabel('Intensity')
     
     plt.show()
     
