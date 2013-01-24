@@ -3003,96 +3003,149 @@ def sph_hrm_coefficients(trajectory, weights=None, q_magnitudes=None,
                                                       np.conjugate(Slm[il,:,iq2]) ) )
     
     return sph_coefficients
+        
+
+class DetectorGeometry(object):
     
+    def __init__(self, image):
         
-def find_center(image, brag_ring_location, ring_window_width=8):
-    """
-    Locate the beam center of an x-ray scattering image. 
+        self.brag_ring_location = self._find_ring(image)
+        self.center = self._find_center(image, ring_window_width=8)
         
-    Performs this center-finding by fitting a histogram of the intensities as
-    a function of radius to a Gaussian, and minimizing the residuals of the
-    Gaussian fit.
+        return
         
-    Contributed by Seva Ivanov
-        
-    Parameters
-    ----------
-    image : ndarray
-        The 2d array of the image intensities
 
-    brag_ring_location : int
-        The radius of the bragg ring to use for center finding, in pixel units
-        
-    Returns
-    -------
-    center : tuple of floats
-        The center position, (x,y)
-    """
-
-    # determine the boundaries
-    minR = brag_ring_location - ring_window_width
-    maxR = brag_ring_location + ring_window_width
-
-    # get ring
-    xcenter = int(image.shape[0] / 2)
-    ycenter = int(image.shape[1] / 2)
-
-    # find a region around the center to search
-    outercutoff = maxR + 5
-    outermini = xcenter - outercutoff-1
-    outermaxi = xcenter + outercutoff
-    outerminj = ycenter - outercutoff-1
-    outermaxj = ycenter + outercutoff
-
-    ring_array_size = 100000
-    Ring = np.zeros((ring_array_size, 3))
-    count = 0
-
-    for j in range(outerminj, outermaxj):
-        i = np.arange(outermini, outermaxi)
-
-        Intensity = image[i,j]
-        index = (Intensity>0)
-
-        xdif = (xcenter - i)
-        ydif = (ycenter - j)
-        Radius = np.sqrt(xdif**2 + ydif**2)
-
-        index = (Radius>minR) * (Radius<maxR) * index
-        add = np.sum(index)
-
-        if (add>0):
-            newcount = count + add
-            if newcount > ring_array_size:
-                raise RuntimeError('Need more than %d points in ring array!' % ring_array_size)
-
-            Ring[count:newcount,0] = i[index]
-            Ring[count:newcount,1] = j
-            Ring[count:newcount,2] = Intensity[index]
-            count = newcount
-
-    Ring = Ring[0:count,0:3]
-
-    # initial parameter guesses
-    # (A, B, C, R, center_x, center_y)
-    # f = A + B * N(R, C) || where N(mu, sigma) is a Gaussian
-    b0 = np.array([1000, 4000, 2, brag_ring_location, xcenter, ycenter])
-
-    def residuals(beta, Int, x, y):
+    def _find_center(self, image, ring_window_width=8):
         """
-        The objective function: the residuals of the Gaussian fit.
+        Locate the beam center of an x-ray scattering image. 
+        
+        Performs this center-finding by fitting a histogram of the intensities as
+        a function of radius to a Gaussian, and minimizing the residuals of the
+        Gaussian fit.
+        
+        Contributed by Seva Ivanov
+        
+        Parameters
+        ----------
+        image : ndarray, float
+            The 2d image
+        
+        ring_window_width : int
+        
+        Returns
+        -------
+        center : tuple of floats
+            The center position, (x,y)
         """
-        A, B, C, R, x0, y0 = beta
-        a = x - x0
-        b = y - y0
-        rad = np.sqrt(a**2 + b**2)
-        predInt = A + B*np.exp(-( (rad - R)**2)/(2*C**2) )
-        return Int - predInt
 
-    beta = optimize.leastsq(residuals, b0, args=(Ring[:,2], Ring[:,0], Ring[:,1]))[0]
-    center = (beta[4], beta[5])
+        # determine the boundaries
+        minR = self.brag_ring_location - ring_window_width
+        maxR = self.brag_ring_location + ring_window_width
+
+        # get ring
+        xcenter = int(image.shape[0] / 2)
+        ycenter = int(image.shape[1] / 2)
+
+        # find a region around the center to search
+        outercutoff = maxR + 5
+        outermini = xcenter - outercutoff-1
+        outermaxi = xcenter + outercutoff
+        outerminj = ycenter - outercutoff-1
+        outermaxj = ycenter + outercutoff
+
+        ring_array_size = 100000
+        Ring = np.zeros((ring_array_size, 3))
+        count = 0
+
+        for j in range(outerminj, outermaxj):
+            i = np.arange(outermini, outermaxi)
+
+            Intensity = image[i,j]
+            index = (Intensity>0)
+
+            xdif = (xcenter - i)
+            ydif = (ycenter - j)
+            Radius = np.sqrt(xdif**2 + ydif**2)
+
+            index = (Radius>minR) * (Radius<maxR) * index
+            add = np.sum(index)
+
+            if (add>0):
+                newcount = count + add
+                if newcount > ring_array_size:
+                    raise RuntimeError('Need more than %d points in ring array!' % ring_array_size)
+
+                Ring[count:newcount,0] = i[index]
+                Ring[count:newcount,1] = j
+                Ring[count:newcount,2] = Intensity[index]
+                count = newcount
+
+        Ring = Ring[0:count,0:3]
+
+        # initial parameter guesses
+        # (A, B, C, R, center_x, center_y)
+        # f = A + B * N(R, C) || where N(mu, sigma) is a Gaussian
+        b0 = np.array([1000, 4000, 2, self.brag_ring_location, xcenter, ycenter])
+
+        def residuals(beta, Int, x, y):
+            """
+            The objective function: the residuals of the Gaussian fit.
+            """
+            A, B, C, R, x0, y0 = beta
+            a = x - x0
+            b = y - y0
+            rad = np.sqrt(a**2 + b**2)
+            predInt = A + B*np.exp(-( (rad - R)**2)/(2*C**2) )
+            return Int - predInt
+
+        beta = optimize.leastsq(residuals, b0, args=(Ring[:,2], Ring[:,0], Ring[:,1]))[0]
+        center = (beta[4], beta[5])
     
-    return center
+        return center
+            
+            
+    def _find_ring(self, image):
+        """
+        Description: Finds the aproximate radius from the center of the first 
+        Bragg Ring. Works in conjunction with the center-finding algorithm.
+
+        Parameters
+        ----------
+        image : ndarray, float
+            2D numpy array of intensities
+
+        Returns:
+        radius : int
+            Approximate radius of first Bragg ring, in pixel units.
+        """
+
+        #width is the width of the strip to grab from the image
+        width = 50;
+        xcenter = np.round(image.shape[0]/2)
+        ycenter = np.round(image.shape[1]/2)
+
+        #strip of intensities from ycenter to edge, summed over width
+        subimage = np.sum(image[(xcenter-50):(xcenter+50),ycenter:(image.shape[1])],0)
+
+        #determine front edge of first peak
+        cutoff = np.average(subimage)+ 3*np.std(subimage)
+        a = np.arange(0,subimage.size)
+        peaks = a[subimage>cutoff]
+
+        #find entire peak
+        counter = 0
+        current = peaks[0]
+        peak = 0
+
+        while ((subimage[current])>cutoff):
+            peak = peak + current
+            counter = counter + 1
+            current = current + 1
+
+        #return the center of peak
+        radius = np.round(peak/counter)
+        return radius
+    
 
 
 
