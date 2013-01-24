@@ -1,13 +1,15 @@
 
 """
 Various parsers:
--- CBF (crystallographic binary format)
--- CXI (coherent xray imaging format)
+-- CBF        (crystallographic binary format)
+-- Kitty H5   (CXI pyana spinoff)
+-- CXI        (coherent xray imaging format)
 """
 
 import logging
 logging.basicConfig()
 logger = logging.getLogger(__name__)
+logger.setLevel('DEBUG')
 
 import inspect
 import tables
@@ -499,6 +501,8 @@ class KittyH5(object):
                 
         energy = float(descriptor['photon_eV'])
         path_length = float(descriptor['detector_mm']) * 1000.0 # mm -> um
+        logger.debug('Energy: %f' % energy)
+        logger.debug('Path length: %f' % path_length)
         
         # extract intensity data
         f = tables.File(descriptor['data_file'])
@@ -508,11 +512,14 @@ class KittyH5(object):
             raise ValueError('Essential data field `i_asm` not in YAML file!')
         i = f.getNode(path).read()
         f.close()
+        logger.debug('Read field %s in file: %s' % (descriptor['i_asm'],
+                                                    descriptor['data_file']))
         
         # find the center (center is in pixel units)
         # todo work: find bragg peak automagically
-        center = xray.find_center(i, bragg_peak_radius) 
+        center = xray.find_center(i, bragg_peak_radius)
         corner = ( -center[0] * x_pixel_size, -center[1] * y_pixel_size, 0.0 )
+        logger.debug('Found center...')
         
         # compile a grid_list object
         basis = (x_pixel_size, y_pixel_size, 0.0)
@@ -522,6 +529,7 @@ class KittyH5(object):
         # generate the detector object               
         b = xray.Beam(100, energy=energy)
         d = xray.Detector.from_basis( grid_list, path_length, b.k )
+        logger.debug('Generated detector object...')
         
         # generate the shot
         s = xray.Shot(i.flatten(), d)

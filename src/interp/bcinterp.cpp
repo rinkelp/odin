@@ -15,8 +15,8 @@
 using namespace std;
 
 
-Bcinterp::Bcinterp( int Nvals, double *vals, double x_space_, double y_space_,
-                    int Xdim_, int Ydim_, double x_corner_, double y_corner_ ) { 
+Bcinterp::Bcinterp( int Nvals, float *vals, float x_space_, float y_space_,
+                    int Xdim_, int Ydim_, float x_corner_, float y_corner_ ) { 
     /*
      * Constructor -- computes the bicubic coefficients `alphas`
      *
@@ -44,15 +44,15 @@ Bcinterp::Bcinterp( int Nvals, double *vals, double x_space_, double y_space_,
     int N = Xdim * Ydim;
     assert( N == Nvals );
 
-	double * dIdx   = new double[N];
-	double * dIdy   = new double[N];
-	double * dIdxdy = new double[N];
+	float * dIdx   = new float[N];
+	float * dIdy   = new float[N];
+	float * dIdxdy = new float[N];
 	
 	int x, y;
-	double dx, dy, dxdy;
-	double a00, a10, a20, a30, a01, a11, a21, a31;
-    double a02, a12, a22, a32, a03, a13, a23, a33;
-    double * I = vals; // for legacy reasons
+	float dx, dy, dxdy;
+	float a00, a10, a20, a30, a01, a11, a21, a31;
+    float a02, a12, a22, a32, a03, a13, a23, a33;
+    float * I = vals; // for legacy reasons
 
     // compute the finite difference derivatives for interior of the grid	
     for( y = 1; y < Ydim-1; y++ ) {
@@ -219,25 +219,25 @@ Bcinterp::Bcinterp( int Nvals, double *vals, double x_space_, double y_space_,
 }
 
 
-double Bcinterp::F (double vals[], int i, int j) {
+float Bcinterp::F (float vals[], int i, int j) {
     // a helper function to evaluate the function F at index (i,j)
-	double val = vals[j*Xdim+i];
+	float val = vals[j*Xdim+i];
 	return val;
 }
 
 
-double Bcinterp::evaluate_point (double x, double y) {
+float Bcinterp::evaluate_point (float x, float y) {
     /* 
      * Evaluate the interpolation defined by alpha at point (x,y)
      */
 
-    double interpI;
-    double a00, a10, a20, a30, a01, a11, a21, a31;
-    double a02, a12, a22, a32, a03, a13, a23, a33;
+    float interpI;
+    float a00, a10, a20, a30, a01, a11, a21, a31;
+    float a02, a12, a22, a32, a03, a13, a23, a33;
 
     // map the point (x,y) to the indicies of our interpolated grid
-    double xm = (x-x_corner) / x_space;
-    double ym = (y-y_corner) / y_space;
+    float xm = (x-x_corner) / x_space;
+    float ym = (y-y_corner) / y_space;
     
     if( xm < 0.0 ) {
         cout << "xm less than zero" << endl;
@@ -283,8 +283,8 @@ double Bcinterp::evaluate_point (double x, double y) {
     a33 = alphas[aStart + 15];
 
     // evaluate the point on the square
-    double xp = xm - (double) i;
-    double yp = ym - (double) j;
+    float xp = xm - (float) i;
+    float yp = ym - (float) j;
     
 	interpI =  a00          + a10*xp          + a20*xp*xp          + a30*xp*xp*xp;
     interpI += a01*yp       + a11*xp*yp       + a21*xp*xp*yp       + a31*xp*xp*xp*yp;
@@ -295,8 +295,8 @@ double Bcinterp::evaluate_point (double x, double y) {
 }
 
 
-void Bcinterp::evaluate_array(int dim_xa, double *xa, int dim_ya, double *ya, 
-                              int dim_za, double *za) {
+void Bcinterp::evaluate_array(int dim_xa, float *xa, int dim_ya, float *ya, 
+                              int dim_za, float *za) {
                                   
     // evaluate an array of points f(x,y) with x/y vectors
     // here, za is the output array, dim_xa must == dim_ya
