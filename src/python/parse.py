@@ -518,8 +518,9 @@ class KittyH5(object):
         # find the center (center is in pixel units)
         # todo work: find bragg peak automagically
         center = xray.find_center(i, bragg_peak_radius)
+        logger.debug('Found center: %s' % str(center))
+        center = (853, 861)
         corner = ( -center[0] * x_pixel_size, -center[1] * y_pixel_size, 0.0 )
-        logger.debug('Found center...')
         
         # compile a grid_list object
         basis = (x_pixel_size, y_pixel_size, 0.0)

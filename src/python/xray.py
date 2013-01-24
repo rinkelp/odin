@@ -1343,8 +1343,18 @@ class Shot(object):
         min_y = grid[2][1]
         max_y = grid[2][1] + grid[0][1] * (grid[1][1] - 1)
         
-        p_inds  = ( xy[:,0] > min_x ) * ( xy[:,0] < max_x ) *\
-                  ( xy[:,1] > min_y ) * ( xy[:,1] < max_y )
+        # p_ind_x = np.intersect1d( np.where( xy[:,0] > min_x )[0], 
+        #                           np.where( xy[:,0] < max_x )[0] )
+        # 
+        # p_ind_y = np.intersect1d( np.where( xy[:,1] > min_y )[0], 
+        #                           np.where( xy[:,1] < max_y )[0] )                                    
+        # 
+        # p_inds = np.intersect1d(p_ind_x, p_ind_y)
+        
+        p_inds2  = np.where(( xy[:,0] > min_x ) * ( xy[:,0] < max_x ) *\
+                            ( xy[:,1] > min_y ) * ( xy[:,1] < max_y ))[0]
+                  
+        assert np.all(p_inds == p_inds2)
         
         return p_inds
         
