@@ -690,6 +690,23 @@ class TestDebye(object):
         debye = xray.debye(self.t, q_values=sim_ip[:,0])
         assert_allclose(debye, sim_ip)
         
+        
+class TestCentering(object):
+    
+    def test_against_matlab(self):
+        
+        ref = (1264.934372404682, 1232.199454157603) # done w/Seva's code
+        
+        fileID = open(ref_file('p2sec_p3d_11_1_00010.bin'), 'r')
+        fileID.seek(1024)
+        data = np.fromfile(fileID, dtype=np.float32)
+        data2D = np.reshape(data,(2527, 2463))
+        data2D = data2D * (data2D > 0.)
+        
+        center = xray.find_center(data2D, 458) # 458 is the loc of the ring
+        
+        assert_allclose(center, ref, rtol=1e-02)
+        
 
 if __name__ == '__main__':
     with warnings.catch_warnings(record=True) as w:

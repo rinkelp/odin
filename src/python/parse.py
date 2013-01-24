@@ -361,8 +361,7 @@ class KittyH5(object):
               - data_file:
                 photon_eV:
                 ...
-                
-                ...
+              - ...
                 
             where each list field corresponds to a different shot.
             
@@ -384,6 +383,7 @@ class KittyH5(object):
         else:
             raise ValueError("`mode` must be one of {'raw', 'asm'}")
         
+        return
     
     @property    
     def essential_fields(self):
@@ -485,7 +485,8 @@ class KittyH5(object):
         return s
         
                         
-    def _convert_asm_shot(self, descriptor, x_pixel_size=0.1, y_pixel_size=0.1):
+    def _convert_asm_shot(self, descriptor, x_pixel_size=109.9, 
+                          y_pixel_size=109.9, bragg_peak_radius=458):
         """
         Convert a Kitty-generated assembled image h5 file to an odin.xray.Shot.
         """
@@ -508,14 +509,15 @@ class KittyH5(object):
         i = f.getNode(path).read()
         f.close()
         
-        # find the center
-        # TODO / WORK
-        center = (0.0, 0.0, 0.0)
+        # find the center (center is in pixel units)
+        # todo work: find bragg peak automagically
+        center = xray.find_center(i, bragg_peak_radius) 
+        corner = ( -center[0] * x_pixel_size, -center[1] * y_pixel_size, 0.0 )
         
         # compile a grid_list object
         basis = (x_pixel_size, y_pixel_size, 0.0)
         shape = (i.shape[0], i.shape[1], 1)
-        grid_list = [( basis, shape, center )]
+        grid_list = [( basis, shape, corner )]
         
         # generate the detector object               
         b = xray.Beam(100, energy=energy)
