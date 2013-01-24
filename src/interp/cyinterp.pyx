@@ -118,7 +118,7 @@ cdef class Bcinterp:
                                  'interpolation')
             else:
                 x = x.astype(np.float32)
-                y = x.astype(np.float32)
+                y = y.astype(np.float32)
                 z = self._evaluate_array(x, y)
                 z = z.astype(np.float64)
             
