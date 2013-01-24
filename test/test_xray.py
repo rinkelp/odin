@@ -720,7 +720,7 @@ class TestCentering(object):
     
     def test_against_matlab(self):
         
-        ref = (1264.934372404682, 1232.199454157603) # done w/Seva's code
+        ref = (1263.934372404682, 1231.199454157603) # done w/Seva's code
         
         fileID = open(ref_file('p2sec_p3d_11_1_00010.bin'), 'r')
         fileID.seek(1024)
@@ -728,9 +728,10 @@ class TestCentering(object):
         data2D = np.reshape(data,(2527, 2463))
         data2D = data2D * (data2D > 0.)
         
-        center = xray.find_center(data2D, 458) # 458 is the loc of the ring
+        dgeo = xray.DetectorGeometry(data2D)
+        center = dgeo.center
         
-        assert_allclose(center, ref, rtol=1e-02)
+        assert_allclose(center, ref, rtol=1e-05)
         
 
 if __name__ == '__main__':
