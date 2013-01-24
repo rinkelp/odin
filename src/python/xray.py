@@ -1335,6 +1335,7 @@ class Shot(object):
         xy   : ndarray, float, 2D
         grid : (basis, size, corner)
         """
+        
         assert xy.shape[1] == 2
         
         # grid:   corner       basis           size
@@ -1342,19 +1343,9 @@ class Shot(object):
         max_x = grid[2][0] + grid[0][0] * (grid[1][0] - 1)
         min_y = grid[2][1]
         max_y = grid[2][1] + grid[0][1] * (grid[1][1] - 1)
-        
-        # p_ind_x = np.intersect1d( np.where( xy[:,0] > min_x )[0], 
-        #                           np.where( xy[:,0] < max_x )[0] )
-        # 
-        # p_ind_y = np.intersect1d( np.where( xy[:,1] > min_y )[0], 
-        #                           np.where( xy[:,1] < max_y )[0] )                                    
-        # 
-        # p_inds = np.intersect1d(p_ind_x, p_ind_y)
-        
-        p_inds2  = np.where(( xy[:,0] > min_x ) * ( xy[:,0] < max_x ) *\
-                            ( xy[:,1] > min_y ) * ( xy[:,1] < max_y ))[0]
-                  
-        assert np.all(p_inds == p_inds2)
+       
+        p_inds  = np.where(( xy[:,0] > min_x ) * ( xy[:,0] < max_x ) *\
+                           ( xy[:,1] > min_y ) * ( xy[:,1] < max_y ))[0]
         
         return p_inds
         
@@ -3114,7 +3105,7 @@ class DetectorGeometry(object):
         return center
             
             
-    def _find_ring(self, image):
+    def _find_ring(self, image, width=50):
         """
         Description: Finds the aproximate radius from the center of the first 
         Bragg Ring. Works in conjunction with the center-finding algorithm.
@@ -3129,33 +3120,19 @@ class DetectorGeometry(object):
             Approximate radius of first Bragg ring, in pixel units.
         """
 
-        #width is the width of the strip to grab from the image
-        width = 50;
+        # width is the width of the strip to grab from the image
         xcenter = np.round(image.shape[0]/2)
         ycenter = np.round(image.shape[1]/2)
 
-        #strip of intensities from ycenter to edge, summed over width
-        subimage = np.sum(image[(xcenter-50):(xcenter+50),ycenter:(image.shape[1])],0)
+        # strip of intensities from ycenter to edge, summed over width
+        subimage = np.sum(image[(xcenter-width):(xcenter+width),
+                                        ycenter:(image.shape[1])],0)
+        a = smooth(subimage)
+        maxima = np.where(np.r_[True, a[1:] > a[:-1]] & np.r_[a[:-1] > a[1:], True] == True)[0]
 
-        #determine front edge of first peak
-        cutoff = np.average(subimage)+ 3*np.std(subimage)
-        a = np.arange(0,subimage.size)
-        peaks = a[subimage>cutoff]
-
-        #find entire peak
-        counter = 0
-        current = peaks[0]
-        peak = 0
-
-        while ((subimage[current])>cutoff):
-            peak = peak + current
-            counter = counter + 1
-            current = current + 1
-
-        #return the center of peak
-        radius = np.round(peak/counter)
+        if len(maxima) < 1:
+             raise RuntimeError('No maxima found')
+        
+        radius = maxima[0]
         return radius
-    
-
-
 
