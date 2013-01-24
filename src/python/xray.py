@@ -8,7 +8,7 @@ Classes, methods, functions for use with xray scattering experiments.
 import logging
 logging.basicConfig()
 logger = logging.getLogger(__name__)
-#logger.setLevel('DEBUG')
+logger.setLevel('DEBUG')
 
 import cPickle
 from bisect import bisect_left
@@ -358,6 +358,44 @@ class Detector(Beam):
         a = self._real_to_recpolar(self.real)
         a[:,1] = 0.0 # convention, re: Dermen, TJL todo, don't think this is right... (flat ewald sphere)
         return a
+        
+        
+    @property
+    def q_max(self):
+        """
+        Returns the maximum value of |q| the detector measures
+        """
+        if self.xyz_type == 'explicit':
+            q_max = np.max(self.recpolar[:,0])
+        elif self.xyz_type == 'implicit':
+            q_max = 0.0
+            for p in [self._grid_max(*t) for t in self._grid_list]:
+                p[2] = self.path_length
+                unit_p = p / self._norm(p)
+                q_max_pt = self.k * (unit_p - np.array([0., 0., 1.]))
+                qm = self._norm(q_max_pt)
+                if qm > q_max: q_max = qm
+        return q_max
+        
+        
+    def _grid_max(self, basis, size, corner):
+        """
+        Find the (real-space) radial extremum of a grid. Returns: (x,y,z)
+        """
+        
+        # find the coordinates of each corner
+        # todo: add z
+        bl = np.array(corner)
+        br = bl + np.array([basis[0] * (size[0]-1), 0.0, 0.0])
+        tl = bl + np.array([0.0, basis[1] * (size[1]-1), 0.0])
+        tr = tl + np.array([basis[0] * (size[0]-1), 0.0, 0.0])
+        
+        # then the norm of each
+        points = [bl, br, tl, tr]
+        max_ind = np.argmax([ self._norm(p) for p in points ])
+        r_max_pt = points[max_ind]
+        
+        return r_max_pt
         
         
     def _real_to_polar(self, xyz):
@@ -1157,12 +1195,7 @@ class Shot(object):
         
     @property
     def num_q(self):
-        try:
-            nq = len(self.q_values)
-        except:
-            logger.critical('no q_values found')
-            nq = None
-        return nq
+        return len(self.q_values)
         
     @property
     def num_datapoints(self):
@@ -1202,17 +1235,18 @@ class Shot(object):
             An array of the intensities I(|q|, phi)
         """
         
+        logger.debug('interpolate_to_polar method...')
+        
         self.phi_spacing = phi_spacing * (2.0 * np.pi / 360.) # conv. to radians
         
         if q_values != None:
-            self.q_values = _q_values
+            self._q_values = np.array(q_values)
             self.q_min = np.min( q_values )
             self.q_max = np.max( q_values )
         else:
             self.q_spacing = q_spacing
-            mq = self.detector.recpolar[:,0]  # |q|
-            self.q_min = np.min( mq )
-            self.q_max = np.max( mq )
+            self.q_min = q_spacing
+            self.q_max = self.detector.q_max
 
         self.polar_intensities = np.zeros(self.num_datapoints)
         self.polar_mask = np.zeros(self.num_datapoints, dtype=np.bool)
@@ -1221,6 +1255,7 @@ class Shot(object):
         # `unstructured` is more general, but slower; implicit/structured assume
         # the detectors are grids, and are therefore faster but specific
         
+        logger.debug('calling interpolator...')
         if self.detector.xyz_type == 'explicit':
             self._unstructured_interpolation()
         elif self.detector.xyz_type == 'implicit':
@@ -1266,18 +1301,18 @@ class Shot(object):
         (x, y)
         """
         
-        pg  = self.polar_grid
-        pgr = np.zeros_like(pg)
-        k = self.detector.k
-        l = self.detector.path_length
+        pg = self.polar_grid
+        k  = self.detector.k
+        l  = self.detector.path_length
         
-        pg[ pg[:,0] == 0.0 ,0] = 1.0e-300
-        h = l * np.tan( 2.0 * np.arcsin( pg[:,0] / (2.0*k) ) )
-
-        pgr[:,0] = h * np.cos( pg[:,1] )
-        pgr[:,1] = h * np.sin( pg[:,1] )
-                
-        return pgr
+        # the real-space radius of each pixel, but "untiled" to save some mem.
+        h = l * np.tan( 2.0 * np.arcsin( (self.q_values+1.0e-300) / (2.0*k) ) )
+        
+        # perform transform in-place to save memory
+        pg[:,0] = np.tile(h, self.num_phi) * np.cos( pg[:,1] )
+        pg[:,1] = np.tile(h, self.num_phi) * np.sin( pg[:,1] )
+                        
+        return pg
         
         
     def _overlap(self, xy1, xy2):
@@ -1311,11 +1346,8 @@ class Shot(object):
         min_y = grid[2][1]
         max_y = grid[2][1] + grid[0][1] * (grid[1][1] - 1)
         
-        p_ind_x = np.intersect1d( np.where( xy[:,0] > min_x )[0], 
-                                  np.where( xy[:,0] < max_x )[0] )
-        p_ind_y = np.intersect1d( np.where( xy[:,1] > min_y )[0], 
-                                  np.where( xy[:,1] < max_y )[0] )                                    
-        p_inds = np.intersect1d(p_ind_x, p_ind_y)
+        p_inds  = ( xy[:,0] > min_x ) * ( xy[:,0] < max_x ) *\
+                  ( xy[:,1] > min_y ) * ( xy[:,1] < max_y )
         
         return p_inds
         
@@ -1331,7 +1363,7 @@ class Shot(object):
         NOTE: The interpolation is performed in cartesian real (xyz) space.
         """
         
-        logger.debug('performing implicit interpolation...')
+        logger.debug('Performing implicit interpolation...')
                 
         # loop over all the arrays that comprise the detector and use
         # grid interpolation on each
@@ -1341,6 +1373,7 @@ class Shot(object):
         
         # convert the polar to cartesian coords for comparison to detector
         pgr = self.polar_grid_as_real_cart
+        logger.debug('post pgr')
         
         for k,grid in enumerate(self.detector._grid_list):
             
@@ -1355,9 +1388,6 @@ class Shot(object):
                 raise RunTimeError('Implicit detector is flat in either x or y!'
                                    ' Cannot be interpolated.')
             
-            i = self.intensities[int_start:int_end]
-            int_start += n_int
-            
             # find the indices of the polar grid pixels that are inside the
             # boundaries of the current detector array we're interpolating over
             p_inds = self._overlap_implicit(pgr, grid)
@@ -1369,12 +1399,17 @@ class Shot(object):
                         
             # interpolate onto the polar grid & update the inverse mask
             # perform the interpolation. 
-            interp = Bcinterp(i, basis[0], basis[1], size[0], size[1], 
+            logger.debug('computing coefficients')
+            interp = Bcinterp(self.intensities[int_start:int_end], 
+                              basis[0], basis[1], size[0], size[1], 
                               corner[0], corner[1])
             
+            logger.debug('evaluating points...')
             self.polar_intensities[p_inds] = interp.evaluate(pgr[p_inds,0], 
                                                              pgr[p_inds,1])
             self.polar_mask[p_inds] = np.bool(False)
+            
+            int_start += n_int
             
         self._mask()
         
