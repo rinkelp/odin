@@ -8,7 +8,7 @@ Classes, methods, functions for use with xray scattering experiments.
 import logging
 logging.basicConfig()
 logger = logging.getLogger(__name__)
-logger.setLevel('DEBUG')
+#logger.setLevel('DEBUG')
 
 import cPickle
 from bisect import bisect_left
@@ -2013,13 +2013,17 @@ class Shotset(Shot):
         q-phi grids in the shots are the same. If some are different, here
         we recalculate them.
         """
-        q_phis = self.shots[0].polar_grid
-        for shot in self.shots:
-            diff = np.sum(np.abs(shot.polar_grid - q_phis))
-            if diff > epsilon:
-                raise ValueError('Detector values in Shotset not consistent '
-                                  ' across set. Homogenize interpolated polar'
-                                  ' grid using Shot.interpolate_to_polar()')
+
+        # todo
+        return
+        
+        #q_phis = self.shots[0].polar_grid
+        #for shot in self.shots:
+        #    diff = np.sum(np.abs(shot.polar_grid - q_phis))
+        #    if diff > epsilon:
+        #        raise ValueError('Detector values in Shotset not consistent '
+        #                          ' across set. Homogenize interpolated polar'
+        #                          ' grid using Shot.interpolate_to_polar()')
     
     
     def I(self, q, phi):

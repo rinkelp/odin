@@ -499,10 +499,10 @@ class KittyH5(object):
             if field not in descriptor.keys():
                 raise ValueError('Essential data field %s not in YAML file!' % field)
                 
-        energy = float(descriptor['photon_eV'])
+        energy = float(descriptor['photon_eV']) / 1000.0        # eV -> keV
         path_length = float(descriptor['detector_mm']) * 1000.0 # mm -> um
-        logger.debug('Energy: %f' % energy)
-        logger.debug('Path length: %f' % path_length)
+        logger.debug('Energy: %f keV' % energy)
+        logger.debug('Path length: %f microns' % path_length)
         
         # extract intensity data
         f = tables.File(descriptor['data_file'])
