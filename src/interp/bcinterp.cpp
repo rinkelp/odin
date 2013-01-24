@@ -236,15 +236,18 @@ float Bcinterp::evaluate_point (float x, float y) {
     float a02, a12, a22, a32, a03, a13, a23, a33;
 
     // map the point (x,y) to the indicies of our interpolated grid
+    // aka: convert to pixel units
     float xm = (x-x_corner) / x_space;
     float ym = (y-y_corner) / y_space;
     
     if( xm < 0.0 ) {
-        cout << "xm less than zero" << endl;
+        cout << "Error: Attempting to evaluate point outside of convex hull.";
+        cout << "xm: " << xm << " less than zero" << endl;
         throw std::out_of_range("xm less than zero");
     }
     if( ym < 0.0 ) {
-        cout << "ym less than zero" << endl;
+        cout << "Error: Attempting to evaluate point outside of convex hull.";
+        cout << "ym: " << ym << " less than zero" << endl;
         throw std::out_of_range("ym less than zero");
     }
 
@@ -309,7 +312,6 @@ void Bcinterp::evaluate_array(int dim_xa, float *xa, int dim_ya, float *ya,
     for( int i = 0; i < dim_za; i++ ) {
         za[i] = evaluate_point(xa[i], ya[i]);
     }
-    
 }
 
 
