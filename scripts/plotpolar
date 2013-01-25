@@ -19,7 +19,7 @@ def main(shotset_fn):
     fig = plt.figure()
     
     polar_i = s.polar_intensities.reshape(s.num_phi, s.num_q)
-    plt.imshow(polar_i)
+    plt.imshow(polar_i.T)
 
     plt.xlabel(r'$\phi$ / Degrees')
     plt.ylabel(r'q / $\AA^{-1}$')

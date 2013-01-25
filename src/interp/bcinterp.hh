@@ -21,3 +21,4 @@ private:
     unsigned int size_alphas;
     float F(float vals[], int i, int j);
 };
+
