@@ -252,8 +252,8 @@ float Bcinterp::evaluate_point (float x, float y) {
     }
 
     // choose which square we're in by looking at the bottom-left
-    unsigned int i = floor(xm);
-	unsigned int j = floor(ym);
+    unsigned int i = int(floor(xm));
+	unsigned int j = int(floor(ym));
 
 	// retrieve the alpha parameters for that specific square (these define
 	// the polynomial function over the square)
@@ -318,5 +318,4 @@ void Bcinterp::evaluate_array(int dim_xa, float *xa, int dim_ya, float *ya,
 Bcinterp::~Bcinterp() {
     //delete [] alphas;
 }
-
 

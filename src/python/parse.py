@@ -501,7 +501,7 @@ class KittyH5(object):
                 
         energy = float(descriptor['photon_eV']) / 1000.0        # eV -> keV
         path_length = float(descriptor['detector_mm']) * 1000.0 # mm -> um
-        logger.debug('Energy: %f keV' % energy)
+        logger.debug('Energy:      %f keV' % energy)
         logger.debug('Path length: %f microns' % path_length)
         
         # extract intensity data

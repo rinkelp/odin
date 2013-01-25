@@ -14,17 +14,17 @@ int main(){
     int Ydim = 1000;
     int Nvals = Xdim * Ydim;
         
-    double * vals = new double [Nvals];
+    float * vals = new float [Nvals];
     for(int i = 0; i < Nvals; i++) {
         vals[i] = float(i);
     }
     
-    double x_space = 0.1;
-    double y_space = 0.1;
+    float x_space = 0.1;
+    float y_space = 0.1;
 
     Bcinterp bc ( Nvals, vals, x_space,  y_space, Xdim,  Ydim, 0.0, 0.0 );
           
-    double i, x, y;
+    float i, x, y;
     x = 1.01;
     y = 1.01;
     i = bc.evaluate_point(x, y);
