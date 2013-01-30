@@ -1,24 +1,23 @@
 #!/usr/bin/env python
 
 """
-Reference implementation & unit test for the GPU scattering simulation code
-(aka gpuscatter, in odin/src/gpuscatter/gpuscatter.*) and CPU scattering simulation
-code 
+Reference implementation & unit test for the GPU & CPU scattering simulation code
 """
 
 import numpy as np
 from numpy.linalg import norm
 from numpy.testing import assert_almost_equal, assert_allclose
 
-try:
-    from odin import gpuscatter
+from odin import xraysim
+
+from odin import installed
+if installed.gpuscatter:
     GPU = True
-except ImportError as e:
+else:
     GPU = False
 
 from odin.refdata import cromer_mann_params
 from odin import xray
-from odin import cpuscatter
 from odin.xray import Detector, atomic_formfactor
 from odin.structure import rand_rotate_molecule
 from odin.testing import skip, ref_file, gputest
