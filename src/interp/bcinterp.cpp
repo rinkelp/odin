@@ -5,9 +5,9 @@
 #include <assert.h>
 
 #ifdef NO_OMP
-   #include <omp.h>
-#else
    #define omp_get_thread_num() 0
+#else
+   #include <omp.h>
 #endif
 
 #include "bcinterp.hh"

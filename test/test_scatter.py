@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 
 """
 Reference implementation & unit test for the GPU & CPU scattering simulation code
@@ -8,17 +7,17 @@ import numpy as np
 from numpy.linalg import norm
 from numpy.testing import assert_almost_equal, assert_allclose
 
-from odin import xraysim
-
 from odin import installed
 if installed.gpuscatter:
     GPU = True
+    from odin import gpuscatter
 else:
     GPU = False
 
 from odin.refdata import cromer_mann_params
-from odin import xray
-from odin.xray import Detector, atomic_formfactor
+from odin import xray, cpuscatter
+from odin.xray import Detector
+from odin.scatter import atomic_formfactor
 from odin.structure import rand_rotate_molecule
 from odin.testing import skip, ref_file, gputest
 
@@ -32,7 +31,7 @@ logger.setLevel(logging.DEBUG)
 logging.basicConfig()
 
 # ------------------------------------------------------------------------------
-#                        BEGIN REFERENCE IMPLEMENTATION
+#                        BEGIN REFERENCE IMPLEMENTATIONS
 # ------------------------------------------------------------------------------
 
 def form_factor(qvector, atomz):
@@ -53,13 +52,6 @@ def form_factor(qvector, atomz):
         fi+= 1.54630*np.exp(-0.323900*qo)
         fi+= 0.867000*np.exp(-32.9089*qo)
         fi+= 0.2508
-
-    elif ( atomz == 26):
-        fi = 11.7695*np.exp(-4.7611*qo)
-        fi+= 7.35730*np.exp(-0.307200*qo)
-        fi+= 3.52220*np.exp(-15.3535*qo)
-        fi+= 2.30450*np.exp(-76.8805*qo)
-        fi+= 1.03690
 
     elif ( atomz == 79):
         fi = 16.8819*np.exp(-0.4611*qo)
@@ -127,183 +119,122 @@ def ref_simulate_shot(xyzlist, atomic_numbers, num_molecules, q_grid, rfloats=No
             for j in range(xyzlist.shape[0]):
                 fi = form_factor(qvector, atomic_numbers[j])
                 r = rotated_xyzlist[j,:]
-                F1 = fi * np.exp( 1j * np.dot(qvector, r) )
-                x = np.dot(qvector, r)
                 F += fi * np.exp( 1j * np.dot(qvector, r) )
     
             I[i] += F.real*F.real + F.imag*F.imag
 
-    # I /= float(num_molecules) # normalize  # TJL got rid of this normalization
     if len(I[I<0.0]) != 0:
-        raise Exception('neg values in CPU!')
+        raise Exception('neg values in reference scattering implementation')
 
     return I
 
 
-# ------------------------------------------------------------------------------
-#                           END REFERENCE IMPLEMENTATION
-# ------------------------------------------------------------------------------
-#                           BEGIN INTERFACE TO gpuscatter
-# ------------------------------------------------------------------------------
-
-def call_gpuscatter(xyzlist, atomic_numbers, num_molecules, qgrid, rfloats):
+def debye_reference(trajectory, weights=None, q_values=None):
     """
-    Calls the GPU version of the scattering code. This is a simplified interface
-    with no random elements for unit testing purposes only.
+    Computes the Debye scattering equation for the structures in `trajectory`,
+    producing the theoretical intensity profile.
+
+    Treats the object `trajectory` as a sample from a Boltzmann ensemble, and
+    averages the profile from each snapshot in the trajectory. If `weights` is
+    provided, weights the ensemble accordingly -- otherwise, all snapshots are
+    given equal weights.
     
+    THIS IS A PYTHON REFERENCE IMPLEMENTATAION.
+
     Parameters
     ----------
-    xyzlist : ndarray, float, 2d
-        An n x 3 array of each atom's position in space
-        
-    atomic_numbers : ndarray, float, 1d
-        An n-length list of the atomic numbers of each atom
-        
-    num_molecules : int
-        The number of molecules to include in the ensemble.
-        
-    q_grid : ndarray, float, 2d
-        An m x 3 array of the q-vectors corresponding to each detector position.
+    trajectory : mdtraj.trajectory
+        A trajectory object representing a Boltzmann ensemble.
 
-    rfloats : ndarray, float, n x 3
-        A bunch of random floats, uniform on [0,1] to be used to seed the 
-        quaternion computation.
-        
+
+    Optional Parameters
+    -------------------    
+    weights : ndarray, int
+        A one dimensional array indicating the weights of the Boltzmann ensemble.
+        If `None` (default), weight each structure equally.
+
+    q_values : ndarray, float
+        The values of |q| to compute the intensity profile for, in
+        inverse Angstroms. Default: np.arange(0.02, 6.0, 0.02)
+
     Returns
     -------
-    I : ndarray, float
-        An array the same size as the first dimension of `q_grid` that gives
-        the value of the measured intensity at each point on the grid.
+    intensity_profile : ndarray, float
+        An n x 2 array, where the first dimension is the magnitude |q| and
+        the second is the average intensity at that point < I(|q|) >_phi.
     """
 
-    device_id = 0
+    # first, deal with weights
+    if weights == None:
+        weights = 1.0 # this will work later when we use array broadcasting
+    else:
+        if not len(weights) == trajectory.n_frames:
+            raise ValueError('length of `weights` array must be the same as the'
+                             'number of snapshots in `trajectory`')
+        weights /= weights.sum()
 
-    assert(num_molecules % 512 == 0)
-    bpg = int(num_molecules / 512)
-    
-    # get detector
-    qx = qgrid[:,0].astype(np.float32)
-    qy = qgrid[:,1].astype(np.float32)
-    qz = qgrid[:,2].astype(np.float32)
-    num_q = len(qx)
-    
-    # get atomic positions
-    rx = xyzlist[:,0].astype(np.float32)
-    ry = xyzlist[:,1].astype(np.float32)
-    rz = xyzlist[:,2].astype(np.float32)
-    num_atoms = len(rx)
-    assert( num_atoms == 512 )
-    
-    aid = atomic_numbers.astype(np.int32)
-    atom_types = np.unique(aid)
+    # next, construct the q-value array
+    if q_values == None:
+        q_values = np.arange(0.02, 6.0, 0.02)
+
+    intensity_profile = np.zeros( ( len(q_values), 2) )
+    intensity_profile[:,0] = q_values
+
+    # array to hold the contribution from each snapshot in `trajectory`
+    S = np.zeros(trajectory.n_frames)
+
+    # extract the atomic numbers, number each atom by its type
+    aZ = np.array([ a.element.atomic_number for a in trajectory.topology.atoms() ])
+    n_atoms = len(aZ)
+
+    atom_types = np.unique(aZ)
     num_atom_types = len(atom_types)
-    
-    # get cromer-mann parameters for each atom type
     cromermann = np.zeros(9*num_atom_types, dtype=np.float32)
+
+    aid = np.zeros( n_atoms, dtype=np.int32 )
+    atomic_formfactors = np.zeros( num_atom_types, dtype=np.float32 )
+
     for i,a in enumerate(atom_types):
         ind = i * 9
-        cromermann[ind:ind+9] = cromer_mann_params[(a,0)]
-        aid[ aid == a ] = i # make the atom index 0, 1, 2, ...
- 
-    # get random numbers
-    rand1 = rfloats[:,0].astype(np.float32)
-    rand2 = rfloats[:,1].astype(np.float32)
-    rand3 = rfloats[:,2].astype(np.float32)
-    
-    # run dat shit
-    out_obj = gpuscatter.GPUScatter(device_id,
-                                    bpg, qx, qy, qz,
-                                    rx, ry, rz, aid,
-                                    cromermann,
-                                    rand1, rand2, rand3, num_q)
-    
-    output = out_obj.this[1].astype(np.float64).copy()
-    return output
+        try:
+            cromermann[ind:ind+9] = np.array(cromer_mann_params[(a,0)]).astype(np.float32)
+        except KeyError as e:
+            logger.critical('Element number %d not in Cromer-Mann form factor parameter database' % a)
+            raise ValueError('Could not get CM parameters for computation')
+        aid[ aZ == a ] = np.int32(i)
 
-# ------------------------------------------------------------------------------
-#                           END INTERFACE TO gpuscatter
-# ------------------------------------------------------------------------------
-#                           BEGIN INTERFACE TO cpuscatter
-# ------------------------------------------------------------------------------
+    # iterate over each value of q and compute the Debye scattering equation
+    for q_ind,q in enumerate(q_values):
+        print q_ind, len(q_values)
 
-def call_cpuscatter(xyzlist, atomic_numbers, num_molecules, qgrid, rfloats):
-    """
-    Calls the CPU version of the scattering code. This is a simplified interface
-    with no random elements for unit testing purposes only.
-    
-    Parameters
-    ----------
-    xyzlist : ndarray, float, 2d
-        An n x 3 array of each atom's position in space
-        
-    atomic_numbers : ndarray, float, 1d
-        An n-length list of the atomic numbers of each atom
-        
-    num_molecules : int
-        The number of molecules to include in the ensemble.
-        
-    q_grid : ndarray, float, 2d
-        An m x 3 array of the q-vectors corresponding to each detector position.
+        # pre-compute the atomic form factors at this q
+        qo = np.power( q / (4. * np.pi), 2)
+        for ai in xrange(num_atom_types):                
+            for i in range(4):
+                atomic_formfactors[ai]  = cromermann[ai*9+8]
+                atomic_formfactors[ai] += cromermann[ai*9+i] * np.exp( cromermann[ai*9+i+5] * qo)
 
-    rfloats : ndarray, float, n x 3
-        A bunch of random floats, uniform on [0,1] to be used to seed the 
-        quaternion computation.
-        
-    Returns
-    -------
-    I : ndarray, float
-        An array the same size as the first dimension of `q_grid` that gives
-        the value of the measured intensity at each point on the grid.
-    """
+        # iterate over all pairs of atoms
+        for i in range(n_atoms):
+            fi = atomic_formfactors[ aid[i] ]
+            for j in range(i+1, n_atoms):
+                fj = atomic_formfactors[ aid[j] ]
 
-    device_id = 0
+                # iterate over all snapshots 
+                for k in range(trajectory.n_frames):
+                    r_ij = np.linalg.norm(trajectory.xyz[k,i,:] - trajectory.xyz[k,j,:])
+                    r_ij *= 10.0 # convert to angstroms!
+                    S[k] += 2.0 * fi * fj * np.sin( q * r_ij ) / ( q * r_ij )
 
-    assert(num_molecules % 512 == 0)
-    bpg = int(num_molecules / 512)
-    
-    # get detector
-    qx = qgrid[:,0].astype(np.float32)
-    qy = qgrid[:,1].astype(np.float32)
-    qz = qgrid[:,2].astype(np.float32)
-    num_q = len(qx)
-    
-    # get atomic positions
-    rx = xyzlist[:,0].astype(np.float32)
-    ry = xyzlist[:,1].astype(np.float32)
-    rz = xyzlist[:,2].astype(np.float32)
-    num_atoms = len(rx)
-    assert( num_atoms == 512 )
-    
-    aid = atomic_numbers.astype(np.int32)
-    atom_types = np.unique(aid)
-    num_atom_types = len(atom_types)
-    
-    # get cromer-mann parameters for each atom type
-    cromermann = np.zeros(9*num_atom_types, dtype=np.float32)
-    for i,a in enumerate(atom_types):
-        ind = i * 9
-        cromermann[ind:ind+9] = cromer_mann_params[(a,0)]
-        aid[ aid == a ] = i # make the atom index 0, 1, 2, ...
- 
-    # get random numbers
-    rand1 = rfloats[:,0].astype(np.float32)
-    rand2 = rfloats[:,1].astype(np.float32)
-    rand3 = rfloats[:,2].astype(np.float32)
-    
-    # run dat shit
-    out_obj = cpuscatter.CPUScatter(num_molecules, qx, qy, qz,
-                                    rx, ry, rz, aid,
-                                    cromermann,
-                                    rand1, rand2, rand3, num_q)
-    
-    output = out_obj.this[1].astype(np.float64)
-    return output
+        intensity_profile[q_ind,1] = np.sum( S * weights )
+
+    return intensity_profile
 
 
 # ------------------------------------------------------------------------------
-#                           END INTERFACE TO cpuscatter
+#                           END REFERENCE IMPLEMENTATIONS
 # ------------------------------------------------------------------------------
-#                              BEGIN nosetest CLASS
+#                              BEGIN nosetest CLASSES
 # ------------------------------------------------------------------------------
 
     
@@ -312,7 +243,7 @@ class TestScatter():
     
     def setup(self):
         
-        self.nq = 3 # number of detector vectors to do
+        self.nq = 2 # number of detector vectors to do
         
         xyzQ = np.loadtxt(ref_file('512_atom_benchmark.xyz'))
         self.xyzlist = xyzQ[:,:3] * 10.0 # nm -> ang.
@@ -346,8 +277,8 @@ class TestScatter():
 
         print "testing c cpu code..."
 
-        cpu_I = call_cpuscatter(self.xyzlist, self.atomic_numbers, self.num_molecules, 
-                                self.q_grid, self.rfloats)
+        cpu_I = cpuscatter.simulate(self.num_molecules, self.q_grid, self.xyzlist, 
+                                    self.atomic_numbers, rfloats=self.rfloats)
 
         print "CPU", cpu_I
         print "REF", self.ref_I
@@ -371,6 +302,35 @@ class TestScatter():
         print py_I
         assert not np.all( py_I == 0.0 )
         assert not np.isnan(np.sum( py_I ))
+        
+
+class TestSphHrm(object):
+    
+    def test_vs_reference(self):
+        qs = np.arange(2, 3.52, 0.02)
+        silver = structure.load_coor(ref_file('SilverSphere.coor'))
+        cl = xray.sph_hrm_coefficients(silver, q_magnitudes=qs, 
+                                       num_coefficients=2)[1,:,:]
+        ref = np.loadtxt(ref_file('ag_kam.dat')) # computed in matlab
+        assert_allclose(cl, ref)
+        
+        
+class TestDebye(object):
+    
+    def test_against_reference_implementation(self):
+        s = structure.load_coor(ref_file("3lyz.xyz"))
+        qs = np.array([0.04, 2.0, 6.0])
+        ref  = debye_reference(s, q_values=qs)
+        calc = xray.debye(s, q_values=qs)
+        assert_allclose(calc, ref)
+    
+    def test_against_scattering_simulation(self):
+        if not GPU: raise SkipTest
+        d = xray.Detector.generic()
+        x = xray.Shot.simulate(self.t, 512, d)
+        sim_ip = x.intensity_profile()
+        debye = xray.debye(self.t, q_values=sim_ip[:,0])
+        assert_allclose(debye, sim_ip)
        
 
 def test_atomic_formfactor():
@@ -379,19 +339,9 @@ def test_atomic_formfactor():
     # was in this file, so testing it here
     
     for q_mag in np.arange(2.0, 6.0, 1.0):
-        for Z in [1, 8, 26, 79]:
-            q_unit = np.zeros(3)
-            q_unit[0] = q_mag
-            assert atomic_formfactor(Z, q_mag) == form_factor(Z, q_unit)
+        for Z in [1, 8, 79]:
+            qv = np.zeros(3)
+            qv[0] = q_mag
+            print Z
+            assert_allclose(atomic_formfactor(Z, q_mag), form_factor(qv, Z))
 
-
-if __name__ == '__main__':
-        xyzQ = np.loadtxt(ref_file('3lyz.xyz'))
-        xyzlist = xyzQ[:,:3]
-        atomic_numbers = xyzQ[:,3].flatten()
-
-        q_grid = np.loadtxt(ref_file('512_q.xyz'))[:100]
-
-        rfloats = np.loadtxt(ref_file('512_x_3_random_floats.txt'))
-        num_molecules = rfloats.shape[0]        
-        print ref_simulate_shot(xyzlist, atomic_numbers, num_molecules, q_grid, rfloats=None)

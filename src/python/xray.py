@@ -19,7 +19,7 @@ from scipy.ndimage import filters
 
 from odin.math import arctan3, rand_pairs, smooth
 from odin import scatter
-from odin.bcinterp import Bcinterp
+from odin.interp import Bcinterp
 from odin.refdata import cromer_mann_params
 
 from mdtraj import trajectory, io
