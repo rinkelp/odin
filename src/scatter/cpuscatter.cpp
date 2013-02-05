@@ -3,11 +3,12 @@
 #include <stdio.h>
 #include <assert.h>
 #include <math.h>
+#include <iostream>
 
 #ifdef NO_OMP
-   #include <omp.h>
-#else
    #define omp_get_thread_num() 0
+#else
+   #include <omp.h>
 #endif
 
 #include "cpuscatter.hh"
@@ -195,9 +196,8 @@ CPUScatter::CPUScatter( int    nQ_,
                         float* h_rand3_,
 
                         // output
-                        float* h_outQ_
-                        ) {
-        
+                        float* h_outQ_ ) {
+                                
     // unpack arguments
     n_rotations = nRot_;
     nQ = nQ_;
@@ -219,6 +219,7 @@ CPUScatter::CPUScatter( int    nQ_,
     h_rand3 = h_rand3_;
 
     h_outQ = h_outQ_;
+    
 
     // execute the kernel
     kernel(h_qx, h_qy, h_qz, h_outQ, nQ, h_rx, h_ry, h_rz, h_id, nAtoms, numAtomTypes, h_cm, h_rand1, h_rand2, h_rand3, n_rotations);
