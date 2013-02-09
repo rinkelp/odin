@@ -587,6 +587,7 @@ class TestCorrelationCollection(object):
                 
 class TestCentering(object):
     
+    @skip
     def test_against_matlab(self):
         
         ref = (1263.934372404682, 1231.199454157603) # done w/Seva's code

@@ -19,7 +19,7 @@ cdef extern from "bcinterp.hh":
       
 cdef class Bcinterp:
         
-    cdef C_Bcinterp* c
+    cdef C_Bcinterp * c
     
     def __init__(self, vals, x_space, y_space, Xdim, Ydim, x_corner, y_corner):
         """
@@ -47,7 +47,8 @@ cdef class Bcinterp:
             Evaluate the interpolated function at one or more points
         """
         
-        v = vals.astype(np.float32)
+        cdef np.ndarray[ndim=1, dtype=np.float32_t] v
+        v = np.ascontiguousarray(vals, dtype=np.float32)
         
         if not (type(x_space) == float) and (type(y_space) == float):
             raise ValueError('`x_space`, `y_space` must be type: float')
@@ -55,13 +56,8 @@ cdef class Bcinterp:
             raise ValueError('`Xdim`, `Ydim` must be type: int')
         if not (type(x_corner) == float) and (type(y_corner) == float):
             raise ValueError('`x_corner`, `y_corner` must be type: float')
-        
-        self.__cinit(v, x_space, y_space, Xdim, Ydim, x_corner, y_corner)
-        
-    
-    def __cinit(self, np.ndarray[ndim=1, dtype=np.float32_t] vals, float x_space,
-            float y_space, int Xdim, int Ydim, float x_corner, float y_corner):
-        self.c = new C_Bcinterp(len(vals), &vals[0], x_space, y_space,
+
+        self.c = new C_Bcinterp(len(vals), &v[0], x_space, y_space,
                                 Xdim, Ydim, x_corner, y_corner)
                 
     def __dealloc__(self):
@@ -117,8 +113,8 @@ cdef class Bcinterp:
                 raise ValueError('y_point out of range of convex hull of '
                                  'interpolation')
             else:
-                x = x.astype(np.float32)
-                y = y.astype(np.float32)
+                x = np.ascontiguousarray(x, dtype=np.float32)
+                y = np.ascontiguousarray(y, dtype=np.float32)
                 z = self._evaluate_array(x, y)
                 z = z.astype(np.float64)
             

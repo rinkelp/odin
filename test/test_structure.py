@@ -29,13 +29,13 @@ def test_rm_com():
         
 def test_multiply_conformations():
     traj = structure.load_coor(ref_file('goldBenchMark.coor'))
-    n_samples = 100
+    n_samples = 150
     otraj = structure.multiply_conformations(traj, n_samples, 0.1)
 
-    # iterate over x,y,z and check if any of the bins are more than 2.25 STD from the mean
+    # iterate over x,y,z and check if any of the bins are more than 3 STD from the mean
     for i in [0,1,2]:
         h = np.histogram(otraj.xyz[:,0,i])[0]
-        cutoff = h.std() * 2.25 # chosen arbitrarily
+        cutoff = h.std() * 3.0 # chosen arbitrarily
         deviations = np.abs(h - h.mean())
         print deviations / h.std()
         if np.any( deviations > cutoff ):
