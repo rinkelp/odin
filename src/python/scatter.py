@@ -3,6 +3,10 @@
 Library for performing simulations of x-ray scattering experiments.
 """
 
+import logging
+logging.basicConfig()
+logger = logging.getLogger(__name__)
+
 import numpy as np
 from threading import Thread
 
