@@ -336,12 +336,11 @@ class TestDebye(object):
 def test_atomic_formfactor():
     
     # this is a function in odin.xray, but the reference implementation
-    # was in this file, so testing it here
+    # is in this file, so testing it here
     
     for q_mag in np.arange(2.0, 6.0, 1.0):
         for Z in [1, 8, 79]:
             qv = np.zeros(3)
             qv[0] = q_mag
-            print Z
             assert_allclose(atomic_formfactor(Z, q_mag), form_factor(qv, Z))
 

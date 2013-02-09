@@ -40,7 +40,7 @@ def main(input_file, output, max_intensity=0, npoints=1000):
     ax[0].set_xlim([ q_edge, np.max(I[:,0]) ])
     ax[0].set_yticklabels([])
     
-    intensities = shotset.shots[0].intensities
+    intensities = shotset.shots[0].intensities.copy() #check
     intensities[intensities > max_intensity] = 0.0
     intensities[intensities < 0.0] = 0.0
     
