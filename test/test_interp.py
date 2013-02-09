@@ -1,6 +1,6 @@
 
 from odin import xray
-from odin.bcinterp import Bcinterp
+from odin.interp import Bcinterp
 from odin.testing import skip, ref_file
 
 import numpy as np

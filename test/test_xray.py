@@ -584,21 +584,3 @@ class TestCorrelationCollection(object):
 
         assert_allclose(pred, correlation, rtol=1e-01)
         
-                
-class TestCentering(object):
-    
-    @skip
-    def test_against_matlab(self):
-        
-        ref = (1263.934372404682, 1231.199454157603) # done w/Seva's code
-        
-        fileID = open(ref_file('p2sec_p3d_11_1_00010.bin'), 'r')
-        fileID.seek(1024)
-        data = np.fromfile(fileID, dtype=np.float32)
-        data2D = np.reshape(data,(2527, 2463))
-        data2D = data2D * (data2D > 0.)
-        
-        dgeo = xray.DetectorGeometry(data2D)
-        center = dgeo.center
-        
-        assert_allclose(center, ref, rtol=1e-05)

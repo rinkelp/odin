@@ -15,7 +15,7 @@ else:
     GPU = False
 
 from odin.refdata import cromer_mann_params
-from odin import xray, cpuscatter
+from odin import xray, cpuscatter, structure
 from odin.xray import Detector
 from odin.scatter import atomic_formfactor
 from odin.structure import rand_rotate_molecule

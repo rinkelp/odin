@@ -1997,7 +1997,9 @@ class Shotset(Shot):
     def __add__(self, other):
         if not isinstance(other, Shotset):
             raise ValueError('Cannot add types: %s and Shotset' % type(other))
-        return Shotset( self.shots.extend(other.shots) )
+        new_shot_list = self.shots.extend(other.shots)
+        assert len(new_shot_list) > 0
+        return Shotset( new_shot_list )
         
         
     def _check_qvectors_same(self, epsilon=1e-6):
