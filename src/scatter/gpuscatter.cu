@@ -1,6 +1,13 @@
 /*! YTZ 20121106 */
+
 #include <stdio.h>
 #include <stdint.h>
+#include <assert.h>
+#include <fstream>
+#include <sstream>
+#include <gpuscatter.hh>
+
+using namespace std;
 
 // ============================================================================
 // IF YOU ARE HERE BECAUSE YOUR num_atom_types WAS TOO BIG...
@@ -9,7 +16,6 @@
 #define MAX_NUM_TYPES 10
 
 // ============================================================================
-
 
 
 /*
@@ -222,16 +228,6 @@ void __global__ kernel(float const * const __restrict__ q_x,
  * Host code
  ******************************************************************************/
 
-#include <stdio.h>
-#include <assert.h>
-#include <fstream>
-#include <sstream>
-
-#include <gpuscatter.cu>
-#include <gpuscatter_mgr.hh>
-
-using namespace std;
-
 
 void deviceMalloc( void ** ptr, int bytes) {
     cudaError_t err = cudaMalloc(ptr, (size_t) bytes);
@@ -266,7 +262,6 @@ GPUScatter::GPUScatter (int device_id_,
                         float* h_rand3_,
 
                         // output
-                        int    nQout_,
                         float* h_outQ_
                         ) {
     
@@ -302,6 +297,7 @@ GPUScatter::GPUScatter (int device_id_,
     h_outQ = h_outQ_;
     
     // set the device
+    cudaError_t err;
     err = cudaSetDevice(device_id);
     if (err != cudaSuccess) {
         printf("Error setting device ID. CUDA error: %s\n", cudaGetErrorString(err));
