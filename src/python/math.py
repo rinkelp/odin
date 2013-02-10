@@ -79,7 +79,7 @@ class CircularHough(object):
        
     def __call__(self, image, mode='all'):
         """
-        Find circles in an image, using  the Circular Hough Transform (CHT).
+        Find circles in an image, using the Circular Hough Transform (CHT).
         
         This function returns circle objects parameterized by their
         (radius, x_location, y_location). It should be fairly robust to noise,
@@ -105,6 +105,8 @@ class CircularHough(object):
         """
         
         self._image_shape = image.shape
+        if not len(self._image_shape) == 2:
+            raise ValueError('`image` must be two-dimensional')
         self.mode = mode.lower()
         self._assert_sanity()
         
