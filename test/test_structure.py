@@ -6,7 +6,7 @@ from odin import structure
 from odin.testing import ref_file
 
 import numpy as np
-from numpy.testing import assert_array_almost_equal
+from numpy.testing import assert_array_almost_equal, assert_allclose
 
 import logging
 logger = logging.getLogger(__name__)
@@ -61,10 +61,32 @@ def test_load_coor():
         
     if os.path.exists('s.pdb'):
         os.remove('s.pdb')
-
+        
+        
+def test_random_rotation():
     
+    # generate a bunch of random vectors that are distributed over the unit
+    # sphere and test that the distributions of their angles is uniform
     
-if __name__ == '__main__':
-    m = test_m_confs()
-    print m.n_frames
-    m.save('test.pdb')
+    x_unit = np.zeros(3)
+    x_unit[0] = 1.0
+    
+    n_samples = int(1e4)
+    n_bins = 10
+    
+    phi_x = np.zeros(n_samples)
+    phi_y = np.zeros(n_samples)
+    
+    for i in range(n_samples):
+        v = structure.quaternion.rand_rotate_vector(x_unit)
+        phi_y[i] = np.arctan2(v[1], v[0])
+        phi_x[i] = np.arctan2(v[2], v[0])
+        
+    vx, b = np.histogram(phi_x, bins=n_bins)
+    vy, b = np.histogram(phi_y, bins=n_bins)
+    
+    v_ref = np.ones(n_bins) * float(n_samples / n_bins)
+    
+    assert_allclose(vx, v_ref, rtol=1e-1)
+    assert_allclose(vy, v_ref, rtol=1e-1)
+    

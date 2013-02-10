@@ -146,7 +146,7 @@ class quaternion(object):
             Another 3-vector, which is the rotated version of v.
         """
         
-        if len(v) != 4:
+        if len(v) != 3:
             raise TypeError('Parameter `v` must be in R^3')
         
         # generate a quaternion vector, with the first element zero
@@ -156,7 +156,7 @@ class quaternion(object):
     
         # get a random quaternion vector
         q = quaternion.random()
-        qconj = quaterion.conjugate(q)
+        qconj = quaternion.conjugate(q)
     
         q_prime = quaternion.prod( quaternion.prod(q, qv), qconj )
     
