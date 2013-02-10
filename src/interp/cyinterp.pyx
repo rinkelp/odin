@@ -51,11 +51,14 @@ cdef class Bcinterp:
         v = np.ascontiguousarray(vals, dtype=np.float32)
         
         if not (type(x_space) == float) and (type(y_space) == float):
-            raise ValueError('`x_space`, `y_space` must be type: float')
+            raise TypeError('`x_space`, `y_space` must be type: float')
         if not (type(Xdim) == int) and (type(Ydim) == int):
-            raise ValueError('`Xdim`, `Ydim` must be type: int')
+            raise TypeError('`Xdim`, `Ydim` must be type: int')
         if not (type(x_corner) == float) and (type(y_corner) == float):
-            raise ValueError('`x_corner`, `y_corner` must be type: float')
+            raise TypeError('`x_corner`, `y_corner` must be type: float')
+         
+        if not len(vals) == Xdim * Ydim:
+            raise ValueError('`vals` must be len `Xdim` * `Ydim`')
 
         self.c = new C_Bcinterp(len(vals), &v[0], x_space, y_space,
                                 Xdim, Ydim, x_corner, y_corner)
