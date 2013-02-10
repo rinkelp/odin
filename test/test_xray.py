@@ -419,6 +419,7 @@ class TestShot(object):
         p = np.zeros(len(qs))
         
         for x,q in enumerate(qs):
+            assert int(np.sum( (pg[:,0] == q) )) == self.shot.num_phi
             p[x] = (i[pg[:,0]==q]).mean()
             
         profile = self.shot.intensity_profile()
@@ -509,19 +510,17 @@ class TestShotset():
         if not GPU: raise SkipTest
         d = xray.Detector.generic(spacing=0.4)
         x = xray.Shotset.simulate(self.t, 512, d, 2)
-    
+   
+    @skip 
     def test_detector_checking(self):
-        if not GPU: raise SkipTest
-        d1 = xray.Detector.generic(spacing=0.4)
-        d2 = xray.Detector.generic(spacing=0.4)
-
-        s1 = xray.Shot.simulate(self.t, 512, d1)
-        s2 = xray.Shot.simulate(self.t, 512, d2)
-        s2.interpolate_to_polar(phi_spacing=2.0)
+        # todo : figure out detector checking
+        s1 = xray.Shot.load(ref_file('refshot.shot')) 
+        s2 = xray.Shot.load(ref_file('refshot.shot'))
+        s2.interpolate_to_polar(phi_spacing=8.0)
         
         try:
             st = xray.Shotset([s1, s2])
-            raise RuntimeError()
+            raise RuntimeError('detector checking should have thrown err')
         except ValueError as e:
             print e
             return # this means success
