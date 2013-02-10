@@ -255,13 +255,15 @@ class TestScatter():
         self.num_molecules = self.rfloats.shape[0]
         
         self.ref_I = ref_simulate_shot(self.xyzlist, self.atomic_numbers, 
-                                       self.num_molecules, self.q_grid, self.rfloats)
+                                       self.num_molecules, self.q_grid, 
+                                       self.rfloats)
     
     def test_gpu_scatter(self):
 
         if not GPU: raise SkipTest
             
-        gpu_I = call_gpuscatter(self.xyzlist, self.atomic_numbers, self.num_molecules, 
+        gpu_I = call_gpuscatter(self.xyzlist, self.atomic_numbers, 
+                                self.num_molecules, 
                                 self.q_grid, self.rfloats)
 
         print "GPU", gpu_I
@@ -309,7 +311,7 @@ class TestSphHrm(object):
     def test_vs_reference(self):
         qs = np.arange(2, 3.52, 0.02)
         silver = structure.load_coor(ref_file('SilverSphere.coor'))
-        cl = xray.sph_hrm_coefficients(silver, q_magnitudes=qs, 
+        cl = scatter.sph_hrm_coefficients(silver, q_magnitudes=qs, 
                                        num_coefficients=2)[1,:,:]
         ref = np.loadtxt(ref_file('ag_kam.dat')) # computed in matlab
         assert_allclose(cl, ref)
@@ -321,7 +323,7 @@ class TestDebye(object):
         s = structure.load_coor(ref_file("3lyz.xyz"))
         qs = np.array([0.04, 2.0, 6.0])
         ref  = debye_reference(s, q_values=qs)
-        calc = xray.debye(s, q_values=qs)
+        calc = scatter.debye(s, q_values=qs)
         assert_allclose(calc, ref)
     
     def test_against_scattering_simulation(self):
@@ -329,7 +331,7 @@ class TestDebye(object):
         d = xray.Detector.generic()
         x = xray.Shot.simulate(self.t, 512, d)
         sim_ip = x.intensity_profile()
-        debye = xray.debye(self.t, q_values=sim_ip[:,0])
+        debye = scatter.debye(self.t, q_values=sim_ip[:,0])
         assert_allclose(debye, sim_ip)
        
 

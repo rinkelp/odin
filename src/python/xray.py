@@ -67,7 +67,7 @@ class Beam(object):
         
         # make sure we have only one argument
         if len(kwargs) != 1:
-            raise ValueError('Expected exactly one argument, got %d' % (len(args)+1) )
+            raise KeyError('Expected exactly one argument, got %d' % (len(args)+1) )
         
         self.units = 'energy: keV, wavelengths: angstroms, frequencies: Hz, wavenumbers: inverse angstroms'
         
@@ -153,7 +153,7 @@ class Detector(Beam):
         if xyz_type == 'explicit':
             
             if type(xyz) != np.ndarray:
-                raise ValueError('Explicit xyz pixels required, `xyz` must be np.ndarray')
+                raise TypeError('Explicit xyz pixels required, `xyz` must be np.ndarray')
             
             self._pixels = xyz
             self._grid_list = None
@@ -169,7 +169,7 @@ class Detector(Beam):
             # this doesn't cause too much trouble later... -- TJL
             
             if type(xyz) != list:
-                raise ValueError('Implicit xyz pixels required, `xyz` must be list')
+                raise TypeError('Implicit xyz pixels required, `xyz` must be list')
             self._xyz_type = 'implicit'
             
             self._grid_list = xyz
@@ -182,7 +182,7 @@ class Detector(Beam):
             self._pixels    = None
             
         else:
-            raise ValueError("`xyz_type` must be one of {'explicit', 'implicit'}")
+            raise TypeError("`xyz_type` must be one of {'explicit', 'implicit'}")
         
         
         # parse wavenumber
@@ -191,7 +191,7 @@ class Detector(Beam):
         elif type(k) in [float, np.float64, np.float32]:
             self.k = k
         else:
-            raise ValueError('`k` must be a float or odin.xray.Beam')
+            raise TypeError('`k` must be a float or odin.xray.Beam')
         
         if coord_type in ['cartesian', 'polar']:
             self.coord_type = coord_type
@@ -810,7 +810,7 @@ class ImageFilter(object):
             intensities, mask = self._apply_hot_pixels(intensities, mask)
         
         if 'polarization' in self._methods_to_apply:
-            intensities = self._apply_polarization(intensities, self._detector)
+            intensities = self._apply_polarization(intensities)
         
         if 'detector_mask' in self._methods_to_apply:
             intensities, mask = self._apply_detector_mask(intensities, mask)
@@ -853,27 +853,28 @@ class ImageFilter(object):
             
         """
         
-        # TJL todo : is passing a detector really the best way (most user 
+        # TJL thinking : is passing a detector really the best way (most user 
         # friendly) to do this?
         
-        self._thetas = detector.polar[:,1].copy() / 2.0 # this is the crystallographic theta
-        self._phis   = detector.polar[:,2].copy()
+        self.qxyz = detector.reciprocal.copy()
+        self.l = detector.path_length
         self._polarization_factor = polarization_factor
         self._methods_to_apply.append('polarization')
-        self._detector = detector
         
         return
         
         
-    def _apply_polarization(self, i, mask):
+    def _apply_polarization(self, i):
         """
         Apply the polarization filter to `i`
         """
-        cf  = ( self._polarization_factor ) * ( 1.0 - np.power( np.sin(self._thetas) * np.cos(self._phis), 2 ))
-        cf += ( 1.0 - self._polarization_factor ) * ( 1.0 - np.power( np.sin(self._thetas) * np.sin(self._phis), 2 ))
-        i = i.flatten()
-        i /= cf
-        return i
+        theta_x = np.arctan( self.qxyz[:,0] / self.l )
+        theta_y = np.arctan( self.qxyz[:,1] / self.l )
+        P = self._polarization_factor
+        f_p = 0.5 * ( (1.0 + P) * np.power(np.cos(theta_x), 2) + \
+                      (1.0 - P) * np.power(np.cos(theta_y), 2) )
+        corrected_i = i.flatten() * f_p
+        return corrected_i
 
         
     def detector_mask(self, border_pixels=1, num_bins=1e5, beta=1.0):
@@ -1996,10 +1997,10 @@ class Shotset(Shot):
         
     def __add__(self, other):
         if not isinstance(other, Shotset):
-            raise ValueError('Cannot add types: %s and Shotset' % type(other))
-        new_shot_list = self.shots.extend(other.shots)
-        assert len(new_shot_list) > 0
-        return Shotset( new_shot_list )
+            raise TypeError('Cannot add types: %s and Shotset' % type(other))
+        self.shots.extend(other.shots)
+        assert len(self.shots) > 0
+        return Shotset( self.shots )
         
         
     def _check_qvectors_same(self, epsilon=1e-6):
@@ -2353,7 +2354,7 @@ class Shotset(Shot):
                 try:
                     to_load = np.array(to_load)
                 except:
-                    raise ValueError('`to_load` must be a ndarry/list of ints')
+                    raise TypeError('`to_load` must be a ndarry/list of ints')
 
             # going to maintain backwards compatability -- this should be
             # deprecated ASAP though....

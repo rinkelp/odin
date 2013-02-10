@@ -24,7 +24,7 @@ scattering code (interface in gpuscatter.hh). It that takes data in on the
 cpu side, copies it to the gpu, and exposes functions that let you perform 
 actions with the GPU.
 
-This class will get translated into python via swig
+This class will get translated into python via a cython wrapper.
 */
 
 
