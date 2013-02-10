@@ -219,11 +219,10 @@ class TestShot(object):
         self.shot = xray.Shot(self.i, self.d)
         
     def test_io(self):
-        if os.path.exists('test.shot'): os.system('test.shot')
+        if os.path.exists('test.shot'): os.remove('test.shot')
         self.shot.save('test.shot')
         s = xray.Shot.load('test.shot')
-        os.remove('test.shot')
-        if os.path.exists('test.shot'): os.system('test.shot')        
+        if os.path.exists('test.shot'): os.remove('test.shot')
         assert_array_almost_equal(s.intensity_profile(),
                                   self.shot.intensity_profile() )
         
