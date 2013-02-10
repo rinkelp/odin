@@ -8,19 +8,18 @@ Classes, methods, functions for use with xray scattering experiments.
 import logging
 logging.basicConfig()
 logger = logging.getLogger(__name__)
-#logger.setLevel('DEBUG')
+logger.setLevel('DEBUG')
 
 import cPickle
 from bisect import bisect_left
 
 import numpy as np
-from scipy import interpolate, fftpack, weave, special, optimize
+from scipy import interpolate, fftpack
 from scipy.ndimage import filters
 
 from odin.math import arctan3, rand_pairs, smooth
 from odin import scatter
 from odin.interp import Bcinterp
-from odin.refdata import cromer_mann_params
 
 from mdtraj import trajectory, io
 
@@ -1493,8 +1492,13 @@ class Shot(object):
         """
         Get the value of q nearest to the argument that is on our computed grid.
         """
-        if (q % self.q_spacing == 0.0) and (q > self.q_min) and (q < self.q_max):
-            pass
+
+        # this is what I had before -- faster, but didn't work so well (floating pt
+        # small errors threw it off, I believe)
+        #if (q % self.q_spacing == 0.0) and (q >= self.q_min) and (q <= self.q_max):
+
+        if q in self.q_values:
+            pass # return q
         else:
             q = self.q_values[ bisect_left(self.q_values, q, hi=len(self.q_values)-1) ]
             logger.debug('Passed value `q` not on grid -- using closest '
@@ -1618,7 +1622,6 @@ class Shot(object):
             The intensity at |q| averaged over the azimuth : < I(|q|) >_phi.
         """
         
-        q = self._nearest_q(q)
         ind = self._q_index(q)
         
         # the two-step type conversion below ensures that (1) masked values
@@ -1640,7 +1643,7 @@ class Shot(object):
             An n x 2 array, where the first dimension is the magnitude |q| and
             the second is the average intensity at that point < I(|q|) >_phi.
         """
-                
+         
         intensity_profile = np.zeros((self.num_q, 2))
         
         for i,q in enumerate(self.q_values):

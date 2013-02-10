@@ -14,12 +14,10 @@ from odin.testing import ref_file, skip, expected_failure
 
 from scipy.ndimage import imread
 
-import matplotlib.pyplot as plt
-
 class TestHough(object):
     
     def setup(self):
-        self.image = imread(ref_file('chough-test.png'))
+        self.image = np.array(imread(ref_file('chough-test.png')))
         self.CM = om.CircularHough(radii=np.arange(75,87,1), procs='all')
     
     @skip         

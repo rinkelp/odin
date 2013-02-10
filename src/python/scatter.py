@@ -8,10 +8,12 @@ logging.basicConfig()
 logger = logging.getLogger(__name__)
 
 import numpy as np
+from scipy import weave, misc, special
 from threading import Thread
 
 from odin import cpuscatter
 from odin.refdata import cromer_mann_params
+from odin.math import arctan3
 
 try:
     from odin import gpuscatter
@@ -85,7 +87,7 @@ def simulate_shot(traj, num_molecules, detector, traj_weights=None,
     num_per_shapshot = np.random.multinomial(num_molecules, traj_weights)
         
     # get the scattering vectors
-    if isinstance(detector, odin.xray.Detector):    
+    if str(type(detector)).find('Detector') > -1:    
         qxyz = detector.reciprocal
         assert detector.num_pixels == qxyz.shape[0]
     elif isinstance(detector, np.ndarray):
@@ -405,7 +407,8 @@ def sph_hrm_coefficients(trajectory, weights=None, q_magnitudes=None,
             for il,l in enumerate(l_vals):                
                 for m in range(-l, l+1):
                     
-                    N = np.sqrt( 2. * l * factorial(l-m) / ( 4. * np.pi * factorial(l+m) ) )
+                    N = np.sqrt( 2. * l * misc.factorial(l-m) / \
+                                ( 4. * np.pi * misc.factorial(l+m) ) )
                     Plm = special.lpmv(m, l, sph_quad_900[:,2])
                     Ylm = N * np.exp( 1j * m * q_phi ) * Plm
                     

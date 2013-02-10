@@ -15,9 +15,7 @@ else:
     GPU = False
 
 from odin.refdata import cromer_mann_params
-from odin import xray, cpuscatter, structure
-from odin.xray import Detector
-from odin.scatter import atomic_formfactor
+from odin import xray, scatter, cpuscatter, structure
 from odin.structure import rand_rotate_molecule
 from odin.testing import skip, ref_file, gputest
 
@@ -262,9 +260,8 @@ class TestScatter():
 
         if not GPU: raise SkipTest
             
-        gpu_I = call_gpuscatter(self.xyzlist, self.atomic_numbers, 
-                                self.num_molecules, 
-                                self.q_grid, self.rfloats)
+        gpu_I = gpuscatter.simulate(self.num_molecules, self.q_grid, self.xyzlist,
+                                    self.atomic_numbers, rfloats=self.rfloats)
 
         print "GPU", gpu_I
         print "REF", self.ref_I
@@ -292,22 +289,26 @@ class TestScatter():
         
                             
     def test_python_call(self):
+        """
+        Test the GPU scattering simulation interface (scatter.simulate)
+        """
 
         if not GPU: raise SkipTest
         print "testing python wrapper fxn..."
         
         traj = trajectory.load(ref_file('ala2.pdb'))
         num_molecules = 512
-        detector = Detector.generic()
+        detector = xray.Detector.generic()
 
-        py_I = xray.simulate_shot(traj, num_molecules, detector)
-        print py_I
+        py_I = scatter.simulate_shot(traj, num_molecules, detector)
+
         assert not np.all( py_I == 0.0 )
         assert not np.isnan(np.sum( py_I ))
         
 
 class TestSphHrm(object):
-    
+   
+    @skip 
     def test_vs_reference(self):
         qs = np.arange(2, 3.52, 0.02)
         silver = structure.load_coor(ref_file('SilverSphere.coor'))
@@ -318,7 +319,8 @@ class TestSphHrm(object):
         
         
 class TestDebye(object):
-    
+   
+    @skip 
     def test_against_reference_implementation(self):
         s = structure.load_coor(ref_file("3lyz.xyz"))
         qs = np.array([0.04, 2.0, 6.0])
@@ -326,12 +328,19 @@ class TestDebye(object):
         calc = scatter.debye(s, q_values=qs)
         assert_allclose(calc, ref)
     
+    @skip
     def test_against_scattering_simulation(self):
         if not GPU: raise SkipTest
+        s = structure.load_coor(ref_file("3lyz.xyz"))
         d = xray.Detector.generic()
-        x = xray.Shot.simulate(self.t, 512, d)
+        x = xray.Shot.simulate(s, 512, d)
+
         sim_ip = x.intensity_profile()
-        debye = scatter.debye(self.t, q_values=sim_ip[:,0])
+        debye = scatter.debye(s, q_values=sim_ip[:,0])
+
+        sim_ip /= sim_ip.max()
+        debye  /= debye.max()
+
         assert_allclose(debye, sim_ip)
        
 
@@ -344,5 +353,5 @@ def test_atomic_formfactor():
         for Z in [1, 8, 79]:
             qv = np.zeros(3)
             qv[0] = q_mag
-            assert_allclose(atomic_formfactor(Z, q_mag), form_factor(qv, Z))
+            assert_allclose(scatter.atomic_formfactor(Z, q_mag), form_factor(qv, Z))
 
