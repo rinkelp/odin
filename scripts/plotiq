@@ -14,7 +14,7 @@ from odin.utils import odinparser
 from odin.plot import InteractiveImshow
 
 
-def main(input_file, output, max_intensity=0, npoints=1000):
+def main(input_file, max_intensity=0, npoints=1000):
     
     shotset = xray.Shotset.load(input_file)
     I = shotset.intensity_profile()
@@ -39,7 +39,7 @@ def main(input_file, output, max_intensity=0, npoints=1000):
     ax[0].set_xlim([ q_edge, np.max(I[:,0]) ])
     ax[0].set_yticklabels([])
     
-    i_assembled = shotset.shots[0].assemble_image(num_x=1000, num_y=1000)
+    i_assembled = shotset.shots[0].assemble_image(npoints=1000, npoints=1000)
     
     im = ax[1].imshow(i_assembled.T, cmap=cm.jet, interpolation="nearest")
     im.set_clim(np.min(I[:,1]), max_intensity)
@@ -62,11 +62,16 @@ def main(input_file, output, max_intensity=0, npoints=1000):
         im.set_clim(lims[0], colmax)
         ax[0].set_ylim([ lims[0], colmax ])
         plt.draw()
+        
+    def on_keypress(event):
+        if event.key == 'r':
+            output = raw_input('Enter filename to save as: ')
+            plt.savefig(output, bbox_inches='tight')
+            print "Saved: %s" % output
     
     fig.canvas.mpl_connect('scroll_event', on_scroll)
+    fig.canvas.mpl_connect('key_press_event', on_keypress)
     
-    # plt.savefig(output, bbox_inches='tight')
-    # print "Saved: %s" % output
     plt.show()
     
     return
@@ -76,13 +81,12 @@ if __name__ == '__main__':
     
     parser = odinparser('Plot intensity profile of a shotset.')
     
-    parser.add_argument('-i', '--input', type=str, help='An hdf shotset file.')
+    parser.add_argument('input', type=str, help='An hdf shotset file.')
     parser.add_argument('-m', '--max', type=float, default=0,
-                        help='Maximum intensity to plot (simulated beamstop). Default: Value at 0.4 1/A')
-    parser.add_argument('-o', '--output', default='intensity_plot.pdf',
-                        help='Image file to write. Append .pdf, .png, .jpg, etc. Default: intensity_plot.pdf')
+                        help='Maximum intensity to plot (simulated beamstop).'
+                             ' Default: Value at 0.4 1/A')
 
     args = parser.parse_args()
     
-    main(args.input, args.output, args.max)
+    main(args.input, max_intensity=args.max)
 
