@@ -11,18 +11,17 @@ import matplotlib.cm as cm
 
 from odin import xray
 from odin.utils import odinparser
+from odin.plot import InteractiveImshow
+
 
 def main(input_file, output, max_intensity=0, npoints=1000):
-    
-    # ----- HARDCODE -------- #
-    q_edge = 0.4  # inv Ang.
-    # ----------------------- #
     
     shotset = xray.Shotset.load(input_file)
     I = shotset.intensity_profile()
     
+    q_edge = 0.4
     if max_intensity == 0:
-        x = np.argsort( np.abs(I[:,0] - q_edge) )[0] # index closest to 0.5 inv A
+        x = np.argsort( np.abs(I[:,0] - q_edge) )[0] # index closest to 0.4 inv A
         max_intensity = I[x,1]
     else:
         q_edge = 0.0
@@ -30,8 +29,8 @@ def main(input_file, output, max_intensity=0, npoints=1000):
     print 'Max. Intensity Cutoff: %f' % max_intensity
     print 'Minimum value of q at that cutoff (A^-1): %f' % q_edge
     
-    fig, ax = plt.subplots(nrows=1, ncols=2, figsize=(8,3.5))
-    fig.tight_layout()
+    fig, ax = plt.subplots(nrows=1, ncols=2, figsize=(12,5.5))
+    #fig.tight_layout()
     
     ax[0].plot(I[:,0], I[:,1], lw=2)
     ax[0].set_xlabel(r'q / $\AA^{-1}$')
@@ -42,14 +41,33 @@ def main(input_file, output, max_intensity=0, npoints=1000):
     
     i_assembled = shotset.shots[0].assemble_image(num_x=1000, num_y=1000)
     
-    ax[1].imshow(np.transpose(i_assembled), cmap=cm.jet, interpolation="nearest")
+    im = ax[1].imshow(i_assembled.T, cmap=cm.jet, interpolation="nearest")
+    im.set_clim(np.min(I[:,1]), max_intensity)
     ax[1].set_xlabel('x')
     ax[1].set_ylabel('y')
     ax[1].set_xticklabels([])
     ax[1].set_yticklabels([])
     
-    plt.savefig(output, bbox_inches='tight')
-    print "Saved: %s" % output
+    # if we scroll, zoom in/out
+    def on_scroll(event):
+        
+        lims = im.get_clim()
+        speed = 1.1
+
+        if event.button == 'up':
+            colmax = lims[1] / speed
+        elif event.button == 'down':
+            colmax = lims[1] * speed
+
+        im.set_clim(lims[0], colmax)
+        ax[0].set_ylim([ lims[0], colmax ])
+        plt.draw()
+    
+    fig.canvas.mpl_connect('scroll_event', on_scroll)
+    
+    # plt.savefig(output, bbox_inches='tight')
+    # print "Saved: %s" % output
+    plt.show()
     
     return
     
