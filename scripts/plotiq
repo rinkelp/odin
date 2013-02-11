@@ -40,23 +40,9 @@ def main(input_file, output, max_intensity=0, npoints=1000):
     ax[0].set_xlim([ q_edge, np.max(I[:,0]) ])
     ax[0].set_yticklabels([])
     
-    intensities = shotset.shots[0].intensities.copy() #check
-    intensities[intensities > max_intensity] = 0.0
-    intensities[intensities < 0.0] = 0.0
+    i_assembled = shotset.shots[0].assemble_image(num_x=1000, num_y=1000)
     
-    q = shotset.shots[0].detector.xyz[:,:2] # ignore z-comp. of detector
-    grid = np.zeros(( npoints**2, 2 ))
-    gx = np.linspace(q[:,0].min(), q[:,0].max(), npoints)
-    gy = np.linspace(q[:,1].min(), q[:,1].max(), npoints)
-
-    gxx, gyy = np.meshgrid(gx, gy)
-    grid[:,0] = gxx.flatten()
-    grid[:,1] = gyy.flatten()
-
-    i_interp = griddata(q, intensities, grid, method='nearest', fill_value=0.0)
-    i_interp = i_interp.reshape(npoints, npoints)
-    
-    ax[1].imshow(np.transpose(i_interp), cmap=cm.jet, interpolation="nearest")
+    ax[1].imshow(np.transpose(i_assembled), cmap=cm.jet, interpolation="nearest")
     ax[1].set_xlabel('x')
     ax[1].set_ylabel('y')
     ax[1].set_xticklabels([])

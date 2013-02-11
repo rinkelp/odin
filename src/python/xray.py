@@ -8,7 +8,7 @@ Classes, methods, functions for use with xray scattering experiments.
 import logging
 logging.basicConfig()
 logger = logging.getLogger(__name__)
-logger.setLevel('DEBUG')
+#logger.setLevel('DEBUG')
 
 import cPickle
 from bisect import bisect_left
@@ -1187,6 +1187,16 @@ class Shot(object):
     @property
     def num_datapoints(self):
         return self.num_phi * self.num_q
+
+        
+    @property
+    def intensities_2d(self):
+        return self.assemble_image()  
+        
+        
+    @property
+    def polar_intensities_2d(self):
+        return self.polar_intensities.reshape(s.num_phi, s.num_q)
         
 
     def interpolate_to_polar(self, q_spacing=0.02, phi_spacing=1.0, 
@@ -1875,7 +1885,7 @@ class Shot(object):
         return np.array(interp_params)
 
         
-    def assemble_image(self, num_x=1715, num_y=1715):
+    def assemble_image(self, num_x=None, num_y=None):
         """
         Assembles the Shot object into a real-space image.
 
@@ -1895,15 +1905,20 @@ class Shot(object):
             >>> show()
             ...
         """
+        
+        if (num_x == None) or (num_y == None):
+            # todo : better performance if needed (implicit detector)
+            num_x = len(self.detector.xyz[:0])
+            num_y = len(self.detector.xyz[:1])
 
-        points = self.detector.xyz[:,:2]
+        points = self.detector.xyz[:,:2] # ignore z-comp. of detector
 
         x = np.linspace(points[:,0].min(), points[:,0].max(), num_x)
         y = np.linspace(points[:,1].min(), points[:,1].max(), num_y)
         grid_x, grid_y = np.meshgrid(x,y)
 
         grid_z = interpolate.griddata(points, self.intensities, (grid_x,grid_y), 
-                                      method='nearest')
+                                      method='nearest', fill_value=0.0)
 
         return grid_z
         
