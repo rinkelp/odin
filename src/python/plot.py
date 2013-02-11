@@ -29,7 +29,7 @@ class InteractiveImshow(object):
         ability.
     """
     
-    def __init__(self, inarr, filename=None):
+    def __init__(self, inarr, filename=None, fig=None, ax=None):
         """
         Parameters
         ----------
@@ -39,19 +39,31 @@ class InteractiveImshow(object):
         filename : {str, None}
             The filename to call the file if it is saved. If `None`, disable saving
             ability.
+            
+        fig : pyplot.figure
+            A figure object to draw on.
+            
+        ax : pyplot.axes
+            An axes canvas to draw on.
         """
         self.inarr = inarr
         self.filename = filename
+        self.fig = fig
+        self.ax = ax
         self.cmax = self.inarr.max()
         self.cmin = self.inarr.min()
         self._draw_img()
         
 
     def _on_keypress(self, event):
+        
         if event.key == 's':
-            logger.info("Saving image: %s" % self.filename)
+            if not self.filename:
+                self.filename = raw_input('Saving. Enter filename: ')
             plt.savefig(self.filename)
-        if event.key == 'r':
+            logger.info("Saved image: %s" % self.filename)
+            
+        elif event.key == 'r':
             logger.info("Reset plot")
             colmin, colmax = self.orglims
             plt.clim(colmin, colmax)
@@ -60,7 +72,7 @@ class InteractiveImshow(object):
 
     def _on_click(self, event):
         if event.inaxes:
-            lims = self.axes.get_clim()
+            lims = self.im.get_clim()
             colmin = lims[0]
             colmax = lims[1]
             rng = colmax - colmin
@@ -73,32 +85,36 @@ class InteractiveImshow(object):
             elif event.button is 3:
                 if value > colmin and value < colmax:
                     colmix = value
-            plt.clim(colmin, colmax)
+            self.im.set_clim(colmin, colmax)
             plt.draw()
             
             
     def _on_scroll(self, event):
-        lims = self.axes.get_clim()
-        factor = 1.1
+        lims = self.im.get_clim()
+        speed = 1.1
         
         if event.button == 'up':
-            colmax = lims[1] / factor
+            colmax = lims[1] / speed
         elif event.button == 'down':
-            colmax = lims[1] * factor
+            colmax = lims[1] * speed
             
-        plt.clim(lims[0], colmax)
+        self.im.set_clim(lims[0], colmax)
         plt.draw()
             
 
     def _draw_img(self):
-        fig = plt.figure()
-        cid1 = fig.canvas.mpl_connect('key_press_event', self._on_keypress)
-        cid2 = fig.canvas.mpl_connect('button_press_event', self._on_click)
-        cid3 = fig.canvas.mpl_connect('scroll_event', self._on_scroll)
-        canvas = fig.add_subplot(111)
-        #canvas.set_title(self.filename)
-        self.axes = plt.imshow(self.inarr, vmax=self.cmax, origin='lower')
-        self.colbar = plt.colorbar(self.axes, pad=0.01)
-        self.orglims = self.axes.get_clim()
-        #plt.show()
+        
+        if not self.fig:
+            self.fig = plt.figure()
+            
+        cid1 = self.fig.canvas.mpl_connect('key_press_event', self._on_keypress)
+        cid2 = self.fig.canvas.mpl_connect('button_press_event', self._on_click)
+        cid3 = self.fig.canvas.mpl_connect('scroll_event', self._on_scroll)
+        
+        if not self.ax:
+            self.ax = self.fig.add_subplot(111)
+        
+        self.im = self.ax.imshow(self.inarr, vmax=self.cmax, origin='lower')
+        self.colbar = plt.colorbar(self.im, pad=0.01)
+        self.orglims = self.im.get_clim()
         
