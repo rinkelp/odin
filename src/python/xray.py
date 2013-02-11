@@ -1196,7 +1196,7 @@ class Shot(object):
         
     @property
     def polar_intensities_2d(self):
-        return self.polar_intensities.reshape(s.num_phi, s.num_q)
+        return self.polar_intensities.reshape(self.num_phi, self.num_q)
         
 
     def interpolate_to_polar(self, q_spacing=0.02, phi_spacing=1.0, 

@@ -14,9 +14,10 @@ logger.setLevel(logging.DEBUG)
 logging.basicConfig()
 
 def test_m_confs():
+    # smoke test
     t = trajectory.load( ref_file('ala2.pdb') )
     m = structure.multiply_conformations(t, 10, 1.0)
-    return m
+    
     
 def test_rm_com():
     t = trajectory.load( ref_file('ala2.pdb') )
@@ -26,6 +27,7 @@ def test_rm_com():
     
     for i in range(t.n_frames):
         assert_array_almost_equal(np.zeros(3), np.average(t.xyz[i,:,:], weights=masses, axis=0))
+        
         
 def test_multiply_conformations():
     traj = structure.load_coor(ref_file('goldBenchMark.coor'))
@@ -47,6 +49,7 @@ def test_multiply_conformations():
         # use the below to visualize the result
         # plt.hist(otraj.xyz[:,0,i])
         # plt.show()
+        
         
 def test_load_coor():
     
@@ -71,7 +74,7 @@ def test_random_rotation():
     x_unit = np.zeros(3)
     x_unit[0] = 1.0
     
-    n_samples = int(1e4)
+    n_samples = int(5e4)
     n_bins = 10
     
     phi_x = np.zeros(n_samples)

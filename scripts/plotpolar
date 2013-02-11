@@ -17,8 +17,7 @@ def main(shotset_fn):
     ss = xray.Shotset.load(shotset_fn)
     s = ss[0]
     
-    fig = plt.figure()
-    plt.InteractiveImshow(s.polar_intensities_2d.T)
+    im = InteractiveImshow(s.polar_intensities_2d.T)
     plt.xlabel(r'$\phi$ / Degrees')
     plt.ylabel(r'q / $\AA^{-1}$')
     
@@ -30,9 +29,7 @@ def main(shotset_fn):
 if __name__ == '__main__':
 	
     parser = odinparser('Plot a sequential series of rings at a specific q-value.')
-
     parser.add_argument('shotset', help='An ODIN shot file to plot')
-                        
     args = parser.parse_args()
     
     main(args.shotset)
