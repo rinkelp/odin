@@ -41,7 +41,7 @@ class TestBcinterp():
                                          self.vals, 
                                          np.array([self.new_x, self.new_y]).T,
                                          method='cubic' )
-        
+
     def test_for_smoke(self):
         ip = self.interp.evaluate(self.new_x, self.new_y)
         if np.all( ip == 0.0 ):
@@ -49,23 +49,12 @@ class TestBcinterp():
             print "Try reinstalling with no OMP: python setup.py install --no-openmp"
             raise Exception()
     
-    def test_point_evaluation(self):
-        x = float(self.new_x[1])
-        y = float(self.new_y[1])
-        i = self.interp._evaluate_point(x,y)
-        assert_allclose( i, self.ref[1], rtol=0.5 )
-
     def test_point_vs_known(self):
         interp = Bcinterp( np.arange(1000**2),
                            0.1, 0.1, 1000, 1000, 0.0, 0.0 )
         i = interp.evaluate(1.01, 1.01)
         assert_almost_equal(i, 10110.1, decimal=0)
-                                       
+    
     def test_array_evaluation(self):
         ip = self.interp.evaluate(self.new_x, self.new_y)
-        assert np.sum( np.abs(ip - self.ref) < 0.3 ) > 600
-        
-if __name__ == '__main__':
-    test = TestBcinterp()
-    test.setup()
-    test.test_array_evaluation()
+        assert np.sum( np.abs(ip - self.ref) < 0.3 ) > 1000

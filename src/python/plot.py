@@ -52,6 +52,7 @@ class InteractiveImshow(object):
             logger.info("Saving image: %s" % self.filename)
             plt.savefig(self.filename)
         if event.key == 'r':
+            logger.info("Reset plot")
             colmin, colmax = self.orglims
             plt.clim(colmin, colmax)
             plt.draw()
@@ -64,25 +65,40 @@ class InteractiveImshow(object):
             colmax = lims[1]
             rng = colmax - colmin
             value = colmin + event.ydata * rng
-            if event.button is 1 :
+            if event.button is 1:
                 if value > colmin and value < colmax :
-                    colmin = value
-            elif event.button is 2 :
-                colmin, colmax = self.orglims
-            elif event.button is 3 :
-                if value > colmin and value < colmax:
                     colmax = value
+            elif event.button is 2:
+                colmin, colmax = self.orglims
+            elif event.button is 3:
+                if value > colmin and value < colmax:
+                    colmix = value
             plt.clim(colmin, colmax)
             plt.draw()
+            
+            
+    def _on_scroll(self, event):
+        lims = self.axes.get_clim()
+        factor = 1.1
+        
+        if event.button == 'up':
+            colmax = lims[1] / factor
+        elif event.button == 'down':
+            colmax = lims[1] * factor
+            
+        plt.clim(lims[0], colmax)
+        plt.draw()
             
 
     def _draw_img(self):
         fig = plt.figure()
         cid1 = fig.canvas.mpl_connect('key_press_event', self._on_keypress)
         cid2 = fig.canvas.mpl_connect('button_press_event', self._on_click)
+        cid3 = fig.canvas.mpl_connect('scroll_event', self._on_scroll)
         canvas = fig.add_subplot(111)
         #canvas.set_title(self.filename)
-        self.axes = plt.imshow(self.inarr.T, vmax = self.cmax, origin='lower')
+        self.axes = plt.imshow(self.inarr, vmax=self.cmax, origin='lower')
         self.colbar = plt.colorbar(self.axes, pad=0.01)
         self.orglims = self.axes.get_clim()
-        plt.show()
+        #plt.show()
+        
