@@ -17,6 +17,7 @@ import re
 import hashlib
 import yaml
 import tables
+import fabio
 from base64 import b64encode
 
 import numpy as np
@@ -24,63 +25,33 @@ import numpy as np
 from odin import xray
 from odin.math import CircularHough
 
-ENABLE_CBF = True
-try:
-    import pycbf
-except ImportError as e:
-    ENABLE_CBF = False
-    logger.warning('Could not find dependency `pycbf`. Install libcbf and'
-                   ' pycbf. See the ODIN documentation for more details.')
-
 
 class CBF(object):
     """
-    A class for parsing CBF files. Depends on pycbf, which is a python-SWIG
-    wrapped cbflib.
+    A class for parsing CBF files. Depends on fabio.
     """
     
-    # --------------------------------------------------------------------------
-    # Warning: Rant Below
-    #
-    # cbflib is a peice of junk. The file format itself, while probably
-    # unnecessary, is fine. The library, however, is unnecessarily convoluted,
-    # obtuse, and painful to use. This should be a straightforward thing, i.e.
-    # load file and be done, but as evidenced in the code below, how to use the
-    # library involves voodoo that is COMPLETELY UNDOCUMENTED, and requires you
-    # to read the fucking C source code to find out what's going on. Whoever
-    # designed this peice of shit is clearly an engineer who needs to learn what
-    # humans are, and how to be a decent person.
-    #
-    # Fortunately, someone SWIG wrapped this mess, which at least makes the
-    # guess-and-check process necessary to use the code faster. Unfortunately
-    # the python version, pycbf, is also completely document/comment free, and
-    # of course it reflects the user-misleading pathologies of the parent 
-    # library.
-    #
-    # I can only pray that the code below works. If you run into problems send
-    # TJ an email at <tjlane@stanford.edu> and we can work together to cut
-    # through the BS.
-    #
-    # Stuff shouldn't be this hard....
-    #
-    # OK, hope you skipped that. Productive code below.
-    # --------------------------------------------------------------------------
-    
     def __init__(self, filename):
+        """
+        A light handle on a CBF file.
+        
+        Parameters
+        ----------
+        filename : str
+            The path to the CBF file.
+        """
+        
         logger.info('Reading: %s' % filename)
-        if not ENABLE_CBF:
-            raise ImportError('Require `libcbf` and `pycbf` to parse CBFs')
         self.filename = filename
         
-        self._get_header_data()
+        # extract all interesting stuff w/fabio
+        self._fabio_handle = fabio.open(filename)
+        self._info = self._fabio_handle.header
+        self._parse_array_header( self._info['_array_data.header_contents'] )
         self.intensity_dtype = self._convert_dtype(self._info['X-Binary-Element-Type'])
-        self._get_array_data()
-        
-        # currently disabled, see comment in functoin
-        # if self.md5:
-        #     self._check_md5()
             
-        logger.debug('loaded file')
+        logger.debug('Finished loading file')
+        
         
     @property
     def md5(self):
@@ -101,7 +72,8 @@ class CBF(object):
         
     @property
     def path_length(self):
-        d, unit = self._info['Detector_distance'].split() # assume units are the same for all dims
+        # assume units are the same for all dims
+        d, unit = self._info['Detector_distance'].split() 
         return float(d)
         
     @property
@@ -129,6 +101,11 @@ class CBF(object):
         #return (self.pixel_size[0] * self.center[0], self.pixel_size[1] * self.center[1])
         return (0.0, 0.0)
         
+    @property
+    def intensities(self):
+        return self._fabio_handle.data
+
+
     def _convert_dtype(self, dtype_str):
         """
         Converts `dtype_str`, straight from the cbf file, to the right numpy
@@ -137,10 +114,10 @@ class CBF(object):
         
         # TJL: I'm just guessing the names for most of these....
         # the cbflib docs are useless!!
-        conversions = {'"signed 32-bit integer"' : np.int32,
-                       '"unsigned 32-bit integer"' : np.uint32,
-                       '"32-bit float"' : np.float32,
-                       '"64-bit float"' : np.float64}
+        conversions = {"signed 32-bit integer" : np.int32,
+                       "unsigned 32-bit integer" : np.uint32,
+                       "32-bit float" : np.float32,
+                       "64-bit float" : np.float64}
         
         try:
             dtype = conversions[dtype_str]
@@ -151,137 +128,52 @@ class CBF(object):
                              % dtype_str)
         
         return dtype
+    
         
-        
-    def _get_header_data(self):
+    def _parse_array_header(self, array_header):
         """
-        Parse the flat-text header section for all the useful self._info
-        """
+        Fabio provides an '_array_data.header_contents' key entry in that
+        needs to be parsed. E.g. for a test PILATUS detector file generated at
+        SSRL, this dictionary entry looks like
         
+        fabio_object.header['_array_data.header_contents'] = 
+        '# Detector: PILATUS 6M, S/N 60-0101 SSRL\r\n# 2012/Apr/09 20:02:10.800
+        \r\n# Pixel_size 172e-6 m x 172e-6 m\r\n# Silicon sensor, thickness 0.00
+        0320 m\r\n# Exposure_time 9.997700 s\r\n# Exposure_period 10.000000 s\r\
+        n# Tau = 110.0e-09 s\r\n# Count_cutoff 1060885 counts\r\n# Threshold_set
+        ting 6000 eV\r\n# N_excluded_pixels = 1685\r\n# Excluded_pixels: badpix_
+        mask.tif\r\n# Flat_field: (nil)\r\n# Trim_directory: p6m0101_T8p0_vrf_m0
+        p3_090729\r\n# Wavelength 0.7293 A\r\n# Energy_range (0, 0) eV\r\n# Dete
+        ctor_distance 0.20000 m\r\n# Detector_Voffset 0.00000 m\r\n# Beam_xy (12
+        31.50, 1263.50) pixels\r\n# Flux 0.0000 ph/s\r\n# Filter_transmission 1.
+        0000\r\n# Start_angle 90.0000 deg.\r\n# Angle_increment 0.0100 deg.\r\n#
+         Detector_2theta 0.0000 deg.\r\n# Polarization 0.990\r\n# Alpha 0.0000 d
+        eg.\r\n# Kappa 0.0000 deg.\r\n# Phi 90.0000 deg.\r\n# Chi 0.0000 deg.\r
+        \n# Oscillation_axis X, CW\r\n# N_oscillations 1'
+        
+        This function makes some sense of this mess.
+        
+        Parameters
+        ----------
+        array_header : str
+            Something that looks like the dictionary value above.
+        
+        This function injects this information into self._info.
+        """
+
         logger.debug('Reading header info...')
-        
-        self._info = {} # everything gets dumped here
-        f = open(self.filename, 'rb')
-        st = str()
-        lines = list()
-        
-        # read char-by-char until we get to the binary header
-        # the first flat text section has to do with the detector & run params
-        loop_counter = 0 # saftey-check to prevent infinite loops
-        loop_cutoff = int(1e8)
-        
-        while True:
-            st += f.read(1)
-            if st == "--CIF-BINARY-FORMAT-SECTION--\r\n":
-                st = ""
-                break
-            elif st.endswith("\n"):
-                lines.append(st)
-                split = st.strip().split()
-                if len(split) > 0:
-                    if split[0] == "#":
-                        k = split[1].strip().lstrip(':')
-                        self._info[k] = ' '.join(split[2:])
-                st = ""
-            loop_counter += 1
-            if loop_counter > loop_cutoff:
-                raise RuntimeError('No break from parse loop -- file corrupted!')
 
-        # there is a second flat-text section that describes the binary data
-        logger.debug("Reading binary header")
-        loop_counter = 0
-        st = ""
+        items = array_header.split('#')
         
-        while True:
-            st += f.read(1)
-            if (st == "\r\n"): # or (st == "\r") or (st == "\n"):
-                break
-            elif st.endswith("\n"): # or st.endswith("\r"):
-                lines.append(st)
-                split = st.strip().split(':')
-                if len(split) == 2:
-                    try:
-                        self._info[split[0].strip()] = int(split[1])
-                    except:
-                        self._info[split[0].strip()] = split[1].strip()
-                st = ""
-            if loop_counter > loop_cutoff:
-                raise RuntimeError('No break from parse loop -- file corrupted!')
-
-        f.close()
+        for item in items:
+            split = item.strip().split(' ')
+            if len(split) > 1:
+                k = split[0].strip().lstrip(':')
+                self._info[k] = ' '.join(split[1:]).strip().lstrip('=')
+        
         return
+    
 
-        
-    def _get_array_data(self):
-        """
-        Finds the numerical data in the CBF file and injects it into intensities.
-        Uses libcbf & pycbf to parse this info.
-        """
-        
-        logger.debug('Reading binary intensities...')
-        
-        # `_handle` is the c-struct object that holds all the CBF-file info
-        self._handle = pycbf.cbf_handle_struct()
-        self._handle.read_file(self.filename, pycbf.MSG_DIGEST)
-        self._handle.rewind_datablock()
-        
-        # some cbflib voodoo...
-        self._n_blocks = self._handle.count_datablocks()
-        self._handle.select_datablock(0)
-        self._block_name = self._handle.datablock_name()
-        logger.debug('Selected block %d, %s' % (0, self._block_name))
-        
-        self._handle.rewind_category()
-        self.n_categories = self._handle.count_categories()
-        
-        # I believe each "category" may contain a different image
-        # todo dblchk
-        for i in range(self.n_categories):
-            
-            self._handle.select_category(i)
-            category_name = self._handle.category_name()
-            logger.debug("Reading category %d, %s" % (i, category_name))
-
-            n_rows = self._handle.count_rows()
-            if n_rows > 1:
-                logger.warning("More than one `row` in CBF, parsing first only...")
-            elif n_rows == 0:
-                raise RuntimeError('No rows in CBF! Cannot parse.')
-                
-            n_cols = self._handle.count_columns()
-            logger.debug("rows/cols: %d/%d" % (n_rows, n_cols))
-
-            # step through each "column", I don't even know what those are...
-            self._handle.rewind_column()
-            while True:
-                logger.debug("column: %s" % self._handle.column_name())
-                try:
-                   self._handle.next_column()
-                except:
-                   break
-                
-            for k in range(n_cols):
-                col_name = self._handle.column_name()
-                self._handle.select_column(k)
-                
-                typeofvalue = self._handle.get_typeofvalue()
-                logger.debug("col: %d, name: %s, type: %s" % (k, col_name, typeofvalue))
-
-                if typeofvalue.find("bnry") > -1:
-                    logger.debug("Found binary data")
-                    try:
-                        s = self._handle.get_integerarray_as_string()
-                    except AttributeError as e:
-                        logger.critical("ERROR: %s" % e)
-                        raise AttributeError('CBF PARSE ERROR: Could not find intensity data in file!')
-                    d = np.fromstring(s, dtype=self.intensity_dtype)
-                    self.intensities = d.reshape(*self.intensities_shape) # (slow, fast)
-                else:
-                    pass
-                    #value = self._handle.get_value()
-                    #logger.debug("column value: %s", str(value))
-
-                        
     def _check_md5(self):
         """
         Check the data are intact by computing the md5 checksum of the binary
@@ -300,12 +192,11 @@ class CBF(object):
             logger.critical("Data MD5:    %s" % data_md5)
             logger.critical("Header MD5:  %s" % self.md5)
             raise RuntimeError('Data and stored md5 hashes do not match! Data corrupted.')
-            
+    
             
     def _find_center(self):
         """
-        Find the center of any Bragg rings (aka the location of the x-ray beam)
-        using a Hough Transform.
+        Find the center of any Bragg rings (aka the location of the x-ray beam).
         
         Returns
         -------
