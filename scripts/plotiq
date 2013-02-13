@@ -39,7 +39,8 @@ def main(input_file, max_intensity=0, npoints=1000):
     ax[0].set_xlim([ q_edge, np.max(I[:,0]) ])
     ax[0].set_yticklabels([])
     
-    i_assembled = shotset.shots[0].assemble_image(npoints=1000, npoints=1000)
+    npoints = 1000
+    i_assembled = shotset.shots[0].assemble_image(npoints, npoints)
     
     im = ax[1].imshow(i_assembled.T, cmap=cm.jet, interpolation="nearest")
     im.set_clim(np.min(I[:,1]), max_intensity)
