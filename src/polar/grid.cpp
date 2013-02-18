@@ -15,19 +15,32 @@
 
 using namespace std;
 
-void generate_random_quaternion(float r1, float r2, float r3,
+class PolarScatter_SM
+{
+
+  void generate_random_quaternion(
+                 float r1, float  r2, float r3,
                 float &q1, float &q2, float &q3, float &q4);
 
-void rotate(float x, float y, float z,
-            float b0, float b1, float b2, float b3,
-            float &ox, float &oy, float &oz);
+  void rotate(float x, float y, float z,
+              float b0, float b1, float b2, float b3,
+              float &ox, float &oy, float &oz);
 
-void sleep(int mseconds);
+  void sleep(int mseconds);
 
-int main(int argc, char * argv[]){
+public:
+  PolarScatter_SM (string in_file,int Nphi,int n_rotations,float qres, float wavelen, string qVal);
+ ~PolarScatter_SM ();
 
-string  in_file    = string(argv[1]);
-hid_t   in_file_id = H5Fopen(argv[1], H5F_ACC_RDWR, H5P_DEFAULT);
+};
+
+
+
+PolarScatter_SM::PolarScatter_SM 
+    (string in_file,int Nphi,int n_rotations,
+     float qres, float wavelen, string qVal) {
+
+hid_t   in_file_id = H5Fopen(in_file.c_str(), H5F_ACC_RDWR, H5P_DEFAULT);
 hid_t   h5_file_id = H5Fcreate( (char*)( in_file +".ring").c_str(), H5F_ACC_TRUNC, H5P_DEFAULT, H5P_DEFAULT);
 
 if(in_file_id < 0)
@@ -42,11 +55,11 @@ herr_t   read_xyza    = H5Dread(data_id_xyza, H5T_NATIVE_FLOAT, H5S_ALL, H5S_ALL
 
 //hid_t    space_xyza  = H5Dget_space (data_id_xyza);
 
-int   Nphi        = atoi(argv[2]); // number of bins around diffraction ring
+//int   Nphi        = atoi(argv[2]); // number of bins around diffraction ring
 float deltaPhi    = 2*M_PI / Nphi;   // spacing between scattering points around the ring
-int   n_rotations = atoi(argv[3]); // number of random rotations
-float qres        = atof(argv[4]); // units of q in inverse angstroms
-float wavelen     = atof(argv[5]); // wavelength of experiment in angstroms
+//int   n_rotations = atoi(argv[3]); // number of random rotations
+//float qres        = atof(argv[4]); // units of q in inverse angstroms
+//float wavelen     = atof(argv[5]); // wavelength of experiment in angstroms
 
 // close coordinate file
 H5Fclose(in_file_id);
@@ -90,16 +103,16 @@ for (int im=0; im < n_rotations; im ++)
 
 
 cout << "\n    Starting simulation.\n    Estimated time to complete: " 
-     << 153./1000. * float(argc-6) *  (float)n_rotations / 3600.  << " hours...\n\n";
+     << 153./1000. * float(1) *  (float)n_rotations / 3600.  << " hours...\n\n";
          
 vector<float> THETA,Q; vector<string> QSTRING;
-for(int i=6;i<argc;i++)
+for(int i=0;i<1;i++)
 {
-  float q = atof( argv[i] )*qres;
+  float q = atof(qVal.c_str() )*qres;
   Q.push_back( q );
   float sin_theta = wavelen*q/4/M_PI;
   THETA.push_back( asin(sin_theta) );
-  QSTRING.push_back( string(argv[i]) );
+  QSTRING.push_back( qVal );
 }
 
 float ax,ay,az; // atomic positions (used later)
@@ -154,10 +167,11 @@ H5Sclose(space_single);
 H5Sclose(space_rings);
 H5Fclose(h5_file_id);
 
-return 0;}
+}
 
 
-void generate_random_quaternion(float r1, float r2, float r3,
+void PolarScatter_SM::generate_random_quaternion
+	       (float  r1, float  r2, float  r3,
                 float &q1, float &q2, float &q3, float &q4) {
     
     float s, sig1, sig2, theta1, theta2, w, x, y, z;
@@ -181,8 +195,9 @@ void generate_random_quaternion(float r1, float r2, float r3,
 }
 
 
-void rotate(float x, float y, float z,
-            float b0, float b1, float b2, float b3,
+void PolarScatter_SM::rotate
+	   (float x,   float   y, float   z,
+            float b0,  float  b1, float  b2, float b3,
             float &ox, float &oy, float &oz) {
 
     // x,y,z      -- float vector
@@ -214,9 +229,12 @@ void rotate(float x, float y, float z,
 
 }
 
-void sleep(int mseconds)
-{
-usleep(mseconds * 1000);
-}
+void PolarScatter_SM::sleep(int mseconds) { usleep(mseconds * 1000); }
 
+PolarScatter_SM::~PolarScatter_SM(){}
 
+int main(){
+
+PolarScatter_SM pssm ("gold_11k.hdf",360,10,0.02,0.7293,"133");
+
+return 0;}
