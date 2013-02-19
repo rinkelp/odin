@@ -11,6 +11,8 @@ class RingScatter
   
   float  wavelen,qres;
   int    n_rotations,Nphi,numAtoms;
+
+  float * rings;
   
   string qstring;
 

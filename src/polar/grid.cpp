@@ -27,6 +27,8 @@ RingScatter::RingScatter (
   qstring        = qstring_;        // string of integers (space delimited) telling RingScatter::Scatter() where to compute the scattering
                               // --> each integer is in units of qres
   n_rotations = n_rotations_; // number of random orientations to sample
+  
+  rings       = new float[n_rotations*Nphi];
 
 
 /*
@@ -149,7 +151,6 @@ void RingScatter::Scatter()
     hid_t  rings_data_id = H5Dcreate1(h5_ring_group_id,("ring_"+QVALS[i]).c_str() , H5T_NATIVE_FLOAT, space_rings , H5P_DEFAULT);
   
 
-    float * rings = new float[n_rotations*Nphi];
     for (int im=0; im < n_rotations; im ++)
     {
       float  phi(0);
@@ -177,12 +178,8 @@ void RingScatter::Scatter()
 //save the rings to hdf
     herr_t  write_rings = H5Dwrite(rings_data_id, H5T_NATIVE_FLOAT, H5S_ALL, H5S_ALL, H5P_DEFAULT, rings);
     H5Dclose(rings_data_id);
-    delete [] rings;
   }
 
-  H5Sclose(space_single);
-  H5Sclose(space_rings);
-  H5Fclose(h5_file_id);
 }
 
 
@@ -259,6 +256,10 @@ void RingScatter::sleep(int mseconds) { usleep(mseconds * 1000); }
 
 RingScatter::~RingScatter()
 {
+  delete [] rings;
+  H5Sclose(space_single);
+  H5Sclose(space_rings);
+  H5Fclose(h5_file_id);
 
 }
 
