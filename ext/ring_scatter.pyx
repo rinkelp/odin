@@ -41,7 +41,7 @@ def coor_and_CM_2_hdf(coor_file, h5_file):
   arr2hdf_simple(h5_file,'cm_param',cm_param,'a')
   arr2hdf_simple(h5_file,'cm_aid',  cm_aid,  'a')
 
-def simulate(input_file, Nphi__, n_rotations__, qres__, wavelen__ , qarray, output_dir='.' ):   
+def simulate(input_file, Nphi__, n_rotations__, qres__, wavelen__ , qarray)#, output_dir='.' ):   
   '''
   parameters
   ----------
@@ -66,10 +66,6 @@ def simulate(input_file, Nphi__, n_rotations__, qres__, wavelen__ , qarray, outp
     then simulate will compute the scattering at rings q = 2 A^-1 and q = 3 A^-1 , sampling each ring at 
     360 evenly spaced points.
   
-  optional parameters
-  ------------------'
-  output_dir : string
-    A directory to dump the ouput
 
   Returns
   -------
