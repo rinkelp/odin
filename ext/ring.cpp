@@ -14,6 +14,9 @@
 #include <hdf5.h>
 #include <ring.h>
 
+// dermen      at stanford dot edu
+// dermendarko at gmail    dot com
+
 using namespace std;
 
 RingScatter::RingScatter (
@@ -24,7 +27,7 @@ RingScatter::RingScatter (
   Nphi        = Nphi_;        // num azimuthal points around each ring on detector
   qres        = qres_;        // units in inverse angstroms (each qval is an integer in these units)
   wavelen     = wavelen_;     // wavelen of beam in angstroms
-  qstring        = qstring_;        // string of integers (space delimited) telling RingScatter::Scatter() where to compute the scattering
+  qstring     = qstring_;     // string of integers (space delimited) telling RingScatter::Scatter() where to compute the scattering
                               // --> each integer is in units of qres
   n_rotations = n_rotations_; // number of random orientations to sample
   
@@ -32,32 +35,64 @@ RingScatter::RingScatter (
 
 
 /*
-  OPEN THE INPUT FILE CONTAING THE COORDINATE INFO.
+  OPEN THE INPUT FILE CONTAING THE COORDINATE/CROMERMANN INFO.
   THIS FILE WILL BE OVERWRITTEN SO THAT THE NEW INFORMATION CAN BE SAVED.
 */
 
-  h5_file_id = H5Fopen(in_file.c_str(), H5F_ACC_RDONLY, H5P_DEFAULT);
+  h5_file_id = H5Fopen( in_file.c_str(), H5F_ACC_RDONLY, H5P_DEFAULT);
   if(h5_file_id < 0)
     cout <<"ERROR: cannot locate file " << in_file << endl;
   
 /*
   READ THE ATOMIC COORDINATE INFO
 */
-  hid_t    data_id_xyza  = H5Dopen(h5_file_id,"/xyza",H5P_DEFAULT); // open coordinate dataset
+  hid_t    data_id_xyza  = H5Dopen(h5_file_id,"xyza",H5P_DEFAULT); // open coordinate dataset
   hid_t    space_xyza    = H5Dget_space (data_id_xyza);             // data space of coordinate dataset
   hsize_t  size          = H5Dget_storage_size( data_id_xyza );     // size in bytes (BYTES) of coordinate info
   numAtoms               = (int)size/16;                            // 4 floats per atom
+  cout <<  size << endl;
   float   *xyza          = new float[numAtoms*4];                   // x,y,z,id for each atom
   herr_t   read_xyza     = H5Dread(data_id_xyza, H5T_NATIVE_FLOAT, H5S_ALL, H5S_ALL, H5P_DEFAULT, xyza);
   for(int i=0;i < numAtoms*4;i++)
     XYZA.push_back(xyza[i]);     // initialize the coordinate info
   H5Dclose(data_id_xyza);        //close the dataset to keep things clean
-  H5Fclose(h5_file_id);          // close the file so we can re-open it and truncate 
+
+for (int i=0; i < numAtoms;i+=4)
+  cout << xyza[i] << " " << xyza[i+1] << " " << xyza[i+2] << " " << xyza[i+3] << endl;
 
   cout << "\n    Found coordinate information for " << numAtoms << " atoms ...\n";
 
 /*
-  OVERWRITE EXISTING COORDINATE FILE AND SAVE THE COORDINATE INFO
+  READ THE CROMERMANN PARAMETERS
+*/
+  hid_t    data_id_cm_params  = H5Dopen(h5_file_id,"cm_param",H5P_DEFAULT); // open coordinate dataset
+  size          = H5Dget_storage_size( data_id_xyza );     // size in bytes (BYTES) of coordinate info
+  numAtomTypes           = (int)size/36;                            // 9 floats per atom type
+  float   *cm_params     = new float[numAtomTypes*9];                   // x,y,z,id for each atom
+  herr_t   read_cm_params   = H5Dread(data_id_xyza, H5T_NATIVE_FLOAT, H5S_ALL, H5S_ALL, H5P_DEFAULT, cm_params);
+  for(int i=0;i < numAtomTypes*9;i++)
+    cromermann.push_back(cm_params[i]);     // initialize the parameter info
+  H5Dclose(data_id_cm_params);        //close the dataset to keep things clean
+  delete [] cm_params;
+  formfactors = new float[numAtomTypes]; // array for storing form factos (see RingScatter::kernel)
+
+
+/*
+  READ THE CROMERMANN ATOM IDS
+*/
+  hid_t    data_id_cm_aid  = H5Dopen(h5_file_id,"cm_aid",H5P_DEFAULT); // open coordinate dataset
+    size            = H5Dget_storage_size( data_id_xyza );      // size in bytes (BYTES) of coordinate info
+  int     *cm_aid          = new int[numAtoms];                  // x,y,z,id for each atom
+  herr_t   read_cm_aid     = H5Dread(data_id_xyza, H5T_NATIVE_FLOAT, H5S_ALL, H5S_ALL, H5P_DEFAULT, cm_aid);
+  for(int i=0;i < numAtoms;i++)
+    CM_AID.push_back(cm_aid[i]);     // initialize the atom id info
+  H5Dclose(data_id_cm_aid);        //close the dataset to keep things clean
+  delete [] cm_aid;
+  
+  H5Fclose(h5_file_id);          // close the file so we can re-open it and truncate 
+
+/*
+  OVERWRITE EXISTING COORDINATE/CROMERMANN FILE AND RE-SAVE THE COORDINATE INFO
 */
 
   h5_file_id           = H5Fcreate( in_file.c_str(), H5F_ACC_TRUNC, H5P_DEFAULT, H5P_DEFAULT);       // open/overwrite file
@@ -81,9 +116,9 @@ RingScatter::RingScatter (
 /*
   SAVE THE PARAMETER qres TO HDF5
 */
-  h5_ring_group_id   = H5Gcreate(h5_file_id, "/rings",H5P_DEFAULT,H5P_DEFAULT,H5P_DEFAULT);
-  hid_t   data_q_res = H5Dcreate1(h5_ring_group_id, "qres", H5T_NATIVE_FLOAT, space_single , H5P_DEFAULT);
-  herr_t  err_q_res  = H5Dwrite(data_q_res, H5T_NATIVE_FLOAT, H5S_ALL, H5S_ALL, H5P_DEFAULT, &qres);
+  h5_ring_group_id        = H5Gcreate(h5_file_id, "/rings",H5P_DEFAULT,H5P_DEFAULT,H5P_DEFAULT);
+  hid_t   data_q_res      = H5Dcreate1(h5_ring_group_id, "qres", H5T_NATIVE_FLOAT, space_single , H5P_DEFAULT);
+  herr_t   err_q_res      = H5Dwrite(data_q_res, H5T_NATIVE_FLOAT, H5S_ALL, H5S_ALL, H5P_DEFAULT, &qres);
   H5Dclose(data_q_res); // close dataset
 
 
@@ -119,21 +154,22 @@ RingScatter::RingScatter (
     THETA.push_back( asin(sin_theta) );
   }
 
-  Scatter();
+  kernel();
+
 }
 
-void RingScatter::Scatter()
+// borrowed and modified from tjlane cpuscatter.cpp
+void RingScatter::kernel()
 {
 /*
   for each q value we will iterate over random orientations, each
   time computing the azimuthal scattering signal at that q.
   We will then save this information in a 2D array (n_rotaions*Nphi) and
-  then save that to hdf5 
+  then save that to hdf5
 */
 
   cout << "\n    Starting simulation.\n    (Estimated time to complete: " 
-       << 69./1000. * float(1) *  (float)n_rotations / 3600.  << " hours)\n\n";
-
+       << 69./1000. * float( QVALS.size() ) *  (float)n_rotations / 3600.  << " hours)\n\n";
 
 
   float ax,ay,az; // atomic positions (used later)
@@ -145,6 +181,27 @@ void RingScatter::Scatter()
     float q        = Q[i]; if(q==0)q+=0.001; //magnitude of q vector
     
     float qz       = q*sin(theta);           // z-component of q vector
+
+/*
+    COMPUTE THE CROMERMANN PARAMETERS FOR THIS Q VALUE (THEY ARE EQUAL FRO A GIVEN Q)
+    author tjlane
+*/
+    float qo = q / (16*M_PI*M_PI); // qo is (sin(theta)/lambda)^2
+    float fi;
+            
+//  for each atom type, compute the atomic form factor f_i(q)
+    for (int type = 0; type < numAtomTypes; type++) 
+    {
+//    scan through cromermann in blocks of 9 parameters
+      int tind = type * 9;
+      fi =  cromermann[tind]   * exp(-cromermann[tind+4]*qo);
+      fi += cromermann[tind+1] * exp(-cromermann[tind+5]*qo);
+      fi += cromermann[tind+2] * exp(-cromermann[tind+6]*qo);
+      fi += cromermann[tind+3] * exp(-cromermann[tind+7]*qo);
+      fi += cromermann[tind+8];
+
+      formfactors[type] = fi; // store for use in a second
+    }
 
     cout << "    ---> Computing the scattering ring at q = "<< q << " Ang^-1 ...\n";
   
@@ -167,8 +224,8 @@ void RingScatter::Scatter()
                   quats[4*im], quats[4*im+1], quats[4*im+2], quats[4*im+3],
                   ax,          ay,            az );
 	  float phase = ax*qx + ay*qy + az*qz;
-	  QsumR      +=  XYZA[a+3]*cos(phase); // add in crommer man functionality
-	  QsumI      +=  XYZA[a+3]*sin(phase); // --> something like CM( xyza[a+3] )
+	  QsumR      +=  formfactors[ CM_AID[im] ] * cos(phase); // add in crommer man functionality
+	  QsumI      +=  formfactors[ CM_AID[im] ] * sin(phase); // --> something like CM( xyza[a+3] )
         }
         rings[int( im*Nphi + phiIndex )] = QsumR*QsumR + QsumI*QsumI;
         phi += 2*M_PI/float(Nphi);
@@ -180,14 +237,8 @@ void RingScatter::Scatter()
     H5Dclose(rings_data_id);
   }
 
-  delete [] rings;
-  H5Sclose(space_single);
-  H5Sclose(space_rings);
-  H5Fclose(h5_file_id);
 }
-
-
-
+// author tjlane
 void RingScatter::generate_random_quaternion
 	       (float  r1, float  r2, float  r3,
                 float &q1, float &q2, float &q3, float &q4) {
@@ -212,7 +263,7 @@ void RingScatter::generate_random_quaternion
     q4 = z;
 }
 
-
+// author tjlane
 void RingScatter::rotate
 	   (float x,   float   y, float   z,
             float b0,  float  b1, float  b2, float b3,
@@ -260,10 +311,14 @@ void RingScatter::sleep(int mseconds) { usleep(mseconds * 1000); }
 
 RingScatter::~RingScatter()
 {
-  //delete [] rings;
-  //H5Sclose(space_single);
-  //H5Sclose(space_rings);
-  //H5Fclose(h5_file_id);
+  cout << "\n    HASTA LA VISTA, BABY..." << endl;
+
+  delete [] rings;
+  delete [] formfactors;
+  H5Gclose(h5_ring_group_id);
+  H5Sclose(space_single);
+  H5Sclose(space_rings);
+  H5Fclose(h5_file_id);
 
 }
 

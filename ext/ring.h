@@ -8,21 +8,24 @@ using namespace std;
 
 class RingScatter
 {
-  vector<float> quats,Q,THETA,XYZA;
-  vector<string> QVALS;
-  
-  float  wavelen,qres;
-  int    n_rotations,Nphi,numAtoms;
 
-  float * rings;
+  vector<float> quats,Q,THETA,XYZA,cromermann;
+  vector<int> CM_AID; // atom type decoder for cromermann array
+  vector<string> QVALS; // 
   
+  float  wavelen,qres; // wavelength and q resolution
+  int    n_rotations,Nphi; // num random rotations and num azimutha; bins per ring
+  int    numAtomTypes,numAtoms; // num distinct atom types and total num atoms
+  
+  float * rings;
+  float * formfactors;
   string qstring;
 
   hid_t  h5_file_id, h5_ring_group_id;
   
   hid_t  space_rings,space_single;
   
-  void Scatter();
+  void kernel();
 
   void generate_random_quaternion(
                  float r1, float  r2, float r3,
@@ -37,7 +40,7 @@ class RingScatter
   void split_string(const string &s, char delim, vector<string> &elems);
 
 public:
-  RingScatter (string in_file,int Nphi_,int n_rotations_,float qres_, float wavelen_, string qstring_);
+  RingScatter (string in_file, int Nphi_, int n_rotations_, float qres_, float wavelen_, string qstring_);
  ~RingScatter ();
 
 };
