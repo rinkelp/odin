@@ -41,7 +41,7 @@ def coor_and_CM_2_hdf(coor_file, h5_file):
   arr2hdf_simple(h5_file,'cm_param',cm_param,'a')
   arr2hdf_simple(h5_file,'cm_aid',  cm_aid,  'a')
 
-def simulate(input_file, Nphi__, n_rotations__, qres__, wavelen__ , qarray)#, output_dir='.' ):   
+def simulate(input_file, Nphi__, n_rotations__, qres__, wavelen__ , qarray):#, output_dir='.' ):   
   '''
   parameters
   ----------
