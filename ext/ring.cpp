@@ -1,7 +1,6 @@
 #include <cstdlib>
 #include <stdlib.h>
 #include <iostream>
-#include <fstream>
 #include <string.h>
 #include <vector>
 #include <sstream>
@@ -50,46 +49,44 @@ RingScatter::RingScatter (
   hid_t    space_xyza    = H5Dget_space (data_id_xyza);             // data space of coordinate dataset
   hsize_t  size          = H5Dget_storage_size( data_id_xyza );     // size in bytes (BYTES) of coordinate info
   numAtoms               = (int)size/16;                            // 4 floats per atom
-  cout <<  size << endl;
   float   *xyza          = new float[numAtoms*4];                   // x,y,z,id for each atom
   herr_t   read_xyza     = H5Dread(data_id_xyza, H5T_NATIVE_FLOAT, H5S_ALL, H5S_ALL, H5P_DEFAULT, xyza);
+  
   for(int i=0;i < numAtoms*4;i++)
     XYZA.push_back(xyza[i]);     // initialize the coordinate info
   H5Dclose(data_id_xyza);        //close the dataset to keep things clean
-
-for (int i=0; i < numAtoms;i+=4)
-  cout << xyza[i] << " " << xyza[i+1] << " " << xyza[i+2] << " " << xyza[i+3] << endl;
 
   cout << "\n    Found coordinate information for " << numAtoms << " atoms ...\n";
 
 /*
   READ THE CROMERMANN PARAMETERS
 */
-  hid_t    data_id_cm_params  = H5Dopen(h5_file_id,"cm_param",H5P_DEFAULT); // open coordinate dataset
-  size          = H5Dget_storage_size( data_id_xyza );     // size in bytes (BYTES) of coordinate info
-  numAtomTypes           = (int)size/36;                            // 9 floats per atom type
-  float   *cm_params     = new float[numAtomTypes*9];                   // x,y,z,id for each atom
+  hid_t  data_id_cm_params  = H5Dopen(h5_file_id,"cm_param",H5P_DEFAULT);  // open coordinate dataset
+  size                      = H5Dget_storage_size( data_id_xyza );         // size in bytes (BYTES) of coordinate info
+  numAtomTypes              = (int)size/36;                                // 9 floats per atom type
+  float   *cm_params        = new float[numAtomTypes*9];                   // x,y,z,id for each atom
   herr_t   read_cm_params   = H5Dread(data_id_xyza, H5T_NATIVE_FLOAT, H5S_ALL, H5S_ALL, H5P_DEFAULT, cm_params);
+  
   for(int i=0;i < numAtomTypes*9;i++)
     cromermann.push_back(cm_params[i]);     // initialize the parameter info
-  H5Dclose(data_id_cm_params);        //close the dataset to keep things clean
+  H5Dclose(data_id_cm_params);              //close the dataset to keep things clean
   delete [] cm_params;
-  formfactors = new float[numAtomTypes]; // array for storing form factos (see RingScatter::kernel)
+  formfactors = new float[numAtomTypes];    // array for storing form factos (see RingScatter::kernel)
 
 
 /*
   READ THE CROMERMANN ATOM IDS
 */
   hid_t    data_id_cm_aid  = H5Dopen(h5_file_id,"cm_aid",H5P_DEFAULT); // open coordinate dataset
-    size            = H5Dget_storage_size( data_id_xyza );      // size in bytes (BYTES) of coordinate info
-  int     *cm_aid          = new int[numAtoms];                  // x,y,z,id for each atom
+  int     *cm_aid          = new int[numAtoms];                        // x,y,z,id for each atom
   herr_t   read_cm_aid     = H5Dread(data_id_xyza, H5T_NATIVE_FLOAT, H5S_ALL, H5S_ALL, H5P_DEFAULT, cm_aid);
+  
   for(int i=0;i < numAtoms;i++)
     CM_AID.push_back(cm_aid[i]);     // initialize the atom id info
-  H5Dclose(data_id_cm_aid);        //close the dataset to keep things clean
+  H5Dclose(data_id_cm_aid);          //close the dataset to keep things clean
   delete [] cm_aid;
-  
-  H5Fclose(h5_file_id);          // close the file so we can re-open it and truncate 
+ 
+  H5Fclose(h5_file_id);             // close the file so we can re-open it and truncate 
 
 /*
   OVERWRITE EXISTING COORDINATE/CROMERMANN FILE AND RE-SAVE THE COORDINATE INFO
@@ -126,7 +123,7 @@ for (int i=0; i < numAtoms;i+=4)
   INITIALIZE RANDOM QUATERNIONS FOR ROTATIONS
 */
 
-  sleep(500); // delay to avoid rotation repeats
+  sleep(500);         // delay to avoid rotation repeats
   srand (time(NULL)); // intitalize random seed
   for(int i=0;i < 4*n_rotations;i++)
     quats.push_back(0);
@@ -224,8 +221,8 @@ void RingScatter::kernel()
                   quats[4*im], quats[4*im+1], quats[4*im+2], quats[4*im+3],
                   ax,          ay,            az );
 	  float phase = ax*qx + ay*qy + az*qz;
-	  QsumR      +=  formfactors[ CM_AID[im] ] * cos(phase); // add in crommer man functionality
-	  QsumI      +=  formfactors[ CM_AID[im] ] * sin(phase); // --> something like CM( xyza[a+3] )
+	  QsumR      +=  formfactors[ CM_AID[im] ] * cos(phase);
+	  QsumI      +=  formfactors[ CM_AID[im] ] * sin(phase); 
         }
         rings[int( im*Nphi + phiIndex )] = QsumR*QsumR + QsumI*QsumI;
         phi += 2*M_PI/float(Nphi);
