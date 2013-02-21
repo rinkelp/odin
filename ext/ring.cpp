@@ -85,7 +85,7 @@ RingScatter::RingScatter (
     CM_AID.push_back(cm_aid[i]);     // initialize the atom id info
   H5Dclose(data_id_cm_aid);          //close the dataset to keep things clean
   delete [] cm_aid;
- 
+
   H5Fclose(h5_file_id);             // close the file so we can re-open it and truncate 
 
 /*
@@ -221,8 +221,9 @@ void RingScatter::kernel()
                   quats[4*im], quats[4*im+1], quats[4*im+2], quats[4*im+3],
                   ax,          ay,            az );
 	  float phase = ax*qx + ay*qy + az*qz;
-	  QsumR      +=  formfactors[ CM_AID[im] ] * cos(phase);
-	  QsumI      +=  formfactors[ CM_AID[im] ] * sin(phase); 
+	  QsumR      +=  formfactors[ CM_AID[a] ] * cos(phase);
+	  QsumI      +=  formfactors[ CM_AID[a] ] * sin(phase); 
+
         }
         rings[int( im*Nphi + phiIndex )] = QsumR*QsumR + QsumI*QsumI;
         phi += 2*M_PI/float(Nphi);
