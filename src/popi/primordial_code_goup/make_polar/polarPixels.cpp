@@ -1,50 +1,99 @@
-#include <vector>
 #include <cstdlib>
-#include <fstream>
-#include <iostream>
 #include <math.h>
+#include <iostream>
+#include <fstream>
+#include <string.h>
+#include <vector>
 
-//external libs
-#include <popi.h>
-
+#include "polarPixels.h"
 
 using namespace std;
 
+int XdimGlobal;
+const float PI = 3.14159265;
 
-PolarPilatus::PolarPilatus(int   Xdim_,       int Ydim_,       float * binData,
-                           float detdist_,    float pixsize_, float wavelen_,
-			   float x_center_=0, float y_center_=0)
-{
-  Xdim    = Xdim_;    // pixel units
-  Ydim    = Ydim_;    // pixel units
-  detdist = detdist_; // meters
-  pixsize = pixsize_; // meters
-  wavelen = wavelen_; // angstroms
+void getPixelsAtQ_bidist(float *ar0,vector<float>& ITH, float Q, int Nphi, int Xdim, float a,float b){
+        float theta(0);
+        float dtheta = 2*PI/float(Nphi);
+        float x,y;
+        float x1,y1;
+        float x2,y2;
+        float r11;
+        float r12;
+        float r21;
+        float r22;
+        float r1,r2;
+        float rtotal;
+        float w11,w12,w21,w22;
+        float wtotal;
+        float I11;
+        float I12;
+        float I21;
+        float I22;
+        float I1,I2;
+        float I;
+        for(int i=0;i<Nphi;i++){
+                x=Q*cos(theta)+a;
+                y=Q*sin(theta)+b;
+                if( ( x-floor(x) ) > 0 and ( y - floor(y) ) > 0 ){
+                        x1=floor(x);
+                        y1=floor(y);
+                        x2=ceil(x);
+                        y2=ceil(y);
+                        r11 = sqrt( (x-x1)*(x-x1) + (y-y1)*(y-y1) );
+                        r12 = sqrt( (x-x1)*(x-x1) + (y2-y)*(y2-y) );
+                        r21 = sqrt( (x2-x)*(x2-x) + (y-y1)*(y-y1) );
+                        r22 = sqrt( (x2-x)*(x2-x) + (y2-y)*(y2-y) );
+                        rtotal = r11 + r12 + r21 + r22;
+                        w11 = 1 - ( r11 / rtotal );
+                        w12 = 1 - ( r12 / rtotal );
+                        w21 = 1 - ( r21 / rtotal );
+                        w22 = 1 - ( r22 / rtotal );
+                        wtotal = w11 + w12 + w21 + w22;
+                        I11 = ar0[ int(x1+y1*Xdim) ]*( w11 / wtotal );
+			I12 = ar0[ int(x1+y2*Xdim) ]*( w12 / wtotal );
+                        I21 = ar0[ int(x2+y1*Xdim) ]*( w21 / wtotal );
+                        I22 = ar0[ int(x2+y2*Xdim) ]*( w22 / wtotal );
+                        I = I11 + I12 + I21 + I22;
+                        ITH[i]=I;
+                        theta+=dtheta;
+                        }
+                else if( ( x-floor(x) ) == 0 && ( y-floor(y) ) > 0 ){
+                        y1=floor(y);
+                        y2=ceil(y);
+                        r1 = y - y1;
+                        r2 = y2 - y;
+                        I1 = ar0[ int(x+y1*Xdim) ]*( 1 - r1 );
+                        I2 = ar0[ int(x+y2*Xdim) ]*( 1 - r2 );
+                        I = I1 + I2;
+                        ITH[i]=I;
+                        theta+=dtheta;
+                        }
+                else if( ( x-floor(x) ) > 0 && ( y-floor(y) ) == 0 ){
+                        x1=floor(x);
+                        x2=ceil(x);
+                        r1 = x - x1;
+                        r2 = x2 - x;
+                        I1 = ar0[ int(x1+y*Xdim) ]*( 1 - r1 );
+                        I2 = ar0[ int(x2+y*Xdim) ]*( 1 - r2 );
+                        I = I1 + I2;
+                        ITH[i]=I;
+                        theta+=dtheta;
+                        }
+                else if( ( x-floor(x) ) == 0 && ( y-floor(y) ) == 0 ){
+                        ITH[i]=ar0[ int(x+y*Xdim) ];
+                        theta+=dtheta;
+                        }
+                }
+        }
 
-  bicubicCoefficients(binData);
 
-  if (x_center_ == 0 && y_center_ == 0)
-  {
-    x_center  = (float)Xdim/2.;
-    y_center  = (float)Ydim/2.;
-  }
-  else
-  {
-    x_center = x_center_;
-    y_center = y_center_;
-  }
+float F(float ar[],int i,int j){
+	float val = ar[j*XdimGlobal+i];
+	return val;
+	}
 
-
-}
-
-
-float PolarPilatus::F(float ar[],int i,int j)
-{
-  float val = ar[j*Xdim+i];
-  return val;
-}
-
-float PolarPilatus::EvaluateIntensity(float coef[],float x,float y){
+float EvaluateIntensity(float coef[],float x,float y){
                 float a00=coef[0];
                 float a10=coef[1];
                 float a20=coef[2];
@@ -80,8 +129,13 @@ float PolarPilatus::EvaluateIntensity(float coef[],float x,float y){
                 return interpI;
 		}
 
-void  PolarPilatus::bicubicCoefficients( float *I ){
+void  bicubicCoefficients(float I[], int Xdim,int Ydim, vector<float>& A){
+	XdimGlobal = Xdim;
 	const int N(Xdim*Ydim);
+	//FILE * pFile = fopen(binFile.c_str(),"r");
+	//fseek(pFile,1024,SEEK_SET);
+	//float * I = new float[N];
+	//fread(I,4,N,pFile);
 
 	float * dIdx = new float[N];
 	float * dIdy = new float[N];
@@ -228,8 +282,9 @@ void  PolarPilatus::bicubicCoefficients( float *I ){
 */
 
 
-	cout << "\n    --> Calculating interpolation coefficients ...\n";
+	cout << "calculating interpolation coefficients ..." << endl;
 
+	//vector<float> A;
 	y=0;
 	while(y < Ydim-1){
 		x=0;
@@ -292,163 +347,73 @@ void  PolarPilatus::bicubicCoefficients( float *I ){
 	delete [] dIdy;
 	delete [] dIdxdy;
 	
+	//return A;
 	}
 
-void PolarPilatus::getPixelsAtQ( vector<float> & IvsPhi, int q_index,  float q, float a, float b)
-{
-// populates the vector IvsPhi with interpolated intensity values
-
-  float * coefficients = new float[16];
-  for(int phi=0;phi < Nphi; phi++){
-	float x = q*cosPhi[phi] + a;
-	float y = q*sinPhi[phi] + b;
-	int i = int(floor(x));
-	int j = int(floor(y));
-	int aStart = 16*j*(Xdim-1) + 16*i;
-	int k(0);
-	while (k < 16){
-		coefficients[k] = A[k+aStart];
-		k += 1;
-		}
-	IvsPhi[q_index*Nphi + phi] += EvaluateIntensity( coefficients, x-floor(x), y-floor(y) );
-	//IvsPhi[phi] = EvaluateIntensity( coefficients, x-floor(x), y-floor(y) );
-	}
-  delete [] coefficients;
-}
-
-float PolarPilatus::aveNo0(vector<float>& ar)
-{
-//  does the angular average around a ring of intensities
-//  ignores 0 values intensities
-  float ave(0);
-  float counts(0);
-  for(int i=0;i < Nphi; i++){
-	if (ar[i] > 0){
-		ave += ar[i];
-		counts += 1;
-		}
-	}
-  if (counts > 0)
-	return ave / counts;
-  else
-	return 0;
-}
-
-
-
-void PolarPilatus::Center(float qMin, float qMax, float center_res, int Nphi_, float size)
-{ 
-/* 
-  Finds beam center by BRUTE-FORCING a mximization calculation
-  Consider implementing gradient decent if this starts lagging
-*/
-
-  Nphi = Nphi_;
-
-  cosPhi.clear();
-  sinPhi.clear();
-  for(int i=0; i < Nphi; i++)
-  {
-    float phi = float(i) * 2*M_PI/float(Nphi);
-    cosPhi.push_back (cos(phi) );
-    sinPhi.push_back( sin(phi) );
-  }
-  vector<float> maxAA;
-  
-  float aMin(   x_center - size  )  ;
-  float aMax(   x_center + size  )  ;
-  float bMin(   y_center - size  )  ;
-  float bMax(   y_center + size  )  ;
-
-  int qdim(0),adim,bdim;
-  float q(qMin);
-  cout << "\n    Accumulating angular average maxima...\n";
-  while (q < qMax){
-	//float q_iang = q_res * q + 0.01;
-	//float q_pix = tan( 2 * asin( q_iang * wavelen / (4 * M_PI) ) ) * detdist / pixsize ;
-	
-	float q_pix = q;
-	
-	bdim=0;
-	float b(bMin);
-	while (b < bMax){
-		adim=0;
-		float a(aMin);
-		while(a < aMax){
-			vector<float> IvsPhi (Nphi,0);
-			getPixelsAtQ(IvsPhi, 0, q_pix, a, b);
-			float AA = aveNo0( IvsPhi );
-			maxAA.push_back( AA );
-			a += center_res;
-			adim += 1;
-			}
-		b += center_res;
-		bdim += 1;
-		}
-	q += 1;
-	qdim += 1;
-	cout << "    --->" << (qMax-qMin - qdim) << endl;
-	}
-
-  cout << "    Calculating the center...\n";
-
-  int i(0);
-  float max(0);
-  int qmax,amax,bmax;
-  while( i < qdim-1){
-	int j(0);
-	while(j < bdim-1){
+void getPixelsAtQ_bicubic(vector<float>& A,vector<float> &IvsPhi, float Q, int Nphi, float a, float b){
+	float theta = 0;
+	float dtheta = 2*PI / float(Nphi);
+	float * coefficients = new float[16];
+	int index(0);
+	vector<float> pix (Nphi,0);
+	while( index < Nphi){
+		float x = Q*cos(theta) + a;
+		float y = Q*sin(theta) + b;
+		int i = int(floor(x));
+		int j = int(floor(y));
+		int aStart = 16*j*(XdimGlobal-1) + 16*i;
 		int k(0);
-		while( k < adim-1){
-			if (maxAA[i*bdim*adim + j*adim + k] > max){
-				max = maxAA[i*bdim*adim + j*adim + k];
-				qmax=i;
-				bmax=j;
-				amax=k;
-				}
+		while (k < 16){
+			coefficients[k] = A[k+aStart];
 			k += 1;
 			}
-		j += 1;
+		IvsPhi[int(Q)*Nphi + index] += EvaluateIntensity( coefficients, x-floor(x), y-floor(y) );
+		theta += dtheta;
+		index += 1;
 		}
-	i += 1;
-	cout << "    ---> " <<  qdim -i << endl;
+	delete [] coefficients;
 	}
 
-  qmax = qmax + (int)qMin;
-  //float q_iang = q_res * float(qmax) + 0.01;
-  //float q_pix = tan( 2 * asin( q_iang * wavelen / (4 * M_PI) ) ) * detdist / pixsize ;
 
-  float q_pix = float(qmax);
+void getPixelsAtQ_bicubic_Bin(vector<float>& A,vector<float> &IvsPhi, float Q, int Nphi, float a, float b,int numPhiBins){
+	int lastBin = Nphi % numPhiBins;
+	if (lastBin != 0)
+		Nphi = Nphi + numPhiBins - lastBin;
+	int numPhiPerBin = Nphi / numPhiBins;
 
-  x_center = float(amax)*center_res + aMin;
-  y_center = float(bmax)*center_res + bMin;
+	float theta = 0;
+	float dtheta = 2*PI / float(Nphi);
+	float * coefficients = new float[16];
+	int index(0);
+	vector<float> pix (Nphi,0);
+	while( index < Nphi){
+		float x = Q*cos(theta) + a;
+		float y = Q*sin(theta) + b;
+		int i = int(floor(x));
+		int j = int(floor(y));
+		int aStart = 16*j*(XdimGlobal-1) + 16*i;
+		int k(0);
+		while (k < 16){
+			coefficients[k] = A[k+aStart];
+			k += 1;
+			}
+		pix[index] = EvaluateIntensity( coefficients, x-floor(x), y-floor(y) );
+		theta += dtheta;
+		index += 1;
+		}
+	delete [] coefficients;
+//	bin pix
 
-  cout << "\n    The peak intensity value is: " << max << endl;
-  cout <<   "    The max parameters are: (q,a,b) (" << q_pix << "," << x_center << "," << y_center << ")\n";
-
-  }
-
-PolarPilatus::~PolarPilatus()
-{
-  cout << "    exiting..." << endl;
-}
-
-
-int main(int argc, char * argv[]){
-
-FILE * binFile = fopen(argv[1],"r");
-fseek(binFile,1024,SEEK_SET);
-int N = 2463*2527;
-float * I = new float[N];
-fread(I,4,N,binFile);
-fclose(binFile);
-
-PolarPilatus pp(2463,2527,I,0.188,0.000176,0.7293);
-
-pp.Center(300,500,1,100,20);
-
-delete [] I;
-
-return 0;
-}
-
+	int i(0);
+	while (i < numPhiBins){
+		int j(0);
+		float ave(0);
+		while(j < numPhiPerBin){
+			ave += pix[i*numPhiPerBin + j];
+			j   += 1;
+			}
+		ave = ave / float(numPhiPerBin);
+		IvsPhi.push_back(ave);
+		i += 1;
+		}
+	}
