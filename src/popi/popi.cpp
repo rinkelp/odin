@@ -364,12 +364,12 @@ void PolarPilatus::Center(float qMin, float qMax, float center_res, int Nphi_, f
   }
   vector<float> maxAA;
   
-  float aMin(   x_center - size  )  ;
-  float aMax(   x_center + size  )  ;
-  float bMin(   y_center - size  )  ;
-  float bMax(   y_center + size  )  ;
+  float aMin =  x_center - size ;
+  float aMax =  x_center + size ;
+  float bMin =  y_center - size ;
+  float bMax =  y_center + size ;
 
-  int qdim(0),adim,bdim;
+  int qdim(0),adim(0),bdim(0);
   float q(qMin);
   cout << "\n      --> Accumulating angular average maxima...";
   while (q < qMax){
@@ -403,7 +403,7 @@ void PolarPilatus::Center(float qMin, float qMax, float center_res, int Nphi_, f
 
   int i(0);
   float max(0);
-  int qmax,amax,bmax;
+  int qmax(0),amax(0),bmax(0);
   while( i < qdim-1){
 	int j(0);
 	while(j < bdim-1){
