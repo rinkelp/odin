@@ -494,10 +494,14 @@ void PolarPilatus::InterpolateToPolar(float qres_, int Nphi_)
 
   cout << "\n    BEGINNING POLAR CONVERSION OF PILATUS 6M DETECTOR IMAGE...";
 
-// max Q in pixels units on the detector (with a 2 pixel cushion)
-  float maxq_pix = floor( (float)Xdim/2)-2;
+// max Q in pixels units on the detector (with a 15 pixel cushion)
+// -->need to hard code something better here, for instance if beam center is more than 15 pixels off from 
+//    the true center, then the code will crash trying to access pixels that dont exist.
+  float maxq_pix = floor( (float)Xdim/2)-15;
   if(Ydim < Xdim)
-    maxq_pix = floor( (float)Ydim/2)-2;
+    maxq_pix = floor( (float)Ydim/2)-15;
+
+  
 
 // and how many bins this corresponds to in qres units
   Nq=0;
