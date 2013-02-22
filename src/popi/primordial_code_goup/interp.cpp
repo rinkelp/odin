@@ -31,6 +31,6 @@ vector<float> PolarPilatus::getRing(int Nphi_, float q_pix )
 
 // array for storing final output
   vector<float> polarPix (Nphi,0);
-  getPixelsAtQ( A, polarPix, 0, q_pix, a, b);
+  getPixelsAtQ( A, polarPix, 0, q_pix, x_center, y_center);
   return polarPix;
 }

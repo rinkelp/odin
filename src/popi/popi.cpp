@@ -3,6 +3,7 @@
 #include <fstream>
 #include <iostream>
 #include <math.h>
+#include <string.h>
 
 //external libs
 #include <popi.h>
@@ -15,6 +16,9 @@ PolarPilatus::PolarPilatus(int   Xdim_,       int Ydim_,       float * binData,
                            float detdist_,    float pixsize_, float wavelen_,
 			   float x_center_=0, float y_center_=0)
 {
+
+  cout << "\n    WELCOME TO POLAR PILATUS. LOADING DATA...";
+
   Xdim    = Xdim_;    // pixel units
   Ydim    = Ydim_;    // pixel units
   detdist = detdist_; // meters
@@ -33,7 +37,9 @@ PolarPilatus::PolarPilatus(int   Xdim_,       int Ydim_,       float * binData,
     x_center = x_center_;
     y_center = y_center_;
   }
+  cout << "      --> Initializing center at x_center, y_center = " << x_center << " , " << y_center << endl; 
 
+  cout << "    DONE LOADING.\n";
 
 }
 
@@ -228,7 +234,7 @@ void  PolarPilatus::bicubicCoefficients( float *I ){
 */
 
 
-	cout << "\n    --> Calculating interpolation coefficients ...\n";
+	cout << "\n      --> Calculating interpolation coefficients ...\n";
 
 	y=0;
 	while(y < Ydim-1){
@@ -302,8 +308,8 @@ void PolarPilatus::getPixelsAtQ( vector<float> & IvsPhi, int q_index,  float q, 
   for(int phi=0;phi < Nphi; phi++){
 	float x = q*cosPhi[phi] + a;
 	float y = q*sinPhi[phi] + b;
-	int i = int(floor(x));
-	int j = int(floor(y));
+	int i = int( floor(x) );
+	int j = int( floor(y) );
 	int aStart = 16*j*(Xdim-1) + 16*i;
 	int k(0);
 	while (k < 16){
@@ -343,6 +349,9 @@ void PolarPilatus::Center(float qMin, float qMax, float center_res, int Nphi_, f
   Consider implementing gradient decent if this starts lagging
 */
 
+  cout << "\n    STARTING CENTER FINDING ALGORITHM...";
+  cout << "\n    (gimmie Bragg ring images)";
+
   Nphi = Nphi_;
 
   cosPhi.clear();
@@ -362,7 +371,7 @@ void PolarPilatus::Center(float qMin, float qMax, float center_res, int Nphi_, f
 
   int qdim(0),adim,bdim;
   float q(qMin);
-  cout << "\n    Accumulating angular average maxima...\n";
+  cout << "\n      --> Accumulating angular average maxima...";
   while (q < qMax){
 	//float q_iang = q_res * q + 0.01;
 	//float q_pix = tan( 2 * asin( q_iang * wavelen / (4 * M_PI) ) ) * detdist / pixsize ;
@@ -387,10 +396,10 @@ void PolarPilatus::Center(float qMin, float qMax, float center_res, int Nphi_, f
 		}
 	q += 1;
 	qdim += 1;
-	cout << "    --->" << (qMax-qMin - qdim) << endl;
+	//cout << "    --->" << (qMax-qMin - qdim) << endl;
 	}
 
-  cout << "    Calculating the center...\n";
+  cout << "\n      --> Calculating the center...";
 
   int i(0);
   float max(0);
@@ -411,7 +420,7 @@ void PolarPilatus::Center(float qMin, float qMax, float center_res, int Nphi_, f
 		j += 1;
 		}
 	i += 1;
-	cout << "    ---> " <<  qdim -i << endl;
+	//cout << "    ---> " <<  qdim -i << endl;
 	}
 
   qmax = qmax + (int)qMin;
@@ -423,17 +432,154 @@ void PolarPilatus::Center(float qMin, float qMax, float center_res, int Nphi_, f
   x_center = float(amax)*center_res + aMin;
   y_center = float(bmax)*center_res + bMin;
 
-  cout << "\n    The peak intensity value is: " << max << endl;
-  cout <<   "    The max parameters are: (q,a,b) (" << q_pix << "," << x_center << "," << y_center << ")\n";
+  cout << "\n      ----> The peak intensity value is: " << max << ".";
+  cout <<   "\n      ----> The max parameters are: (q,a,b) (" << q_pix << "," << x_center << "," << y_center << ").";
+  cout << "\n    UPDATING CENTER TO BE x_center,y_center = " << x_center << " , " << y_center << endl; 
 
   }
 
-PolarPilatus::~PolarPilatus()
+
+void PolarPilatus::getRing(int Nphi_, float q_pix, vector<float>& IvsPhi )
 {
-  cout << "    exiting..." << endl;
+  Nphi = Nphi_;
+
+
+
+  cosPhi.clear();
+  sinPhi.clear();
+  for(int i=0; i < Nphi; i++)
+  {
+    float phi = float(i) * 2*M_PI/float(Nphi);
+    cosPhi.push_back ( cos(phi) );
+    sinPhi.push_back ( sin(phi) );
+  }
+
+  getPixelsAtQ( IvsPhi, 0, q_pix, x_center, y_center);
 }
 
 
+void PolarPilatus::nearest_multiple(int &n, int m)
+{
+  //adjusts the integer n so that it is envenly divisible by the integer m
+  int remainder = n % m;
+  if (remainder != 0)
+	n += m - remainder;
+}
+
+void PolarPilatus::binPhi (int            numBins, int            samplesPerBin, int qpix, 
+                           vector<float>& IvsPhi,  vector<float>& IvsPhi_binned)
+// bins pixels azimuathally, forming rings of scattering. Accumulates these rings in IvsPhi_binned
+
+{
+  int i(0);
+  while (i < numBins)
+  {
+    int j(0);
+    float ave(0);
+    while(j < samplesPerBin)
+    {
+      ave += IvsPhi[i*samplesPerBin + j];
+      j   += 1;
+    }
+    ave = ave / float(samplesPerBin);
+    IvsPhi_binned[numBins*qpix + i] = ave;
+    i += 1;
+  }
+}
+
+void PolarPilatus::InterpolateToPolar(float qres_, int Nphi_)
+{
+
+  qres = qres_;
+
+  cout << "\n    BEGINNING POLAR CONVERSION OF PILATUS 6M DETECTOR IMAGE...";
+
+// max Q in pixels units on the detector (with a 2 pixel cushion)
+  float maxq_pix = floor( (float)Xdim/2)-2;
+  if(Ydim < Xdim)
+    maxq_pix = floor( (float)Ydim/2)-2;
+
+// and how many bins this corresponds to in qres units
+  Nq=0;
+  float maxq = sin( atan2( maxq_pix*pixsize, detdist ) / 2.)* 4. * M_PI /  wavelen;
+  for(float q=0; q < maxq ; q += qres)
+    Nq += 1;
+
+
+// make a container for the pixels which are binned azimuthally...
+// --> basically one ring per pixel unit radially. The radial binning will come next...
+  vector<float> IvsPhi_binnedPhi (maxq_pix*Nphi_, 0);
+
+  float q_pix(0);
+  while(q_pix < maxq_pix)
+  {
+    int numPhiSamples = int(2*M_PI*q_pix); // Sample each ring at single-pixel resolution.
+    if( numPhiSamples < Nphi_ )              // In case we are at very low q and numPhiSamples < Nphi,
+  	numPhiSamples = Nphi_;              // then we force to sample Nphi times...
+    nearest_multiple(numPhiSamples, Nphi_);  // Force numPhiSamples to be divisible by Nphi.
+    vector<float> IvsPhi (numPhiSamples, 0);
+    getRing( numPhiSamples, q_pix, IvsPhi);  // sample the ring at q_pix
+    binPhi(Nphi_, numPhiSamples/Nphi_ , q_pix, IvsPhi, IvsPhi_binnedPhi); // average the bins
+    q_pix += 1;
+  }
+
+  Nphi = Nphi_; // safely reset the global variable Nphi; (getRing --> getPixelsAtQ mucks around with it a bit)
+
+/*
+  HERE WE BIN THE PIXELS RADIALLY ON THE DETECOTR, BUT IN RECIPROCAL SPACE UNITS.
+
+  This is a bit tricky due to the non linearity in the q_pix <--> q_inv_ang relationship..
+  --> The goal is to bin on an inv_angstrom scale. 
+      The non-linearity means that a ring of width 0.02 inv_ang at low q contains fewer pixels radially
+      than one at high q...
+
+  q       is in inv_ang.
+  q_stop  is in inv_ang.
+  q_pix   is in pixel units.
+  q_index is in qres units (e.g. 0.02 inverse angstroms).
+
+  Open for suggestions on improving this section...
+*/
+
+  polar_pixels = new float[Nq*Nphi]; // this is the final polar interpolated image container
+  for(int i=0;i < Nq*Nphi; i++)
+    polar_pixels[i] = 0;
+ 
+  q_pix        = 0;
+  float q      = sin( atan2( q_pix * pixsize, detdist) / 2.)* 4. * M_PI/wavelen;
+  float q_stop = qres; // we will stop averaging once we reach q_stop, then we will do q_stop += qres
+  int q_index  = 0;
+
+
+  while (q_index < Nq )
+  {
+  float counts(0);
+  while (q < q_stop)
+  {
+    for(int i=0;i < Nphi; i++)
+      polar_pixels[q_index*Nphi + i] += IvsPhi_binnedPhi[q_pix*Nphi + i];
+    q_pix+=1;
+    q = sin( atan2( q_pix * pixsize, detdist ) / 2. ) * 4. * M_PI / wavelen;
+    counts += 1;
+    if (q==maxq_pix) // nasty, but the last ring is usually not important (furthest out on detector)
+      break;
+  }
+  q_stop += qres;
+  for(int i=0;i < Nphi;i++)
+    polar_pixels[q_index*Nphi + i] = polar_pixels[q_index*Nphi + i] / counts;
+  q_index += 1;
+  }
+  
+  cout << "\n    FINISHED WITH THE INTERPOLATION...\n";
+}
+
+PolarPilatus::~PolarPilatus()
+{
+  cout << "\n    EXITING... HASTA LA VISTA, PILATUS 6M.\n\n";
+  delete [] polar_pixels;
+}
+
+/*
 int main(int argc, char * argv[]){
 
 FILE * binFile = fopen(argv[1],"r");
@@ -447,8 +593,22 @@ PolarPilatus pp(2463,2527,I,0.188,0.000176,0.7293);
 
 pp.Center(300,500,1,100,20);
 
+
+pp.InterpolateToPolar(0.02,360);
+
+N = pp.Nphi*pp.Nq;
+
+
+binFile = fopen( ( string(argv[1]) + ".pol").c_str(),"w");
+fwrite(pp.polar_pixels, 4, N, binFile);
+
+fclose(binFile);
+
+cout << pp.Nq <<" " << pp.Nphi << endl;
+
 delete [] I;
 
 return 0;
 }
+*/
 
