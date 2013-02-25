@@ -22,9 +22,11 @@ cdef extern from "popi.h":
     int   Nq       # Radial dimension of polar-coverted detector
     int   Nphi     # Azimuthal dimension of polar-converted detector
 
-    float * polar_pixels    
+    #float * polar_pixels    
     void Center(float qMin, float qMax, float center_res, int Nphi_, float size)
-    void InterpolateToPolar(float qres_, int Nphi_)
+    void InterpolateToPolar(float qres_, int Nphi_, int Nq_, float maxq_pix, float maxq, float * polpix)
+    
+    
 
 
 # as a reference see:  http://docs.scipy.org/doc/numpy/user/c-info.how-to-extend.html
@@ -34,7 +36,7 @@ cdef extern from "popi.h":
 
 # I Modded this and added it to the polaripilatus class: 
 
-np.import_array() # initialize C API to call PyArray_SimpleNewFromData
+#np.import_array() # initialize C API to call PyArray_SimpleNewFromData
 #cdef public api tonumpyarray(float * data, int size) with gil:
 # if not (data and size >= 0): raise ValueError
 # cdef np.npy_intp dims = size
@@ -64,6 +66,8 @@ cdef class polarpilatus:
     b : float, y center on detector (defaults to Ydim/2)
 
     """
+    #self.filled_polar=0
+    
     cbf     = parse.CBF(cbf_filename)
     vals    = cbf.intensities
     detdist = cbf.path_length
@@ -72,6 +76,7 @@ cdef class polarpilatus:
 
     X = vals.shape[1]
     Y = vals.shape[0]
+
 
     if a == 0 and b == 0:
       a = X/2.
@@ -117,27 +122,49 @@ cdef class polarpilatus:
   #  def __get__(self):
   #    return self.polar_pixels[0]
  
-  def get_polar_pixels(self):
-    """ returns the polar pixels as 2d numpy array"""
-
-    ## this is the best I could come up with a.t.m. but im not 100% confident in it
-    ## --> just borrowing from the webs.. see the note and refs above
-    
-    cdef np.npy_intp dims = self.pp.Nphi*self.pp.Nq
-    polpix =  np.PyArray_SimpleNewFromData(1, &dims, np.NPY_FLOAT32, <void*> self.pp.polar_pixels)
-    return polpix.reshape( (self.pp.Nq,self.pp.Nphi) )
-    
-    #polpix = np.fromiter(self.pp.polar_pixels,dtype='float32',count=self.pp.Nphi*self.pp.Nq)
-    #print self.pp.Nphi*self.pp.Nq
-    #polpix = tonumpyarray(self.pp.polar_pixels,self.pp.Nphi*self.pp.Nq)
-    #float * data = self.pp.polar_pixels
  
-  def center(self,qMin,qMax,center_res,Nphi,size):
+  def center(self,qMin,qMax,center_res=0.5,Nphi=50,size=20.):
     """ finds the center of pilatus image"""
     self.pp.Center(float(qMin),float(qMax),float(center_res),int(Nphi), float(size) )
 
   def Interpolate_to_polar(self,qres,Nphi):
-    self.pp.InterpolateToPolar(float(qres),int(Nphi))
+    """ 
+    INTERPOLATES THE PILATUS DETECTOR ADN RETURNS THE RESULT AS A NUMPY ARRAY
+    qres :  thickness of each polar ring in inverse angstroms
+    Nphi :  number of pixels per polar scattering ring
+    """
+  
+    maxq_pix = np.floor( float (self.pp.Xdim/2.))-15
+    if self.pp.Ydim < self.pp.Xdim:
+      maxq_pix = np.floor( float (self.pp.Ydim/2.))-15
+    Nq=0
+    maxq = np.sin( np.arctan2( maxq_pix*self.pp.pixsize, self.pp.detdist ) / 2.)* 4. * np.pi /  self.pp.wavelen
+    #for q=0; q < maxq ; q += qres)
+    q = 0
+    while q < maxq:
+      Nq += 1
+      q += qres
+
+    #self.filled_polar = 1
+    cdef np.ndarray[ndim=1, dtype=np.float32_t] polpix = np.zeros(Nphi*Nq,dtype=np.float32)
+    polpix = np.ascontiguousarray(polpix, dtype=np.float32)
+    self.pp.InterpolateToPolar(float(qres),int(Nphi),int (Nq) , float (maxq_pix), float( maxq), &polpix[0])
+    return polpix.reshape( (Nq,Nphi) )
+  
+  #def get_polar_pixels(self):
+    """ returns the polar pixels as 2d numpy array"""
+   # cdef np.npy_intp dims = self.pp.Nphi*self.pp.Nq
+    #if self.filled_polar:
+    #polpix =  np.PyArray_SimpleNewFromData(1, &dims, np.NPY_FLOAT32, <void*> self.pp.polar_pixels)
+    #return polpix.reshape( (self.pp.Nq,self.pp.Nphi) )
+      ## this is the best I could come up with a.t.m. but im not 100% confident in it
+      ## --> just borrowing from the webs.. see the note and refs above
+      #polpix = np.fromiter(self.pp.polar_pixels,dtype='float32',count=self.pp.Nphi*self.pp.Nq)
+      #print self.pp.Nphi*self.pp.Nq
+      #polpix = tonumpyarray(self.pp.polar_pixels,self.pp.Nphi*self.pp.Nq)
+      #float * data = self.pp.polar_pixels
+    #else:
+     # print "Must first form the polar image. Please execute method Interpolate_to_Polar..."
 
   def I_profile(self,d):
     aves = d.mean(axis=1)
