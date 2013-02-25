@@ -28,9 +28,9 @@ public:
   float  qres;
   float  x_center,y_center;
   
-  float* polar_pixels;
+  //float* polar_pixels;
   
   void  Center(float qMin, float qMax, float center_res, int Nphi_, float size);
-  void  InterpolateToPolar(float qres_, int Nphi_);
+  void  InterpolateToPolar(float qres_, int Nphi_, int Nq_, float maxq_pix, float maxq, float * polar_pixels);
  ~PolarPilatus();
 };
