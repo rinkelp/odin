@@ -487,23 +487,28 @@ void PolarPilatus::binPhi (int            numBins, int            samplesPerBin,
   }
 }
 
-void PolarPilatus::InterpolateToPolar(float qres_, int Nphi_)
+void PolarPilatus::InterpolateToPolar(float qres_, int Nphi_, int Nq_, float maxq_pix, float maxq, float * polar_pixels)
 {
 
   qres = qres_;
+  Nq = Nq_;
 
   cout << "\n    BEGINNING POLAR CONVERSION OF PILATUS 6M DETECTOR IMAGE...";
 
-// max Q in pixels units on the detector (with a 2 pixel cushion)
-  float maxq_pix = floor( (float)Xdim/2)-2;
-  if(Ydim < Xdim)
-    maxq_pix = floor( (float)Ydim/2)-2;
+// max Q in pixels units on the detector (with a 15 pixel cushion)
+// -->need to hard code something better here, for instance if beam center is more than 15 pixels off from 
+//    the true center, then the code will crash trying to access pixels that dont exist.
+  //float maxq_pix = floor( (float)Xdim/2)-15;
+  //if(Ydim < Xdim)
+    //maxq_pix = floor( (float)Ydim/2)-15;
+
+  
 
 // and how many bins this corresponds to in qres units
-  Nq=0;
-  float maxq = sin( atan2( maxq_pix*pixsize, detdist ) / 2.)* 4. * M_PI /  wavelen;
-  for(float q=0; q < maxq ; q += qres)
-    Nq += 1;
+  //Nq=0;
+  //float maxq = sin( atan2( maxq_pix*pixsize, detdist ) / 2.)* 4. * M_PI /  wavelen;
+  //for(float q=0; q < maxq ; q += qres)
+    //Nq += 1;
 
 
 // make a container for the pixels which are binned azimuthally...
@@ -541,9 +546,9 @@ void PolarPilatus::InterpolateToPolar(float qres_, int Nphi_)
   Open for suggestions on improving this section...
 */
 
-  polar_pixels = new float[Nq*Nphi]; // this is the final polar interpolated image container
-  for(int i=0;i < Nq*Nphi; i++)
-    polar_pixels[i] = 0;
+  //polar_pixels = new float[Nq*Nphi]; // this is the final polar interpolated image container
+  //for(int i=0;i < Nq*Nphi; i++)
+    //polar_pixels[i] = 0;
  
   q_pix        = 0;
   float q      = sin( atan2( q_pix * pixsize, detdist) / 2.)* 4. * M_PI/wavelen;
@@ -576,7 +581,7 @@ void PolarPilatus::InterpolateToPolar(float qres_, int Nphi_)
 PolarPilatus::~PolarPilatus()
 {
   cout << "\n    EXITING... HASTA LA VISTA, PILATUS 6M.\n\n";
-  delete [] polar_pixels;
+  //delete [] polar_pixels;
 }
 
 /*
