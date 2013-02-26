@@ -235,7 +235,7 @@ void  PolarPilatus::bicubicCoefficients( float *I ){
 
 
 	cout << "\n      --> Calculating interpolation coefficients ...\n";
-
+        A.clear();
 	y=0;
 	while(y < Ydim-1){
 		x=0;
