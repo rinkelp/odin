@@ -13,7 +13,7 @@ from threading import Thread
 
 from odin import cpuscatter
 from odin.refdata import cromer_mann_params
-from odin.math import arctan3
+from odin.math2 import arctan3
 
 try:
     from odin import gpuscatter
