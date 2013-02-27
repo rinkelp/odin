@@ -17,7 +17,7 @@ import numpy as np
 from scipy import interpolate, fftpack
 from scipy.ndimage import filters
 
-from odin.math import arctan3, rand_pairs, smooth
+from odin.math2 import arctan3, rand_pairs, smooth
 from odin import scatter
 from odin.interp import Bcinterp
 

@@ -23,7 +23,7 @@ from base64 import b64encode
 import numpy as np
 
 from odin import xray
-from odin.math import CircularHough
+from odin.math2 import CircularHough
 
 
 class CBF(object):
