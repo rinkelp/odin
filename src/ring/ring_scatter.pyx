@@ -6,6 +6,9 @@ import numpy as np
 
 import tables
 
+from odin.arnold import get_arnold as ga
+
+
 cdef extern from "ring.h":
   cdef cppclass RingScatter:
     RingScatter(string in_file, int Nphi_, int n_rotations_, float qres_, float wavelen_, string qstring_) except + # except + raises python exception in case of c memory allocation error
@@ -90,19 +93,4 @@ def simulate(input_file, Nphi__, n_rotations__, qres__, wavelen__ , qarray):#, o
 
   rs = new RingScatter(in_file_, Nphi__, n_rotations__, qres__, wavelen__, qstring )
   del rs
-
-'''
-cdef class Ring:
-
-  cdef RingScatter *thisptr
-
-  def __init__(self,string in_file, int Nphi_, int n_rotations_, float qres_, float wavelen_ , string qstring_ ):
-    print "__init__"
-    self.thisptr = new RingScatter(in_file, Nphi_, n_rotations_, qres_, wavelen_, qstring_ )
-  def __dealloc__ (self):
-    print "__dealloc__"
-    del self.thisptr
-
-  def Scatter(self):
-    self.thisptr.Scatter()
-'''
+  print ga()
