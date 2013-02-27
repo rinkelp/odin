@@ -2,6 +2,8 @@ import numpy as np
 cimport numpy as np
 import pylab as plt
 
+from odin.arnold import get_arnold as ga
+
 from odin import parse
   
 cdef extern from "popi.h":
@@ -87,6 +89,7 @@ cdef class polarpilatus:
 			        float(wavelen), float(a), float(b))
   def __dealloc__(self):
     del self.pp
+    print ga()
   
   property Xdim:
     def __get__(self): 
