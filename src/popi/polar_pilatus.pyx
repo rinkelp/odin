@@ -32,6 +32,23 @@ cdef class polar:
   cdef PolarPilatus *pp
 
   def __init__(self,d,pixsize,detdist,wavelen,a=0,b=0):
+    """
+    Converts 2D cartesian detector image into polar coordinates
+ 
+    Parameters
+    ----------
+
+    d       : numpy 2D numpy image array 
+    pixsize : pixel size in meters
+    detdist : samplt -to -detector distance in meters
+    wavelen : wavelength of xrays in angstroms
+
+    OPTIONAL PARAMETERS
+    ------------------
+    a : float, x center on detector (defaults to Xdim/2)
+    b : float, y center on detector (defaults to Ydim/2)
+
+    """
     X = d.shape[1]
     Y = d.shape[0]
     if a ==0 and b == 0:
@@ -78,7 +95,19 @@ cdef class polar:
       return self.pp.qres
 
   def center(self,qMin,qMax,center_res=0.5,Nphi=50,size=20.):
-    """ finds the center of pilatus image"""
+    """ 
+    Finds the center of pilatus image:
+      polarpilatus.center(qMin,qMax,center_res=0.5,Nphi=50,size=20.)
+   
+    -------------------
+    PARAMS
+    ------------------- 
+    qMin,qMax  : min and max ring position in pixel units
+    center_res : resolution of desired center in pixel units
+    Nphi       : number of phi bins when maximizing angular average
+    size       : defines a box around the center of the detector (pixel units)
+            
+    """
     self.pp.Center(float(qMin),float(qMax),float(center_res),int(Nphi), float(size) )
 
   def Interpolate_to_polar(self,qres,Nphi):
@@ -104,6 +133,11 @@ cdef class polar:
     return  polpix.reshape( (Nq,Nphi) )
   
   def I_profile(self,d):
+    """
+    Plots angular average of scattering pattern, 
+    PARAMS: 
+    d     : returned numpy array of polarpilatus.Interpolate_to_polar
+    """
     aves = d.mean(axis=1)
     qvals = [i*self.pp.qres for i in range(len(aves))]
     plt.plot(qvals,aves,linewidth=2)
@@ -115,9 +149,7 @@ cdef class polar:
 
 
 cdef class polarpilatus:
-
   cdef PolarPilatus *pp
-
 #    self.pp has a nice ring to it  ~.~
 
   def __init__(self, cbf_filename,a=0,b=0):
@@ -139,14 +171,13 @@ cdef class polarpilatus:
     #self.filled_polar=0
     
     cbf     = parse.CBF(cbf_filename)
-    vals    = cbf.intensities
+    vals   = cbf.intensities
     detdist = cbf.path_length
     wavelen = cbf.wavelength
     pixsize = cbf.pixel_size[0]
 
     X = vals.shape[1]
     Y = vals.shape[0]
-
 
     if a == 0 and b == 0:
       a = X/2.
@@ -155,6 +186,7 @@ cdef class polarpilatus:
     v = np.ascontiguousarray(vals.flatten(), dtype=np.float32)
     self.pp = new PolarPilatus(int(X), int(Y), &v[0], float(detdist), float(pixsize),
 			        float(wavelen), float(a), float(b))
+
   def __dealloc__(self):
     del self.pp
     print ga()
@@ -189,10 +221,28 @@ cdef class polarpilatus:
   property qres:
     def __get__(self): 
       return self.pp.qres
- 
- 
+
+  def cartesian_image(self,cbf_filename):
+    """ returns a cartesian image of the detector; params: string cbf_filename"""
+    cbf     = parse.CBF(cbf_filename)
+    vals    = cbf.intensities
+    return vals
+
+
   def center(self,qMin,qMax,center_res=0.5,Nphi=50,size=20.):
-    """ finds the center of pilatus image"""
+    """ 
+    Finds the center of pilatus image:
+      polarpilatus.center(qMin,qMax,center_res=0.5,Nphi=50,size=20.)
+   
+    -------------------
+    PARAMS
+    ------------------- 
+    qMin,qMax  : min and max ring position in pixel units
+    center_res : resolution of desired center in pixel units
+    Nphi       : number of phi bins when maximizing angular average
+    size       : defines a box around the center of the detector (pixel units)
+            
+    """
     self.pp.Center(float(qMin),float(qMax),float(center_res),int(Nphi), float(size) )
 
   def Interpolate_to_polar(self,qres,Nphi):
@@ -218,6 +268,11 @@ cdef class polarpilatus:
     return  polpix.reshape( (Nq,Nphi) )
   
   def I_profile(self,d):
+    """
+    Plots angular average of scattering pattern, 
+    PARAMS: 
+    d     : returned numpy array of polarpilatus.Interpolate_to_polar
+    """
     aves = d.mean(axis=1)
     qvals = [i*self.pp.qres for i in range(len(aves))]
     plt.plot(qvals,aves,linewidth=2)
@@ -225,7 +280,4 @@ cdef class polarpilatus:
     plt.ylabel("average intensity",fontsize=20)
     plt.suptitle("Intensity profile",fontsize=20)
     plt.show()
-
-
- 
 
