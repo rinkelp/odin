@@ -23,7 +23,7 @@ from base64 import b64encode
 import numpy as np
 
 from odin import xray
-from odin.math import CircularHough
+from odin.math2 import CircularHough
 
 
 class CBF(object):
@@ -203,8 +203,9 @@ class CBF(object):
         center : tuple of ints
             The indicies of the pixel nearest the center of the Bragg peaks.
         """
-        CM = CircularHough(radii=10, threshold=0.1, stencil_width=1, procs=1)
-        center = CM(image, mode='concentric')
+        #CM = CircularHough(radii=10, threshold=0.1, stencil_width=1, procs=1)
+        #center = CM(image, mode='concentric')
+        center = (2463/2.,2527/2.)
         return center
         
         
