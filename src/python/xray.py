@@ -1910,8 +1910,8 @@ class Shot(object):
         
         if (num_x == None) or (num_y == None):
             # todo : better performance if needed (implicit detector)
-            num_x = len(self.detector.xyz[:0])
-            num_y = len(self.detector.xyz[:1])
+            num_x = len(self.detector.xyz[:,0])
+            num_y = len(self.detector.xyz[:,1])
 
         points = self.detector.xyz[:,:2] # ignore z-comp. of detector
 
