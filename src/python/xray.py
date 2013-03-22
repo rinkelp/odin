@@ -2558,13 +2558,14 @@ class CorrelationCollection(object):
             	# method (2)
             	
                 c, fit_data = np.polynomial.legendre.legfit(np.cos(psi), 
-                                  self._correlation_data[(q1,q2)], order*2 - 1, full=True)
+                                  self._correlation_data[(q1,q2)], order-1, full=True)
                 
-                assert len(c) == order * 2
-                c = c[::2]     # discard odd values
-                assert len(c) == Cl.shape[0]
-                
-                #c /= c.sum()   # normalize
+                # this code was used to strip out and save only the even coefficients
+                # assert len(c) == order * 2
+                # c = c[::2]     # discard odd values
+                # assert len(c) == Cl.shape[0]
+                # c /= c.sum()   # normalize
+
                 Cl[:,i,j] = c
                 Cl[:,j,i] = c  # copy it to the lower triangle too
         

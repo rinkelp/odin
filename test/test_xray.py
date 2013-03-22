@@ -588,9 +588,12 @@ class TestCorrelationCollection(object):
         # compute the coefficients and re-construct the cos function
         cl = cc.legendre_coeffecients(order=order)
         cl = cl[:,0,0]
-        c = np.zeros( 2 * cl.shape[0] )
-        c[::2] = cl
-        pred = np.polynomial.legendre.legval( np.cos(psi), c)
+        
+        # this code was used when only the even coefficients were computed
+        # c = np.zeros( 2 * cl.shape[0] )
+        # c[::2] = cl
+        
+        pred = np.polynomial.legendre.legval(np.cos(psi), cl)
 
         assert_allclose(pred, correlation, rtol=1e-01)
         
