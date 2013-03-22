@@ -2532,20 +2532,39 @@ class CorrelationCollection(object):
                 q1 = self.q_values[i]
                 q2 = self.q_values[j]
             	
+            	# THERE ARE TWO WAYS TO DO THIS:
+            	# (1) a 'brute-force' numerical integration
+            	# (2) a matrix-inversion to do a least-squares fit to
+            	# (1) is much faster, need to test if they are equiv
+            	
+            	# method (1)
+            	
             	# iterate over Legendre coefficients (even only up to `order`)
-            	for l in xrange(0, order+2, 2):
-            	    
-            	    # project
-            		Pl = legendre(l)
-        			cl = np.sum( self._correlation_data[(q1,q2)] * \
-        			             Pl( np.cos(psi) ) * np.sin(psi) ) # TJL dbl chk
+                # for l in range(0, order+2, 2):
+                #     
+                #   # project
+                #   Pl = legendre(l)
+                #   cl = np.sum( self._correlation_data[(q1,q2)] * \
+                #                Pl( np.cos(psi) ) * np.sin(psi) ) # TJL dbl chk
+                #   
+                #   # normalize (differs from Kam by an unknown factor N -- the 
+                #   # number of molecules)
+                #   c = (2.0*np.pi * (2.0*l + 1.0) / (self.num_phi)) * cl # TJL dbl chk
             		
-            		# normalize (differs from Kam by an unknown factor N -- the 
-            		# number of molecules)
-            		cn = (2.0*np.pi * (2.0*l + 1.0) / (self.num_phi)) * cl # TJL dbl chk
             		
-                Cl[:,i,j] = cn
-                Cl[:,j,i] = cn  # copy it to the lower triangle too
+            	# method (2)
+            	
+                x = order*2 - 1
+                c, fit_data = np.polynomial.legendre.legfit(np.cos(psi), 
+                                  self._correlation_data[(q1,q2)], x, full=True)
+                
+                assert len(c) == order * 2
+                c = c[::2]     # discard odd values
+                assert len(c) == Cl.shape[0]
+                
+                c /= c.sum()   # normalize
+                Cl[:,i,j] = c
+                Cl[:,j,i] = c  # copy it to the lower triangle too
         
         
         # this is an internal sanity checker -- it should be removed at a later
