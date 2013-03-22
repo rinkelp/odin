@@ -565,7 +565,7 @@ class TestCorrelationCollection(object):
         assert_allclose(ring1, ring2)
         
     def test_coefficients_smoke(self):
-        cl = self.cc.legendre_coeffecients()
+        cl = self.cc.legendre_coeffecients(order=6)
         
     def test_coefficients(self):
         order = 2000
