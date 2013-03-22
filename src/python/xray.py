@@ -2539,7 +2539,7 @@ class CorrelationCollection(object):
             	
             	# method (1)
             	
-            	# iterate over Legendre coefficients (even only up to `order`)
+            	# # iterate over Legendre coefficients (even only up to `order`)
                 # for l in range(0, order+2, 2):
                 #     
                 #   # project
