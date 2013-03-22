@@ -39,8 +39,11 @@ RingScatter::RingScatter (
 */
 
   h5_file_id = H5Fopen( in_file.c_str(), H5F_ACC_RDONLY, H5P_DEFAULT);
-  if(h5_file_id < 0)
-    cout <<"ERROR: cannot locate file " << in_file << endl;
+  
+  // TJL commented out 3/22/13 -- caused compilation fail
+  // if(h5_file_id < 0) {
+  //   cout <<"ERROR: cannot locate file " << in_file << endl;
+  // }
   
 /*
   READ THE ATOMIC COORDINATE INFO
