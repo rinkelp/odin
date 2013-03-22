@@ -1,6 +1,6 @@
 
 """
-tests for odin/src/python/math.py
+tests for odin/src/python/math2.py
 """
 
 import scipy
@@ -9,7 +9,7 @@ from scipy.ndimage import imread
 from numpy.testing import assert_allclose
 
 from odin import parse
-from odin import math as om
+from odin import math2 as om
 from odin.testing import ref_file, skip, expected_failure
 
 from scipy.ndimage import imread
