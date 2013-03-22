@@ -16,6 +16,7 @@ from bisect import bisect_left
 import numpy as np
 from scipy import interpolate, fftpack
 from scipy.ndimage import filters
+from scipy.special import legendre
 
 from odin.math2 import arctan3, rand_pairs, smooth
 from odin import scatter
@@ -2499,21 +2500,24 @@ class CorrelationCollection(object):
             return self._correlation_data[(q1,q2)]
             
             
-    def legendre_coeffecients(self, order=20, report_error=False):
+    def legendre_coeffecients(self, order, report_error=False):
         """
         Project the correlation functions onto a set of legendre polynomials,
         and return the coefficients of that projection.
         
-        Optional Parameters
-        -------------------
+        Parameters
+        ----------
         order : int
-            The order at which to truncate the polynomial expansion. If none,
-            will use epsilon parameter to decide order.
+            The order at which to truncate the polynomial expansion. Note that
+            this function projects only onto even numbered Legendre polynomials.
         """
         
         # initialize space for coefficients        
         Cl = np.zeros((order, self.num_q, self.num_q))
-            
+           
+        # iterate over each pair of rings in the collection and project the
+        # correlation between those two rings into the Legendre basis
+        
         for i in range(self.num_q):
             for j in range(i,self.num_q):
                 
@@ -2521,24 +2525,31 @@ class CorrelationCollection(object):
                 t1 = np.arctan( self.q_values[i] / (2.0*self.k) ) # theta1
                 t2 = np.arctan( self.q_values[j] / (2.0*self.k) ) # theta2
 
+                # compute the Kam scattering angle psi
                 psi = np.arccos( np.cos(t1)*np.cos(t2) + np.sin(t1)*np.sin(t2) \
                                  * np.cos( self.deltas * 2. * np.pi/float(self.num_phi) ) )
                                                      
                 q1 = self.q_values[i]
                 q2 = self.q_values[j]
-                
-                x = order*2 - 1
-                c, fit_data = np.polynomial.legendre.legfit(np.cos(psi), 
-                                  self._correlation_data[(q1,q2)], x, full=True)
-                                  
-                assert len(c) == order * 2
-                c = c[::2]     # discard odd values
-                assert len(c) == Cl.shape[0]
-                
-                c /= c.sum()   # normalize
-                Cl[:,i,j] = c
-                Cl[:,j,i] = c  # copy it to the lower triangle too
+            	
+            	# iterate over Legendre coefficients (even only up to `order`)
+            	for l in xrange(0, order+2, 2):
+            	    
+            	    # project
+            		Pl = legendre(l)
+        			cl = np.sum( self._correlation_data[(q1,q2)] * \
+        			             Pl( np.cos(psi) ) * np.sin(psi) ) # TJL dbl chk
+            		
+            		# normalize (differs from Kam by an unknown factor N -- the 
+            		# number of molecules)
+            		cn = (2.0*np.pi * (2.0*l + 1.0) / (self.num_phi)) * cl # TJL dbl chk
+            		
+                Cl[:,i,j] = cn
+                Cl[:,j,i] = cn  # copy it to the lower triangle too
         
+        
+        # this is an internal sanity checker -- it should be removed at a later
+        # date since its replicated in the unit test
         if report_error:
             d = 0.0
             for i in range(self.num_q):
