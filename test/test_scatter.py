@@ -308,42 +308,15 @@ class TestScatter():
 
 class TestSphHrm(object):
    
-    @skip 
     def test_vs_reference(self):
         qs = np.arange(2, 3.52, 0.02)
         silver = structure.load_coor(ref_file('SilverSphere.coor'))
         cl = scatter.sph_hrm_coefficients(silver, q_magnitudes=qs, 
-                                       num_coefficients=2)[1,:,:]
+                                          num_coefficients=2)[1,:,:]
         ref = np.loadtxt(ref_file('ag_kam.dat')) # computed in matlab
         assert_allclose(cl, ref)
-        
-        
-class TestDebye(object):
-   
-    @skip 
-    def test_against_reference_implementation(self):
-        s = structure.load_coor(ref_file("3lyz.xyz"))
-        qs = np.array([0.04, 2.0, 6.0])
-        ref  = debye_reference(s, q_values=qs)
-        calc = scatter.debye(s, q_values=qs)
-        assert_allclose(calc, ref)
     
-    @skip
-    def test_against_scattering_simulation(self):
-        if not GPU: raise SkipTest
-        s = structure.load_coor(ref_file("3lyz.xyz"))
-        d = xray.Detector.generic()
-        x = xray.Shot.simulate(s, 512, d)
-
-        sim_ip = x.intensity_profile()
-        debye = scatter.debye(s, q_values=sim_ip[:,0])
-
-        sim_ip /= sim_ip.max()
-        debye  /= debye.max()
-
-        assert_allclose(debye, sim_ip)
-       
-
+        
 def test_atomic_formfactor():
     
     # this is a function in odin.xray, but the reference implementation
