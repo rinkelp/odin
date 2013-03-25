@@ -180,12 +180,16 @@ void kernel( float const * const __restrict__ q_x,
                         
             // add the output to the total intensity array
             #pragma omp critical
+            {
             outQ[iq] += (Qsumx*Qsumx + Qsumy*Qsumy);
             outQ_sum += outQ[iq];
+            }
             
         } // end loop over q
         
         // discrete photon statistics, if requested
+        #pragma omp critical
+        {
         if ( finite_photons == 1 ) {
                 
             float rp;
@@ -206,6 +210,7 @@ void kernel( float const * const __restrict__ q_x,
                 discrete_outQ[iq] += 1;
             }
         } // end finite photons
+        }
         
     } // end loop over rotations
     
