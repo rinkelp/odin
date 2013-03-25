@@ -99,6 +99,16 @@ void kernel( float const * const __restrict__ q_x,
              int   const * const __restrict__ n_photons ) {
             
 
+    // if doing finite photons, we need some memory allocated to store results
+    int ndQ;
+    if ( finite_photons == 1 ) {
+        ndQ = nQ;
+    } else {
+        ndQ = 1; // don't allocate a lot of mem we wont use
+    }
+    srand(time(NULL));                  // init rand seed
+    int * discrete_outQ = new int[ndQ]; // new array for finite photon output
+
     // main loop -- over molecules
     for( int im = 0; im < n_rotations; im++ ) {
         
@@ -173,16 +183,13 @@ void kernel( float const * const __restrict__ q_x,
         } // end loop over q
         
     // discrete photon statistics, if requested
-    if ( finite_photon == 1 ) {
-        
-        srand(time(NULL)); // init rand seed
-        
+    if ( finite_photons == 1 ) {
+                
         float rp;
         float cum_q_sum;
-        int discrete_outQ[nQ] = {0}; // new array for finite photon output
         
         // for each photon, draw a rand to put it in a pixel
-        for ( int p = 0; p < finite_photon[im] ) {
+        for ( int p = 0; p < n_photons[im]; p++ ) {
             
             rp = rand() * outQ_sum;
             cum_q_sum = 0.0;
@@ -200,13 +207,12 @@ void kernel( float const * const __restrict__ q_x,
     
     // now cp the results in discrete_outQ to outQ and free memory
     // a bit silly, but is only one loop :/
-    if ( finite_photon == 1 ) {
+    if ( finite_photons == 1 ) {
         for( int iq = 0; iq < nQ; iq++ ) {
             outQ[iq] = discrete_outQ[iq];
         }
-        delete discrete_outQ;
-        
-    } // end finite photons
+    }
+    delete [] discrete_outQ;
     
 } // end kernel fxn
 

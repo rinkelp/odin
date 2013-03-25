@@ -8,7 +8,7 @@ logging.basicConfig()
 logger = logging.getLogger(__name__)
 
 import numpy as np
-from scipy import weave, misc, special
+from scipy import misc, special
 from threading import Thread
 
 from odin import cpuscatter

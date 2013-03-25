@@ -308,6 +308,7 @@ class TestScatter():
 
 class TestSphHrm(object):
    
+    @skip
     def test_vs_reference(self):
         qs = np.arange(2, 3.52, 0.02)
         silver = structure.load_coor(ref_file('SilverSphere.coor'))

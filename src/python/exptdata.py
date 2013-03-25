@@ -141,6 +141,7 @@ class ExptDataCollection(object):
         
     def _to_file(self, filemame):
         # use Cpickle, binary serialization
+        pass
     
     @classmethod
     def _from_file(self, filename):
