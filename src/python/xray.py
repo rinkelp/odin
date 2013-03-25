@@ -48,14 +48,14 @@ class Beam(object):
     self.wavenumber  (angular, inv. angstroms)
     """
     
-    def __init__(self, flux, **kwargs):
+    def __init__(self, photons_scattered_per_shot, **kwargs):
         """
         Generate an instance of the Beam class.
         
         Parameters
         ----------
-        flux : float
-            The photon flux in the focal point of the beam.
+        photons_scattered_per_shot : int
+            The average number of photons scattered per shot.
         
         **kwargs : dict
             Exactly one of the following, in the indicated units
@@ -65,7 +65,7 @@ class Beam(object):
             -- wavenumber: inverse angstroms
         """
         
-        self.flux = flux
+        self.photons_scattered_per_shot = photons_scattered_per_shot
         
         # make sure we have only one argument
         if len(kwargs) != 1:
@@ -510,7 +510,8 @@ class Detector(Beam):
         
         
     @classmethod
-    def generic(cls, spacing=1.00, lim=100.0, energy=10.0, flux=100.0, l=50.0, 
+    def generic(cls, spacing=1.00, lim=100.0, energy=10.0, 
+                photons_scattered_per_shot=1e10, l=50.0, 
                 force_explicit=False):
         """
         Generates a simple grid detector that can be used for testing
@@ -542,7 +543,7 @@ class Detector(Beam):
             Recommend keeping `False`.
         """
         
-        beam = Beam(flux, energy=energy)
+        beam = Beam(photons_scattered_per_shot, energy=energy)
 
         if not force_explicit:
             
@@ -569,7 +570,8 @@ class Detector(Beam):
         
     @classmethod
     def generic_polar(cls, q_spacing=0.02, q_lim=5.0, q_values=None,
-                       angle_spacing=1.0, energy=10.0, flux=100.0, l=50.0):
+                       angle_spacing=1.0, energy=10.0, 
+                       photons_scattered_per_shot=1e10, l=50.0):
         """
         Generates a simple grid detector that can be used for testing
         (factory function). 
@@ -617,7 +619,7 @@ class Detector(Beam):
         xyz[:,0] = polar[:,0] * np.cos(polar[:,1])
         xyz[:,1] = polar[:,0] * np.sin(polar[:,1])
         
-        beam = Beam(flux, energy=energy) 
+        beam = Beam(photons_scattered_per_shot, energy=energy) 
 
         detector = Detector(xyz, l, beam, coord_type='polar')
 
@@ -1820,7 +1822,7 @@ class Shot(object):
         
     @classmethod
     def simulate(cls, traj, num_molecules, detector, traj_weights=None, 
-                 force_no_gpu=False, device_id=0):
+                 finite_photon=False, force_no_gpu=False, device_id=0):
         """
         Simulate a scattering 'shot', i.e. one exposure of x-rays to a sample, and
         return that as a Shot object (factory function).
@@ -1854,6 +1856,9 @@ class Shot(object):
             If `traj` contains many structures, an array that provides the Boltzmann
             weight of each structure. Default: if traj_weights == None, weights
             each structure equally.
+            
+        finite_photon : bool
+            Use finite photon statistics in the simulation.
     
         force_no_gpu : bool
             Run the (slow) CPU version of this function.
@@ -1867,8 +1872,10 @@ class Shot(object):
             A shot instance, containing the simulated shot.
         """
         I = scatter.simulate_shot(traj, num_molecules, detector, 
-                                  traj_weights=traj_weights, 
-                                  force_no_gpu=force_no_gpu, device_id=device_id)
+                                  traj_weights=traj_weights,
+                                  finite_photon=finite_photon, 
+                                  force_no_gpu=force_no_gpu,
+                                  device_id=device_id)
         shot = Shot(I, detector)
         return shot
         
@@ -2245,7 +2252,8 @@ class Shotset(Shot):
             
     @classmethod
     def simulate(cls, traj, num_molecules, detector, num_shots,
-                 traj_weights=None, force_no_gpu=False, device_id=0):
+                 traj_weights=None, finite_photon=False, force_no_gpu=False,
+                 device_id=0):
         """
         Simulate many scattering 'shot's, i.e. one exposure of x-rays to a sample, and
         return that as a Shot object (factory function).
@@ -2276,10 +2284,15 @@ class Shotset(Shot):
         num_shots : int
             The number of shots to perform and include in the Shotset.
 
+        Optional Parameters
+        -------------------
         traj_weights : ndarray, float
-            If `traj` contains many structures, an array that provides the Boltzmann
-            weight of each structure. Default: if traj_weights == None, weights
-            each structure equally.
+            If `traj` contains many structures, an array that provides the 
+            Boltzmann weight of each structure. Default: if traj_weights == None
+            weights each structure equally.
+            
+        finite_photon : bool
+            Whether or not to employ finite photon statistics in the simulation
 
         force_no_gpu : bool
             Run the (slow) CPU version of this function.
@@ -2296,6 +2309,7 @@ class Shotset(Shot):
         for i in range(num_shots):
             I = scatter.simulate_shot(traj, num_molecules, detector, 
                                       traj_weights=traj_weights,
+                                      finite_photon=finite_photon,
                                       force_no_gpu=force_no_gpu,
                                       device_id=device_id)
             shot = Shot(I, detector)

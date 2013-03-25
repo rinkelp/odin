@@ -24,7 +24,7 @@ except ImportError as e:
 
 
 def simulate_shot(traj, num_molecules, detector, traj_weights=None,
-                  force_no_gpu=False, device_id=0):
+                  finite_photon=False, force_no_gpu=False, device_id=0):
     """
     Simulate a scattering 'shot', i.e. one exposure of x-rays to a sample.
     
@@ -58,6 +58,9 @@ def simulate_shot(traj, num_molecules, detector, traj_weights=None,
         If `traj` contains many structures, an array that provides the Boltzmann
         weight of each structure. Default: if traj_weights == None, weights
         each structure equally.
+        
+    finite_photon : bool
+        Whether or not to employ finite photon statistics in the simulation.
         
     force_no_gpu : bool
         Run the (slow) CPU version of this function.
@@ -96,6 +99,13 @@ def simulate_shot(traj, num_molecules, detector, traj_weights=None,
     else:
         raise ValueError('`detector` must be {odin.xray.Detector, np.ndarray}')
     num_q = qxyz.shape[0]
+    
+    # figure out finite photon statistics
+    if finite_photon:
+        poisson_parameter = float(detector.beam.photons_scattered_per_shot) / \
+                            float(num_molecules)
+    else:
+        poisson_parameter = 0.0 # flag to downstream code to not use stats
     
     # extract the atomic numbers
     atomic_numbers = np.array([ a.element.atomic_number for a in traj.topology.atoms() ])
@@ -143,14 +153,15 @@ def simulate_shot(traj, num_molecules, detector, traj_weights=None,
             # run dat shit
             if num_cpu > 0:
                 logger.debug('Running CPU scattering code (%d/%d)...' % (num_cpu, num))
-                cpu_args = (num_cpu, qxyz, rxyz, atomic_numbers)
+                cpu_args = (num_cpu, qxyz, rxyz, atomic_numbers, poisson_parameter)
                 t_cpu = Thread(target=multi_helper, args=('cpu', cpu_args))
                 t_cpu.start()
                 threads.append(t_cpu)                
 
             if num_gpu > 0:
                 logger.debug('Sending calculation to GPU device...')
-                gpu_args = (num_gpu, qxyz, rxyz, atomic_numbers, device_id)
+                gpu_args = (num_gpu, qxyz, rxyz, atomic_numbers, 
+                            poisson_parameter, device_id)
                 t_gpu = Thread(target=multi_helper, args=('gpu', gpu_args))
                 t_gpu.start()
                 threads.append(t_gpu)
