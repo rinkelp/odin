@@ -226,7 +226,7 @@ class CBF(object):
         corner = tuple( list(self.corner) + [0.0] )
         grid_list = [(basis, shape, corner )]
         
-        b = xray.Beam(wavelength=self.wavelength, flux=100)
+        b = xray.Beam(1e4, wavelength=self.wavelength)
         d = xray.Detector.from_basis(grid_list, self.path_length, b.k)
         s = xray.Shot(self.intensities.flatten().astype(np.float64), d)
         
