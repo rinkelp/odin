@@ -5,6 +5,8 @@
 #include <assert.h>
 #include <fstream>
 #include <sstream>
+#include <curand.h>
+#include <curand_kernel.h>
 #include <gpuscatter.hh>
 
 using namespace std;
@@ -103,6 +105,13 @@ void __device__ rotate(float x, float y, float z,
 
 }
 
+__global__ void init_rand ( curandState * state, unsigned long seed )
+{
+    int id = threadIdx.x;
+    curand_init ( seed, id, 0, &state[id] );
+} 
+
+
 // blockSize = tpb, templated in case we need to use a faster reduction
 // method later. 
 template<unsigned int blockSize>
@@ -123,7 +132,8 @@ void __global__ kernel(float const * const __restrict__ q_x,
                        float const * const __restrict__ randN3,
                        int   const finite_photons,
                        int   const * const __restrict__ n_photons,
-                       unsigned int numRotations) {
+                       unsigned int numRotations,
+                       curandState * globalState) {
 
     // shared array for block-wise reduction
     __shared__ float sdata[blockSize];
@@ -143,17 +153,19 @@ void __global__ kernel(float const * const __restrict__ q_x,
     } else {
         ndQ = 1; // don't allocate a lot of mem we wont use
     }
-    srand(randN1[0]);                   // init rand seed, using the first rand
-                                        // number makes the code deterministic
-                                        // for the purposes of testing
+
+    // init rand
+
     int * discrete_outQ = new int[ndQ]; // new array for finite photon output
-    srand(randN1[0]);
     for( int iq = 0; iq < ndQ; iq++ ) {
         discrete_outQ[iq] = 0;
     }
     // --- end finite photons
     
     while(gid < numRotations) {
+
+        // keep track of the total scattered intensity
+        float outQ_sum = 0.0;
        
         // determine the rotated locations
         float rand1 = randN1[gid]; 
@@ -248,10 +260,14 @@ void __global__ kernel(float const * const __restrict__ q_x,
             float cum_q_sum;
         
             // for each photon, draw a rand to put it in a pixel
-            for ( int p = 0; p < n_photons[im]; p++ ) {
-            
-                rp = (float)rand()/(float)RAND_MAX * outQ_sum;
+            for ( int p = 0; p < n_photons[gid]; p++ ) {
+           
+                // cpu : rp = (float)rand()/(float)RAND_MAX * outQ_sum;
                 
+                curandState localState = globalState[tid]; // tid = thread id
+                rp = curand_uniform( &localState );
+                globalState[tid] = localState;
+
                 cum_q_sum = 0.0;
                 int iq = 0;
             
@@ -400,7 +416,7 @@ GPUScatter::GPUScatter (int device_id_,
     float *d_rand1;     deviceMalloc( (void **) &d_rand1, nRotations_size);
     float *d_rand2;     deviceMalloc( (void **) &d_rand2, nRotations_size);
     float *d_rand3;     deviceMalloc( (void **) &d_rand3, nRotations_size);
-    float *d_n_photons; deviceMalloc( (void **) &d_n_photons, nRotations_size);
+    int   *d_n_photons; deviceMalloc( (void **) &d_n_photons, nRotations_size);
     
     // check for errors
     err = cudaGetLastError();
@@ -431,11 +447,24 @@ GPUScatter::GPUScatter (int device_id_,
         exit(-1);
     }
 
+    // setup random numbers -- devStates is the seed state for each thread
+    curandState* devStates;
+    cudaMalloc ( &devStates, sizeof( curandState ) );
+    unsigned int rseed = (unsigned int) floor(h_rand1[0] * 1000000.0);
+    init_rand <<<bpg, tpb>>> ( devStates, rseed );
+
+    // check for errors
+    err = cudaGetLastError();
+    if (err != cudaSuccess) {
+        printf("Error in rand seed setup. CUDA error: %s\n", cudaGetErrorString(err));
+        exit(-1);
+    }  
+
     // --- execute the kernel --------------------------------------------------
     kernel<tpb> <<<bpg, tpb>>> (d_qx, d_qy, d_qz, d_outQ, nQ, d_rx, d_ry, d_rz, 
                                 d_id, nAtoms, numAtomTypes, d_cm, d_rand1, 
                                 d_rand2, d_rand3, finite_photons, d_n_photons, 
-                                nRotations);
+                                nRotations, devStates);
     // -------------------------------------------------------------------------
     
     cudaThreadSynchronize();
