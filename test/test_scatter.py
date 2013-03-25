@@ -328,8 +328,23 @@ class TestFinitePhoton(object):
                                     self.atomic_numbers, rfloats=self.rfloats, 
                                     poisson_parameter=1.0)
              
-        print cpu_I
         assert_allclose( cpu_I, np.array([0., 23886.]) )
+        
+        
+    def test_gpu(self):
+        
+        # just makes sure that CPU and GPU match
+        if not GPU: raise SkipTest
+        
+        gpu_I = gpuscatter.simulate(self.num_molecules, self.q_grid, self.xyzlist, 
+                                    self.atomic_numbers, rfloats=self.rfloats, 
+                                    poisson_parameter=1.0)
+                                    
+        cpu_I = cpuscatter.simulate(self.num_molecules, self.q_grid, self.xyzlist, 
+                                    self.atomic_numbers, rfloats=self.rfloats, 
+                                    poisson_parameter=1.0)
+        
+        assert_allclose( cpu_I, gpu_I )
         
         
     def test_py_cpu_smoke(self):

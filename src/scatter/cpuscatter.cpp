@@ -206,6 +206,7 @@ void kernel( float const * const __restrict__ q_x,
                 discrete_outQ[iq] += 1;
             }
         } // end finite photons
+        
     } // end loop over rotations
     
     // now cp the results in discrete_outQ to outQ and free memory
