@@ -247,14 +247,13 @@ def sph_hrm_coefficients(trajectory, weights=None, q_magnitudes=None,
     # don't do odd values of ell
     l_vals = range(0, 2*num_coefficients, 2)
     
-    # initialize output space
-    sph_coefficients = np.zeros((num_coefficients, num_q_mags, num_q_mags))
+    # initialize spherical harmonic coefficient array
     Slm = np.zeros(( num_coefficients, 2*num_coefficients+1, num_q_mags), 
                      dtype=np.complex128 )
     
     # get the quadrature vectors we'll use, a 900 x 4 array : [q_x, q_y, q_z, w]
     from odin.refdata import sph_quad_900
-    q_phi   = arctan3(sph_quad_900[:,1], sph_quad_900[:,0])
+    q_phi = arctan3(sph_quad_900[:,1], sph_quad_900[:,0])
         
     # iterate over all snapshots in the trajectory
     for i in range(trajectory.n_frames):
@@ -278,6 +277,7 @@ def sph_hrm_coefficients(trajectory, weights=None, q_magnitudes=None,
                     Slm[il, m, iq] = np.sum( S_q * Ylm * sph_quad_900[:,3] )
     
         # now, reduce the Slm solution to C_l(q1, q2)
+        sph_coefficients = np.zeros((num_coefficients, num_q_mags, num_q_mags))
         for iq1, q1 in enumerate(q_magnitudes):
             for iq2, q2 in enumerate(q_magnitudes):
                 for il, l in enumerate(l_vals):
