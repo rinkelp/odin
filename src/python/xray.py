@@ -105,7 +105,8 @@ class Beam(object):
 class BasisGrid(object):
     """
     A class representing a set of rectangular grids in space -- specifically,
-    x-ray scattering detectors.
+    x-ray scattering detectors. Does not contain all the metadata associated
+    with a full-fledged Detector class (e.g. the wavelength, etc).
 
     Note that the geometry below is definied in "slow" and "fast" scan 
     dimensions. These are simply the two dimensions that define the plane
@@ -817,12 +818,12 @@ class Detector(Beam):
         
         
     @classmethod
-    def generic_polar(cls, q_spacing=0.02, q_lim=5.0, q_values=None,
-                       angle_spacing=1.0, energy=10.0, 
-                       photons_scattered_per_shot=1e4, l=50.0):
+    def generic_polar(cls, q_spacing=0.02, q_lim=5.0, q_values=None, 
+                      angle_spacing=1.0, energy=10.0, 
+                      photons_scattered_per_shot=1e4, l=50.0):
         """
-        Generates a simple grid detector that can be used for testing
-        (factory function). 
+        Generates a grid formed by a bunch of concentric rings at even 
+        q-spacing. 
 
         Optional Parameters
         -------------------
@@ -840,8 +841,8 @@ class Detector(Beam):
         angle_spacing : float
             The angular grid spacing, *in degrees*
             
-        k : float
-            Wavenumber of the beam
+        energy : float
+            Energy of the beam (keV)
             
         l : float
             The path length from the sample to the detector, in the same units
@@ -853,23 +854,36 @@ class Detector(Beam):
             An instance of the detector that meets the specifications of the 
             parameters
         """
+        
+        beam = Beam(photons_scattered_per_shot, energy=energy)
 
         if q_values == None:
             q_values = np.arange(0.0, q_lim, q_spacing)
+        else:
+            q_values = np.array(q_values)
             
-        phi_values = np.arange(0.0, 2.0*np.pi, angle_spacing*(2.0*np.pi/360.0) )
+        phi_values = np.arange(0.0, 2.0*np.pi, angle_spacing*(2.0*np.pi/360.0) )        
             
-        polar = np.zeros(( len(q_values) * len(phi_values), 2 ))
-        polar[:,0] = np.repeat(q_values, len(phi_values))
-        polar[:,1] = np.tile(phi_values, len(q_values))
+        # compute where those q-values will lie in real space
+        real_q = l * np.tan(2.0 * np.arcsin( q_values / (2.0*beam.k) ))
+        assert len(real_q) == len(q_values)
+            
+        polar = np.zeros(( len(real_q) * len(phi_values), 2 ))
+        
+        # note: MUST keep q tiled and phi repeated to maintain consistency
+        #       with the polar methods in Shot
+        polar[:,0] = np.tile(real_q, len(phi_values))
+        polar[:,1] = np.repeat(phi_values, len(real_q))
 
         xyz = np.zeros(( polar.shape[0], 3 ))
         xyz[:,0] = polar[:,0] * np.cos(polar[:,1])
         xyz[:,1] = polar[:,0] * np.sin(polar[:,1])
-        
-        beam = Beam(photons_scattered_per_shot, energy=energy) 
 
         detector = Detector(xyz, l, beam, coord_type='polar')
+        
+        # only coord_type == 'polar' detectors will have the following attrs
+        detector.q_values    = q_values
+        detector.phi_spacing = angle_spacing*(2.0*np.pi/360.0) # in rad
 
         return detector
         
@@ -1365,7 +1379,7 @@ class Shot(object):
         phi_spacing : float
             For interpolation:The azimuthal angle spacing, IN DEGREES.
             
-        q_values : ndarray OR list OF floats
+        q_values : ndarray OR list of floats
             For interpolation:  If supplied, the interpolation will only be 
             performed at these values of |q|, and the `q_spacing` parameter will
             be ignored.
@@ -1396,10 +1410,29 @@ class Shot(object):
             self.real_mask = np.zeros(intensities.shape, dtype=np.bool)
         
         if interpolated_values == None:
-            # interpolate_to_polar also sets self.polar_mask
-            self.interpolate_to_polar(q_spacing=q_spacing,
-                                      phi_spacing=phi_spacing, 
-                                      q_values=q_values)
+            
+            if detector.coord_type == 'cartesian':            
+                # interpolate_to_polar also sets self.polar_mask
+                self.interpolate_to_polar(q_spacing=q_spacing,
+                                          phi_spacing=phi_spacing, 
+                                          q_values=q_values)
+                                          
+            elif detector.coord_type == 'polar':
+                
+                # polar shots behave just like regular shots, but their pixels
+                # are arranged in a polar orientation -- they also contain a
+                # little more metadata (_q_values, phi_spacing)
+                
+                self.polar_intensities = self.intensities
+                self.polar_mask = np.ones( len(self.polar_intensities), 
+                                           dtype=np.bool)
+                self._q_values   = self.detector.q_values
+                self.phi_spacing = self.detector.phi_spacing # in radians
+                
+            else:
+                raise ValueError('`detector` coord_type attribute has '
+                                 'invalid value: %s' % detector.coord_type)
+                
         else:
             self.polar_intensities = interpolated_values[0]
             self.polar_mask        = interpolated_values[1]
@@ -1484,6 +1517,9 @@ class Shot(object):
         self.polar_intensities : ndarray, float
             An array of the intensities I(|q|, phi)
         """
+        
+        if self.detector.coord_type == 'polar':
+            raise RuntimeError('Cannot interpolate a polar detector!')
         
         self.phi_spacing = phi_spacing * (2.0 * np.pi / 360.) # conv. to radians
         
@@ -1809,7 +1845,14 @@ class Shot(object):
         """
         # recall : q values are tiled
         q = self._nearest_q(q)
-        start = int(q/self.q_spacing) - int(self.q_min/self.q_spacing)
+        
+        if hasattr(self, 'q_spacing'):
+            start = int(q/self.q_spacing) - int(self.q_min/self.q_spacing)
+        elif hasattr(self, '_q_values'):
+            start = int( np.where(self._q_values == q)[0] )
+        else:
+            raise AttributeError('could not find: q_spacing or q_values')
+            
         inds = np.arange(start, self.num_datapoints, self.num_q)
         return inds
         

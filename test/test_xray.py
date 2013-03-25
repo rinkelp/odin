@@ -309,7 +309,7 @@ class TestShot(object):
         maxq = self.shot.q_values.max()
         assert np.all( mag <= (maxq + 1e-6) )
 
-    @expected_failure
+    @skip
     def test_pgr(self):
         """ test polar_grid_as_real_cart() property """
         
@@ -529,6 +529,28 @@ class TestShot(object):
         if not GPU: raise SkipTest
         d = xray.Detector.generic(spacing=0.6)
         x = xray.Shot.simulate(self.t, 513, d)
+        
+    def test_polar_shot(self):
+        dp = xray.Detector.generic_polar(q_lim=0.6)
+        xp = xray.Shot.simulate(self.t, 10, dp)
+        
+        dc = xray.Detector.generic(spacing=0.6)
+        xc = xray.Shot.simulate(self.t, 10, dc)
+        
+        # make sure it matches up decently with non-polar
+        ref = xc.I_ring(0.4)
+        pol = xp.I_ring(0.4)
+        ref = ref * (pol[0]/ref[0]) # scale them to be the same-ish
+        
+        # not a great test, but visually things work out... there is a phase
+        # ambiguity here that's hard to account for (I mean I could FFT...)
+        rel_diff = np.abs(ref - pol) / ref
+        assert np.all(rel_diff < 1.0) 
+        
+        
+    def test_polar_shot_2(self):
+        d = xray.Detector.generic_polar(q_values=[1.0, 2.0])
+        x = xray.Shot.simulate(self.t, 1, d)
         
         
 class TestShotset():
