@@ -499,6 +499,7 @@ class Detector(Beam):
             The wavenumber of the incident beam to use. Optionally A Beam 
             object, defining the beam energy.
         """
+        
         if type(grid_list) == tuple: # be generous...
             grid_list = [grid_list]
         elif type(grid_list) == list:
@@ -506,7 +507,9 @@ class Detector(Beam):
                 raise ValueError('grid_list must be a list of 3-tuples')
         else:
             raise ValueError('grid_list must be a list of 3-tuples')
+            
         d = Detector(grid_list, path_length, k, xyz_type='implicit')
+        
         return d
       
         
@@ -2400,70 +2403,7 @@ class Shotset(Shot):
         intensity_profile[:,1] /= float(self.num_shots)
         
         return intensity_profile
-
-
-    def intra_fft(self,q1,q2):
-    	"""
-    	computes intra-shot correlation ffts
-    	"""
-    	shots = self.shots
-    	n_phi = len(shots[0].phi_values)
-    	intraCors = [np.abs(np.fft.fft (s.correlate_ring_brute(q1,q2)[:,1], n_phi)) for s in shots]
-    	return intraCors
-
-
-    def inter_fft(self,q1,q2,n_inter=0):
-       	"""
-    	computes inter-shot correlation ffts
-	
-    	Paramters
-    	---------
-    	q1 : float
-    	    magnitude of first position to correlate
-	    
-    	q2 : float
-    	    magnitude of second position to correlate
-	    
-    	n_inter : int , optional
-    	    number of inter-shot correlation ffts to compute
-	
-    	Returns
-    	--------
-    	list of np.ndarrays
-	
-    	"""
-    	shots = self.shots
-    	n_shots = len(shots)
-	
-    	if n_shots == 1:
-    		raise ValueError("Cannot compute inter shot correlations with 1 shot")
-		
-        # I arbitrarily picked 0.6
-        # TJL to DERMEN: what is this and do we need it?
-    	if n_inter > 0.6 * (n_shots+1)*n_shots/2 :
-    		print "Might take a long time to find",n_inter,"unique inter-shot pairs from",n_shots
-    		print "shots. Please choose n_inter <",int(0.6 *  (n_shots+1)*n_shots/2 ),"."
-    		raise RuntimeError()
-    		
-	
-    	if n_inter==0:
-    	    n_inter=n_shots
-	    	
-    	interCors = []
-    	for s1,s2 in rand_pairs(n_shots,n_inter):
-    	    shot1 = shots[s1]
-    	    shot2 = shots[s2]
-    	    I1 = shot1.I_ring(q1)
-    	    I2 = shot2.I_ring(q2)
-
-            # note: when the args passed to correlate_ring_brute are numpy.ndarrays
-            # the only call to self is self.phi_values, which should be the same for
-            # shot1 or shot2
-    	    c12= shot1.correlate_ring_brute(I1,I2)[:,1]
-    	    interCors.append( np.abs( np.fft.fft(c12,len(c12) ) ))
-	
-    	return interCors
-        
+    
         
     def correlate(self, q1, q2, delta):
         """
