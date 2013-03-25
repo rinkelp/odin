@@ -2268,7 +2268,7 @@ class Shot(object):
         return ss[0]
 
 
-class Shotset(Shot):
+class Shotset(object):
     """
     A collection of xray 'shots', and methods for anaylzing statistical
     properties across shots.
