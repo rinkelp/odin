@@ -190,8 +190,10 @@ class Detector(Beam):
         # parse wavenumber
         if isinstance(k, Beam):
             self.k = k.wavenumber
+            self.beam = k
         elif type(k) in [float, np.float64, np.float32]:
             self.k = k
+            self.beam = None
         else:
             raise TypeError('`k` must be a float or odin.xray.Beam')
         
@@ -511,7 +513,7 @@ class Detector(Beam):
         
     @classmethod
     def generic(cls, spacing=1.00, lim=100.0, energy=10.0, 
-                photons_scattered_per_shot=1e10, l=50.0, 
+                photons_scattered_per_shot=1e4, l=50.0, 
                 force_explicit=False):
         """
         Generates a simple grid detector that can be used for testing
@@ -571,7 +573,7 @@ class Detector(Beam):
     @classmethod
     def generic_polar(cls, q_spacing=0.02, q_lim=5.0, q_values=None,
                        angle_spacing=1.0, energy=10.0, 
-                       photons_scattered_per_shot=1e10, l=50.0):
+                       photons_scattered_per_shot=1e4, l=50.0):
         """
         Generates a simple grid detector that can be used for testing
         (factory function). 

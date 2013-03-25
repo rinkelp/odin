@@ -102,6 +102,9 @@ def simulate_shot(traj, num_molecules, detector, traj_weights=None,
     
     # figure out finite photon statistics
     if finite_photon:
+        if detector.beam == None:
+            raise RuntimeError('`detector` object must have a beam attribute if'
+                               ' finite photon statistics are to be computed')
         poisson_parameter = float(detector.beam.photons_scattered_per_shot) / \
                             float(num_molecules)
     else:

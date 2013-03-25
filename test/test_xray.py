@@ -31,10 +31,10 @@ logging.basicConfig()
 class TestBeam(object):
     
     def setup(self):
-        self.flux = 100.0
+        self.n_photons = 100.0
         
     def test_unit_convs(self):
-        beam = xray.Beam(self.flux, energy=1.0)
+        beam = xray.Beam(self.n_photons, energy=1.0)
         assert_allclose(beam.wavelength, 12.398, rtol=1e-3)
         assert_allclose(beam.frequency, 2.4190e17, rtol=1e-3)
         assert_allclose(beam.wavenumber, (2.0 * np.pi)/12.398, rtol=1e-3)
@@ -43,15 +43,15 @@ class TestBeam(object):
 class TestDetector(object):
     
     def setup(self):
-        self.spacing = 0.05
-        self.lim     = 10.0
-        self.energy  = 0.7293
-        self.flux    = 100.0
-        self.l       = 50.0
+        self.spacing   = 0.05
+        self.lim       = 10.0
+        self.energy    = 0.7293
+        self.n_photons = 100.0
+        self.l         = 50.0
         self.d = xray.Detector.generic(spacing = self.spacing,
                                        lim = self.lim,
                                        energy = self.energy,
-                                       flux = self.flux,
+                                       photons_scattered_per_shot = self.n_photons,
                                        l = self.l) 
     
     def test_recpolar_n_reciprocal(self):
@@ -113,7 +113,7 @@ class TestDetector(object):
         assert_array_almost_equal(real, self.d.real)
        
     def test_basis_factory(self):
-        beam = xray.Beam(self.flux, energy=self.energy)
+        beam = xray.Beam(self.n_photons, energy=self.energy)
         basis = (self.spacing, self.spacing, 0.0)
         dim = 2*(self.lim / self.spacing) + 1
         shape = (dim, dim, 1)

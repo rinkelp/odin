@@ -3,7 +3,6 @@
 #include <stdio.h>
 #include <assert.h>
 #include <math.h>
-#include <time.h>
 #include <iostream>
 
 
@@ -97,7 +96,6 @@ void kernel( float const * const __restrict__ q_x,
              int   const n_rotations,
              int   const finite_photons,
              int   const * const __restrict__ n_photons ) {
-            
 
     // if doing finite photons, we need some memory allocated to store results
     int ndQ;
@@ -106,8 +104,13 @@ void kernel( float const * const __restrict__ q_x,
     } else {
         ndQ = 1; // don't allocate a lot of mem we wont use
     }
-    srand(time(NULL));                  // init rand seed
+    srand(randN1[0]);                   // init rand seed, using the first rand
+                                        // number makes the code deterministic
+                                        // for the purposes of testing
     int * discrete_outQ = new int[ndQ]; // new array for finite photon output
+    for( int iq = 0; iq < ndQ; iq++ ) {
+        discrete_outQ[iq] = 0;
+    }
 
     // main loop -- over molecules
     for( int im = 0; im < n_rotations; im++ ) {
@@ -182,27 +185,27 @@ void kernel( float const * const __restrict__ q_x,
             
         } // end loop over q
         
-    // discrete photon statistics, if requested
-    if ( finite_photons == 1 ) {
+        // discrete photon statistics, if requested
+        if ( finite_photons == 1 ) {
                 
-        float rp;
-        float cum_q_sum;
+            float rp;
+            float cum_q_sum;
         
-        // for each photon, draw a rand to put it in a pixel
-        for ( int p = 0; p < n_photons[im]; p++ ) {
+            // for each photon, draw a rand to put it in a pixel
+            for ( int p = 0; p < n_photons[im]; p++ ) {
             
-            rp = rand() * outQ_sum;
-            cum_q_sum = 0.0;
+                rp = (float)rand()/(float)RAND_MAX * outQ_sum;
+                
+                cum_q_sum = 0.0;
+                int iq = 0;
             
-            for( int iq = 0; iq < nQ; iq++ ) {
-                cum_q_sum += outQ[iq];
-                if ( cum_q_sum >= rp ) {
-                    discrete_outQ[iq] += 1;
+                while ( cum_q_sum < rp ) {
+                    cum_q_sum += outQ[iq];
+                    iq++;
                 }
+                discrete_outQ[iq] += 1;
             }
-        }
-    } // end finite photons    
-        
+        } // end finite photons
     } // end loop over rotations
     
     // now cp the results in discrete_outQ to outQ and free memory
@@ -247,6 +250,7 @@ CPUScatter::CPUScatter( int    nQ_, // scattering vectors
                         float* h_outQ_ ) {
                                 
     // unpack arguments
+    
     n_rotations = nRot_;
     nQ = nQ_;
     h_qx = h_qx_;
@@ -270,7 +274,6 @@ CPUScatter::CPUScatter( int    nQ_, // scattering vectors
     n_photons = n_photons_;
 
     h_outQ = h_outQ_;
-    
 
     // execute the kernel
     kernel(h_qx, h_qy, h_qz, h_outQ, nQ, h_rx, h_ry, h_rz, h_id, nAtoms, 

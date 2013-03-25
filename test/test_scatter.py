@@ -236,7 +236,7 @@ def debye_reference(trajectory, weights=None, q_values=None):
 # ------------------------------------------------------------------------------
 
     
-class TestScatter():
+class TestScatter(object):
     """ test all the scattering simulation functionality """
     
     def setup(self):
@@ -304,6 +304,48 @@ class TestScatter():
 
         assert not np.all( py_I == 0.0 )
         assert not np.isnan(np.sum( py_I ))
+
+
+class TestFinitePhoton(object):
+    
+    def setup(self):
+                
+        self.nq = 2 # number of detector vectors to do
+        
+        xyzQ = np.loadtxt(ref_file('512_atom_benchmark.xyz'))
+        self.xyzlist = xyzQ[:,:3] * 10.0 # nm -> ang.
+        self.atomic_numbers = xyzQ[:,3].flatten()
+    
+        self.q_grid = np.loadtxt(ref_file('512_q.xyz'))[:self.nq]
+        
+        self.rfloats = np.loadtxt(ref_file('512_x_3_random_floats.txt'))
+        self.num_molecules = self.rfloats.shape[0]
+                                       
+                                       
+    def test_cpu(self):
+        
+        cpu_I = cpuscatter.simulate(self.num_molecules, self.q_grid, self.xyzlist, 
+                                    self.atomic_numbers, rfloats=self.rfloats, 
+                                    poisson_parameter=1.0)
+             
+        print cpu_I
+        assert_allclose( cpu_I, np.array([0., 23886.]) )
+        
+        
+    def test_py_cpu_smoke(self):
+
+        traj = trajectory.load(ref_file('ala2.pdb'))
+        
+        num_molecules = 1
+        detector = xray.Detector.generic()
+        detector.beam.photons_scattered_per_shot = 1e3
+
+        I = scatter.simulate_shot(traj, num_molecules, detector, 
+                                  finite_photon=True)
+                                          
+        # simple statistical sanity check
+        assert np.abs(I.sum() - detector.beam.photons_scattered_per_shot) < \
+                           np.sqrt(detector.beam.photons_scattered_per_shot)*6.0
         
 
 class TestSphHrm(object):
