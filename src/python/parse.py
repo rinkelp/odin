@@ -17,13 +17,19 @@ import re
 import hashlib
 import yaml
 import tables
-import fabio
 from base64 import b64encode
 
 import numpy as np
 
 from odin import xray
 from odin.math2 import CircularHough
+
+
+try:
+    import fabio
+    FABIO_IMPORTED = True
+except ImportError as e:
+    FABIO_IMPORTED = False
 
 
 class CBF(object):
@@ -40,6 +46,10 @@ class CBF(object):
         filename : str
             The path to the CBF file.
         """
+        
+        if not FABIO_IMPORTED:
+            raise ImportError('Could not import python package "fabio", please '
+                              'install it')
         
         logger.info('Reading: %s' % filename)
         self.filename = filename
