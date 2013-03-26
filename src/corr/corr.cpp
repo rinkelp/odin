@@ -69,10 +69,4 @@ Corr::~Corr()
 
 }
 
-int main()
-{
-
-
-return 0;
-}
 
