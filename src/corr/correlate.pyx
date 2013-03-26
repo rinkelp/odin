@@ -1,6 +1,6 @@
 import numpy as np
 cimport numpy as np
-from random
+import random
 
 cdef extern from "corr.h":
   cdef cppclass Corr:
@@ -18,7 +18,7 @@ def correlate(A,B):
   """
   if A.shape != B.shape:
     print "arrays must be of same size and shape" 
-    return 0
+    return 0  # will add an traceback once I learn how :)
   N = A.shape[0]
   C = np.zeros_like(A)
   cdef np.ndarray[ndim=1,dtype=np.float32_t] v1
@@ -59,6 +59,7 @@ def randPairs(numItems,numPairs):
 
 def intra(ringsA,ringsB,num_cors=0):
   """
+  does intra shot correlations for many shots..
   PARAMS ringsA  : ndarray floats (first dim = number of rings, second dim = number of pixels per ring) 
          ringsB  : ndarray floats (first dim = number of rings, second dim = number of pixels per ring) 
   OPT    num_cors:  int number of corrs to compute
@@ -73,6 +74,7 @@ def intra(ringsA,ringsB,num_cors=0):
 
 def inter(ringsA,ringsB,num_cors = 0):
   """
+  does inter shot correlations for many shots..
   PARAMS ringsA  : ndarray floats (first dim = number of rings, second dim = number of pixels per ring) 
          ringsB  : ndarray floats (first dim = number of rings, second dim = number of pixels per ring) 
   OPT    num_cors:  int number of corrs to compute
