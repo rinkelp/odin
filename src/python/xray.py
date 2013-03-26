@@ -16,6 +16,7 @@ from bisect import bisect_left
 import numpy as np
 from scipy import interpolate, fftpack
 from scipy.ndimage import filters
+from scipy.special import legendre
 
 from odin.math2 import arctan3, rand_pairs, smooth
 from odin import scatter
@@ -31,8 +32,6 @@ c = 299792458         # speed of light  | m / s
 
 # ------------------------------------------------------------------------------
 
-# DERMEN WANTS TO PUSH
-
 
 class Beam(object):
     """
@@ -47,14 +46,14 @@ class Beam(object):
     self.wavenumber  (angular, inv. angstroms)
     """
     
-    def __init__(self, flux, **kwargs):
+    def __init__(self, photons_scattered_per_shot, **kwargs):
         """
         Generate an instance of the Beam class.
         
         Parameters
         ----------
-        flux : float
-            The photon flux in the focal point of the beam.
+        photons_scattered_per_shot : int
+            The average number of photons scattered per shot.
         
         **kwargs : dict
             Exactly one of the following, in the indicated units
@@ -64,7 +63,7 @@ class Beam(object):
             -- wavenumber: inverse angstroms
         """
         
-        self.flux = flux
+        self.photons_scattered_per_shot = photons_scattered_per_shot
         
         # make sure we have only one argument
         if len(kwargs) != 1:
@@ -101,8 +100,257 @@ class Beam(object):
         
         # some aliases
         self.k = self.wavenumber
+
+
+class BasisGrid(object):
+    """
+    A class representing a set of rectangular grids in space -- specifically,
+    x-ray scattering detectors. Does not contain all the metadata associated
+    with a full-fledged Detector class (e.g. the wavelength, etc).
+
+    Note that the geometry below is definied in "slow" and "fast" scan 
+    dimensions. These are simply the two dimensions that define the plane
+    a single rectangular pixel grid lives in. They may also be called the x and
+    y dimensions without any loss of generality.
+
+    Note on units: units are arbitrary -- all the units must be the same for
+    this to work. We don't keep track of units here.
+
+    The class is a set of rectangular grids, with each grid defined by four
+    quantities:
+
+        -- p vector : DEFINES A GRIDS POSITION IN SPACE.
+                      The vector between a chosen origin (possibly interaction 
+                      site) and the corner of the grid that is smallest in both 
+                      slow and fast (x/y) dimensions of the coordinate system. 
+                      Usually this will be the "bottom left" corner, but due to 
+                      the generality of the coordinates used, this is not 
+                      necessarily true.
+
+        -- s/f vect : DEFINES A GRIDS ORIENTATION IN SPACE
+                      Vectors pointing along the slow/fast-scan direction,
+                      respectively. These define the plane containing the pixels.
+                      The magnitudes of these vectors defines the size of the
+                      pixel in that dimension.
+
+        -- shape    : DEFINES GRID DIMENSIONS
+                      The number of pixels in the fast/slow direction. Ints.
+    """
+
+
+    def __init__(self, list_of_grids=[]):
+        """
+        Initialize a BasisGrid object.
+
+        Parameters
+        ----------
+        list_of_grids : list
+            A list of tuples of the form  (p, s, f, shape). See the doc
+            for the `add_grid` method on this class for more information. May
+            be an empty list (default) in which case a GridList with no pixels
+            is created.
+
+        See Also
+        --------
+        add_grid
+        add_grid_using_center
+        """
+
+        if not type(list_of_grids) == list:
+            raise TypeError('`list_of_grids` must be a list')
+
+        self.num_grids  = 0
+        self._ps        = [] # p-vectors
+        self._ss        = [] # slow-scan vectors
+        self._fs        = [] # fast-scan vectors
+        self._shapes    = [] # shapes
+
+        if len(list_of_grids) > 0:
+            for grid in list_of_grids:
+                self.add_grid(*grid)
+
+        return
+
+
+    def _check_valid_basis(self, p, s, f, shape):
+        """
+        Check to make sure that all the inputs look good.
+        """
+
+        if not (p.shape == (3,)) and (s.shape == (3,)) and (f.shape == (3,)):
+            raise ValueError('`p`, `s`, `f` must be 3-vectors')
+
+        if not (len(shape) == 2):
+            raise ValueError('`shape` must be len 2')
+
+        return
+
+
+    def _assert_list_sizes(self):
+        """
+        A simple sanity check
+        """
+        assert len(self._ps)     == self.num_grids
+        assert len(self._ss)     == self.num_grids
+        assert len(self._fs)     == self.num_grids
+        assert len(self._shapes) == self.num_grids
+        return
+
+
+    def add_grid(self, p, s, f, shape):
+        """
+        Add a grid (detector array) to the basis representation.
+
+        Parameters
+        ----------
+        p : np.ndarray, float
+            3-vector from the origin to the pixel on the grid with 
+            smallest coordinate in all dimensions.
+
+        s : np.ndarray, float
+            3-vector pointing in the slow scan direction
+
+        f : np.ndarray, float
+            3-vector pointing in the slow scan direction    
+
+        shape : tuple or list of float
+            The number of pixels in the (slow, fast) directions. Len 2.
+
+        See Also
+        --------    
+        add_grid_using_center
+        """
+        self._check_valid_basis(p, s, f, shape)
+        self._ps.append(p)
+        self._ss.append(s)
+        self._fs.append(f)
+        self._shapes.append(shape)
+        self.num_grids += 1
+        self._assert_list_sizes()
+        return
+
+
+    def add_grid_using_center(self, p_center, s, f, shape):
+        """
+        Add a grid (detector array) to the basis representation. Here, though,
+        the p-vector points to the center of the array instead of the slow/fast
+        smallest corner.
+
+        Parameters
+        ----------
+        p_center : np.ndarray, float
+            3-vector from the origin to the center of the grid.
+
+        s : np.ndarray, float
+            3-vector pointing in the slow scan direction
+
+        f : np.ndarray, float
+            3-vector pointing in the slow scan direction
+
+        shape : tuple or list of float
+            The number of pixels in the (slow, fast) directions. Len 2.
+        """
+
+        p_center = np.array(p_center)
+        if not p_center.shape == (3,):
+            raise ValueError('`p_center` must have shape (3,)')
+
+        # just compute where `p` is then add the grid as usual
+        x = (np.array(shape) - 1)
+        center_correction =  ((x[0] * s) + (x[1] * f)) / 2.
+        p  = p_center.copy()
+        p -= center_correction
+
+        self.add_grid(p, s, f, shape)
+
+        return
+
+
+    def get_grid(self, grid_number):
+        """
+        Return a grid for grid `grid_number`.
+
+        Parameters
+        ----------
+        grid_number : int
+            The index of the grid to get.
+
+        Returns
+        -------
+        p_center : np.ndarray, float
+            3-vector from the origin to the center of the grid.
+
+        s : np.ndarray, float
+            3-vector pointing in the slow scan direction
+
+        f : np.ndarray, float
+            3-vector pointing in the slow scan direction
+
+        shape : tuple or list of float
+            The number of pixels in the (slow, fast) directions. Len 2.
+        """
+
+        if grid_number >= self.num_grids:
+            raise ValueError('Only %d grids in object, you asked for the %d-th'
+                             ' (zero indexed)' % (self.num_grids, grid_number))
+
+        grid_tuple = (self._ps[grid_number], self._ss[grid_number], 
+                      self._fs[grid_number], self._shapes[grid_number])
+
+        return grid_tuple
+
+
+    def to_explicit(self):
+        """
+        Return the entire grid as an n x 3 array, defining the x,y,z positions
+        of each pixel.
+
+        Returns
+        -------
+        xyz : np.ndarray, float
+            An N x 3 array of the x,y,z positions of each pixel. Note that this
+            is a flattened version of what you get for each grid individually
+            using `grid_as_explicit`.
+
+        See Also
+        --------
+        grid_as_explicit
+        """
+        ex_grids = [ self.grid_as_explicit(i) for i in range(self.num_grids) ]
+        xyz = np.concatenate([ g.reshape((g.shape[0]* g.shape[1], 3)) for g in ex_grids ])
+        return xyz
+
+
+    def grid_as_explicit(self, grid_number):
+        """
+        Get the x,y,z coordiantes for a single grid.
+
+        Parameters
+        ----------
+        grid_number : int
+            The index of the grid to get.
+
+        Returns
+        -------
+        xyz : np.ndarray, float
+            An (shape) x 3 array of the x,y,z positions of each pixel
+
+        See Also
+        --------
+        to_explicit
+        """
+
+        p, s, f, shape = self.get_grid(grid_number)
+
+        # xyz = i * s + j * f, where i,j are ints running over range `shape`
+        mg = np.mgrid[0:shape[0]-1:1j*shape[0], 0:shape[1]-1:1j*shape[1]]
+        xyz = np.outer(mg[0].flatten(), s) + np.outer(mg[1].flatten(), f)
+        xyz += p # translate
+        xyz = xyz.reshape( (shape[0], shape[1], 3) )
+
+        return xyz
     
-    
+        
 class Detector(Beam):
     """
     Class that provides a plethora of geometric specifications for a detector
@@ -189,8 +437,10 @@ class Detector(Beam):
         # parse wavenumber
         if isinstance(k, Beam):
             self.k = k.wavenumber
+            self.beam = k
         elif type(k) in [float, np.float64, np.float32]:
             self.k = k
+            self.beam = None
         else:
             raise TypeError('`k` must be a float or odin.xray.Beam')
         
@@ -249,6 +499,7 @@ class Detector(Beam):
             The wavenumber of the incident beam to use. Optionally A Beam 
             object, defining the beam energy.
         """
+        
         if type(grid_list) == tuple: # be generous...
             grid_list = [grid_list]
         elif type(grid_list) == list:
@@ -256,7 +507,9 @@ class Detector(Beam):
                 raise ValueError('grid_list must be a list of 3-tuples')
         else:
             raise ValueError('grid_list must be a list of 3-tuples')
+            
         d = Detector(grid_list, path_length, k, xyz_type='implicit')
+        
         return d
       
         
@@ -509,7 +762,8 @@ class Detector(Beam):
         
         
     @classmethod
-    def generic(cls, spacing=1.00, lim=100.0, energy=10.0, flux=100.0, l=50.0, 
+    def generic(cls, spacing=1.00, lim=100.0, energy=10.0, 
+                photons_scattered_per_shot=1e4, l=50.0, 
                 force_explicit=False):
         """
         Generates a simple grid detector that can be used for testing
@@ -541,7 +795,7 @@ class Detector(Beam):
             Recommend keeping `False`.
         """
         
-        beam = Beam(flux, energy=energy)
+        beam = Beam(photons_scattered_per_shot, energy=energy)
 
         if not force_explicit:
             
@@ -567,11 +821,12 @@ class Detector(Beam):
         
         
     @classmethod
-    def generic_polar(cls, q_spacing=0.02, q_lim=5.0, q_values=None,
-                       angle_spacing=1.0, energy=10.0, flux=100.0, l=50.0):
+    def generic_polar(cls, q_spacing=0.02, q_lim=5.0, q_values=None, 
+                      angle_spacing=1.0, energy=10.0, 
+                      photons_scattered_per_shot=1e4, l=50.0):
         """
-        Generates a simple grid detector that can be used for testing
-        (factory function). 
+        Generates a grid formed by a bunch of concentric rings at even 
+        q-spacing. 
 
         Optional Parameters
         -------------------
@@ -589,8 +844,8 @@ class Detector(Beam):
         angle_spacing : float
             The angular grid spacing, *in degrees*
             
-        k : float
-            Wavenumber of the beam
+        energy : float
+            Energy of the beam (keV)
             
         l : float
             The path length from the sample to the detector, in the same units
@@ -602,23 +857,36 @@ class Detector(Beam):
             An instance of the detector that meets the specifications of the 
             parameters
         """
+        
+        beam = Beam(photons_scattered_per_shot, energy=energy)
 
         if q_values == None:
             q_values = np.arange(0.0, q_lim, q_spacing)
+        else:
+            q_values = np.array(q_values)
             
-        phi_values = np.arange(0.0, 2.0*np.pi, angle_spacing*(2.0*np.pi/360.0) )
+        phi_values = np.arange(0.0, 2.0*np.pi, angle_spacing*(2.0*np.pi/360.0) )        
             
-        polar = np.zeros(( len(q_values) * len(phi_values), 2 ))
-        polar[:,0] = np.repeat(q_values, len(phi_values))
-        polar[:,1] = np.tile(phi_values, len(q_values))
+        # compute where those q-values will lie in real space
+        real_q = l * np.tan(2.0 * np.arcsin( q_values / (2.0*beam.k) ))
+        assert len(real_q) == len(q_values)
+            
+        polar = np.zeros(( len(real_q) * len(phi_values), 2 ))
+        
+        # note: MUST keep q tiled and phi repeated to maintain consistency
+        #       with the polar methods in Shot
+        polar[:,0] = np.tile(real_q, len(phi_values))
+        polar[:,1] = np.repeat(phi_values, len(real_q))
 
         xyz = np.zeros(( polar.shape[0], 3 ))
         xyz[:,0] = polar[:,0] * np.cos(polar[:,1])
         xyz[:,1] = polar[:,0] * np.sin(polar[:,1])
-        
-        beam = Beam(flux, energy=energy) 
 
         detector = Detector(xyz, l, beam, coord_type='polar')
+        
+        # only coord_type == 'polar' detectors will have the following attrs
+        detector.q_values    = q_values
+        detector.phi_spacing = angle_spacing*(2.0*np.pi/360.0) # in rad
 
         return detector
         
@@ -1114,7 +1382,7 @@ class Shot(object):
         phi_spacing : float
             For interpolation:The azimuthal angle spacing, IN DEGREES.
             
-        q_values : ndarray OR list OF floats
+        q_values : ndarray OR list of floats
             For interpolation:  If supplied, the interpolation will only be 
             performed at these values of |q|, and the `q_spacing` parameter will
             be ignored.
@@ -1145,10 +1413,29 @@ class Shot(object):
             self.real_mask = np.zeros(intensities.shape, dtype=np.bool)
         
         if interpolated_values == None:
-            # interpolate_to_polar also sets self.polar_mask
-            self.interpolate_to_polar(q_spacing=q_spacing,
-                                      phi_spacing=phi_spacing, 
-                                      q_values=q_values)
+            
+            if detector.coord_type == 'cartesian':            
+                # interpolate_to_polar also sets self.polar_mask
+                self.interpolate_to_polar(q_spacing=q_spacing,
+                                          phi_spacing=phi_spacing, 
+                                          q_values=q_values)
+                                          
+            elif detector.coord_type == 'polar':
+                
+                # polar shots behave just like regular shots, but their pixels
+                # are arranged in a polar orientation -- they also contain a
+                # little more metadata (_q_values, phi_spacing)
+                
+                self.polar_intensities = self.intensities
+                self.polar_mask = np.ones( len(self.polar_intensities), 
+                                           dtype=np.bool)
+                self._q_values   = self.detector.q_values
+                self.phi_spacing = self.detector.phi_spacing # in radians
+                
+            else:
+                raise ValueError('`detector` coord_type attribute has '
+                                 'invalid value: %s' % detector.coord_type)
+                
         else:
             self.polar_intensities = interpolated_values[0]
             self.polar_mask        = interpolated_values[1]
@@ -1233,6 +1520,9 @@ class Shot(object):
         self.polar_intensities : ndarray, float
             An array of the intensities I(|q|, phi)
         """
+        
+        if self.detector.coord_type == 'polar':
+            raise RuntimeError('Cannot interpolate a polar detector!')
         
         self.phi_spacing = phi_spacing * (2.0 * np.pi / 360.) # conv. to radians
         
@@ -1558,7 +1848,14 @@ class Shot(object):
         """
         # recall : q values are tiled
         q = self._nearest_q(q)
-        start = int(q/self.q_spacing) - int(self.q_min/self.q_spacing)
+        
+        if hasattr(self, 'q_spacing'):
+            start = int(q/self.q_spacing) - int(self.q_min/self.q_spacing)
+        elif hasattr(self, '_q_values'):
+            start = int( np.where(self._q_values == q)[0] )
+        else:
+            raise AttributeError('could not find: q_spacing or q_values')
+            
         inds = np.arange(start, self.num_datapoints, self.num_q)
         return inds
         
@@ -1819,7 +2116,7 @@ class Shot(object):
         
     @classmethod
     def simulate(cls, traj, num_molecules, detector, traj_weights=None, 
-                 force_no_gpu=False, device_id=0):
+                 finite_photon=False, force_no_gpu=False, device_id=0):
         """
         Simulate a scattering 'shot', i.e. one exposure of x-rays to a sample, and
         return that as a Shot object (factory function).
@@ -1853,6 +2150,9 @@ class Shot(object):
             If `traj` contains many structures, an array that provides the Boltzmann
             weight of each structure. Default: if traj_weights == None, weights
             each structure equally.
+            
+        finite_photon : bool
+            Use finite photon statistics in the simulation.
     
         force_no_gpu : bool
             Run the (slow) CPU version of this function.
@@ -1866,8 +2166,10 @@ class Shot(object):
             A shot instance, containing the simulated shot.
         """
         I = scatter.simulate_shot(traj, num_molecules, detector, 
-                                  traj_weights=traj_weights, 
-                                  force_no_gpu=force_no_gpu, device_id=device_id)
+                                  traj_weights=traj_weights,
+                                  finite_photon=finite_photon, 
+                                  force_no_gpu=force_no_gpu,
+                                  device_id=device_id)
         shot = Shot(I, detector)
         return shot
         
@@ -1910,8 +2212,8 @@ class Shot(object):
         
         if (num_x == None) or (num_y == None):
             # todo : better performance if needed (implicit detector)
-            num_x = len(self.detector.xyz[:0])
-            num_y = len(self.detector.xyz[:1])
+            num_x = len(self.detector.xyz[:,0])
+            num_y = len(self.detector.xyz[:,1])
 
         points = self.detector.xyz[:,:2] # ignore z-comp. of detector
 
@@ -1966,7 +2268,7 @@ class Shot(object):
         return ss[0]
 
 
-class Shotset(Shot):
+class Shotset(object):
     """
     A collection of xray 'shots', and methods for anaylzing statistical
     properties across shots.
@@ -2101,70 +2403,7 @@ class Shotset(Shot):
         intensity_profile[:,1] /= float(self.num_shots)
         
         return intensity_profile
-
-
-    def intra_fft(self,q1,q2):
-    	"""
-    	computes intra-shot correlation ffts
-    	"""
-    	shots = self.shots
-    	n_phi = len(shots[0].phi_values)
-    	intraCors = [np.abs(np.fft.fft (s.correlate_ring_brute(q1,q2)[:,1], n_phi)) for s in shots]
-    	return intraCors
-
-
-    def inter_fft(self,q1,q2,n_inter=0):
-       	"""
-    	computes inter-shot correlation ffts
-	
-    	Paramters
-    	---------
-    	q1 : float
-    	    magnitude of first position to correlate
-	    
-    	q2 : float
-    	    magnitude of second position to correlate
-	    
-    	n_inter : int , optional
-    	    number of inter-shot correlation ffts to compute
-	
-    	Returns
-    	--------
-    	list of np.ndarrays
-	
-    	"""
-    	shots = self.shots
-    	n_shots = len(shots)
-	
-    	if n_shots == 1:
-    		raise ValueError("Cannot compute inter shot correlations with 1 shot")
-		
-        # I arbitrarily picked 0.6
-        # TJL to DERMEN: what is this and do we need it?
-    	if n_inter > 0.6 * (n_shots+1)*n_shots/2 :
-    		print "Might take a long time to find",n_inter,"unique inter-shot pairs from",n_shots
-    		print "shots. Please choose n_inter <",int(0.6 *  (n_shots+1)*n_shots/2 ),"."
-    		raise RuntimeError()
-    		
-	
-    	if n_inter==0:
-    	    n_inter=n_shots
-	    	
-    	interCors = []
-    	for s1,s2 in rand_pairs(n_shots,n_inter):
-    	    shot1 = shots[s1]
-    	    shot2 = shots[s2]
-    	    I1 = shot1.I_ring(q1)
-    	    I2 = shot2.I_ring(q2)
-
-            # note: when the args passed to correlate_ring_brute are numpy.ndarrays
-            # the only call to self is self.phi_values, which should be the same for
-            # shot1 or shot2
-    	    c12= shot1.correlate_ring_brute(I1,I2)[:,1]
-    	    interCors.append( np.abs( np.fft.fft(c12,len(c12) ) ))
-	
-    	return interCors
-        
+    
         
     def correlate(self, q1, q2, delta):
         """
@@ -2244,7 +2483,8 @@ class Shotset(Shot):
             
     @classmethod
     def simulate(cls, traj, num_molecules, detector, num_shots,
-                 traj_weights=None, force_no_gpu=False, device_id=0):
+                 traj_weights=None, finite_photon=False, force_no_gpu=False,
+                 device_id=0):
         """
         Simulate many scattering 'shot's, i.e. one exposure of x-rays to a sample, and
         return that as a Shot object (factory function).
@@ -2275,10 +2515,15 @@ class Shotset(Shot):
         num_shots : int
             The number of shots to perform and include in the Shotset.
 
+        Optional Parameters
+        -------------------
         traj_weights : ndarray, float
-            If `traj` contains many structures, an array that provides the Boltzmann
-            weight of each structure. Default: if traj_weights == None, weights
-            each structure equally.
+            If `traj` contains many structures, an array that provides the 
+            Boltzmann weight of each structure. Default: if traj_weights == None
+            weights each structure equally.
+            
+        finite_photon : bool
+            Whether or not to employ finite photon statistics in the simulation
 
         force_no_gpu : bool
             Run the (slow) CPU version of this function.
@@ -2295,6 +2540,7 @@ class Shotset(Shot):
         for i in range(num_shots):
             I = scatter.simulate_shot(traj, num_molecules, detector, 
                                       traj_weights=traj_weights,
+                                      finite_photon=finite_photon,
                                       force_no_gpu=force_no_gpu,
                                       device_id=device_id)
             shot = Shot(I, detector)
@@ -2499,21 +2745,24 @@ class CorrelationCollection(object):
             return self._correlation_data[(q1,q2)]
             
             
-    def legendre_coeffecients(self, order=20, report_error=False):
+    def legendre_coeffecients(self, order, report_error=False):
         """
         Project the correlation functions onto a set of legendre polynomials,
         and return the coefficients of that projection.
         
-        Optional Parameters
-        -------------------
+        Parameters
+        ----------
         order : int
-            The order at which to truncate the polynomial expansion. If none,
-            will use epsilon parameter to decide order.
+            The order at which to truncate the polynomial expansion. Note that
+            this function projects only onto even numbered Legendre polynomials.
         """
         
         # initialize space for coefficients        
         Cl = np.zeros((order, self.num_q, self.num_q))
-            
+           
+        # iterate over each pair of rings in the collection and project the
+        # correlation between those two rings into the Legendre basis
+        
         for i in range(self.num_q):
             for j in range(i,self.num_q):
                 
@@ -2521,24 +2770,53 @@ class CorrelationCollection(object):
                 t1 = np.arctan( self.q_values[i] / (2.0*self.k) ) # theta1
                 t2 = np.arctan( self.q_values[j] / (2.0*self.k) ) # theta2
 
+                # compute the Kam scattering angle psi
                 psi = np.arccos( np.cos(t1)*np.cos(t2) + np.sin(t1)*np.sin(t2) \
                                  * np.cos( self.deltas * 2. * np.pi/float(self.num_phi) ) )
                                                      
                 q1 = self.q_values[i]
                 q2 = self.q_values[j]
-                
-                x = order*2 - 1
+            	
+            	# THERE ARE TWO WAYS TO DO THIS:
+            	# (1) a 'brute-force' numerical integration
+            	# (2) a matrix-inversion to do a least-squares fit to
+            	
+            	# Tests performed by TJL indicate that the results are similar,
+            	# but that method (2) is MUCH faster and gives cleaner results
+            	
+            	# method (1)
+            	# note: code below not completely tested
+            	
+            	# # iterate over Legendre coefficients (even only up to `order`)
+                # for l in range(0, order, 2):
+                #     
+                #   # project
+                #   Pl = legendre(l)
+                #   cl = np.sum( self._correlation_data[(q1,q2)] * \
+                #                Pl( np.cos(psi) ) * np.sin(psi) ) # TJL dbl chk
+                #   
+                #   # normalize (differs from Kam by an unknown factor N -- the 
+                #   # number of molecules)
+                #   c = (2.0*l + 1.0) / (self.num_phi) * cl # TJL dbl chk
+            		
+            		
+            	# method (2)
+            	
                 c, fit_data = np.polynomial.legendre.legfit(np.cos(psi), 
-                                  self._correlation_data[(q1,q2)], x, full=True)
-                                  
-                assert len(c) == order * 2
-                c = c[::2]     # discard odd values
-                assert len(c) == Cl.shape[0]
+                                  self._correlation_data[(q1,q2)], order-1, full=True)
                 
-                c /= c.sum()   # normalize
+                # this code was used to strip out and save only the even coefficients
+                # assert len(c) == order * 2
+                # c = c[::2]     # discard odd values
+                # assert len(c) == Cl.shape[0]
+                # c /= c.sum()   # normalize
+
                 Cl[:,i,j] = c
                 Cl[:,j,i] = c  # copy it to the lower triangle too
         
+        
+        # this is an internal sanity checker -- it should be removed at a later
+        # date since its replicated in the unit test
         if report_error:
             d = 0.0
             for i in range(self.num_q):

@@ -6,7 +6,9 @@ Experimental Data
 """
 
 import os
+import abc
 from glob import glob
+
 import numpy as np
 
 from mdtraj import io
@@ -139,6 +141,7 @@ class ExptDataCollection(object):
         
     def _to_file(self, filemame):
         # use Cpickle, binary serialization
+        pass
     
     @classmethod
     def _from_file(self, filename):
@@ -157,6 +160,11 @@ class ExptData(object):
     that outputs an array of len(values) that is the *prediction* of the array
     `values` given a molecular geometry `xyz`.
     """
+    
+    __metaclass__ = abc.ABCMeta
+        
+    # the following methods will be automatically inhereted, but are mutable
+    # by children if need be    
         
     def __init__(self, directory):
         """
@@ -210,9 +218,11 @@ class ExptData(object):
         """
         return self._acceptable_filetypes()
 
-    # TJL : need to figure out how ABC's work. 
-    # Classes that inherent from ExptData should implement all the methods below 
-    @abstractplaceholder
+
+    # Classes that inherent from ExptData must implement all the methods below 
+    # this is enforced by the abstract class module
+    
+    @abc.abstractmethod
     def _load_file(self, filename):
         """
         Load a file containing experimental data, and dump the relevant data,
@@ -220,7 +230,7 @@ class ExptData(object):
         """
         return
         
-    @abstractplaceholder
+    @abc.abstractmethod
     def predict(self, trajectory):
         """
         Method to predict the array `values` for each snapshot in `trajectory`.
@@ -238,7 +248,7 @@ class ExptData(object):
         """
         return prediction
         
-    @abstractplaceholder
+    @abc.abstractmethod
     def _default_error(self):
         """
         Method to estimate the error of the experiment (conservatively) in the
@@ -246,7 +256,7 @@ class ExptData(object):
         """
         return error_guess
         
-    @abstractplaceholder
+    @abc.abstractmethod
     def _get_values(self):
         """
         Return an array `values`, in an order that ensures it will match up
@@ -254,7 +264,7 @@ class ExptData(object):
         """
         return values
 
-    @abstractplaceholder
+    @abc.abstractmethod
     def _get_errors(self):
         """
         Return an array `errors`, in an order that ensures it will match up
@@ -262,7 +272,7 @@ class ExptData(object):
         """
         return errors
     
-    @abstractplaceholder    
+    @abc.abstractmethod    
     def _acceptable_filetypes(self):
         """
         A list object of the file extensions this class knows how to load.
@@ -270,131 +280,3 @@ class ExptData(object):
         return list_of_extensions
         
 
-class ScatteringData(ExptData):
-    """
-    A class supporting x-ray scattering data.
-    
-    Two kinds of experimental observables are currently supported by this class
-    and it's predict() method:
-    
-    -- intensity profiles
-         The observed x-ray scattering averaged over the azimuthal (radial)
-         angle on the detector. Also known as SAXS/WAXS data.
-    -- correlations
-         This is the correlation function of an intensity 'ring' on the detector.
-         These correlations promise to hold more structural information than
-         the intensity profile alone, but have an intrinsically greater error.
-         
-    The intensity profile is stored in self._intensity profile. This is the
-    average profile over all data files that get loaded. self._intensity is
-    a 2-d array, the first dimension is the list of q-values at which the
-    intensities were measured, the second is the intensity value at that q.
-    
-    The correlation data is stored in a 3-d array. Each element of that array
-    contains one value of the correlation function C(q_1, q_2, phi). Each
-    dimension scans across each parameter of that function C
-    
-        Dim 0: q_1 magnitude
-        Dim 1: q_1 magnitude
-        Dim 2: phi
-    
-    The values that each index corresponds to are held in two other arrays:
-        
-        self._correlated_q_mags
-        self._correlated_phis
-    
-    Such that, for example,
-    
-        self._correlations[2,3,10]
-    
-    corresponds to C(q1, q2, phi) for
-    
-        q1  = self._correlated_q_mags[2]
-        q1  = self._correlated_q_mags[3]
-        phi = self._correlated_phis[10]
-        
-    This mirrors the structure of the return value of 
-    xray.Shotset.correlate_all_rings(), which ultimately generates the data
-    arrays for this class.
-    """
-        
-    def _load_file(self, filename):
-        """
-        Load a file containing experimental data, and dump the relevant data,
-        errors, and metadata into the object in a smart/comprehendable manner.
-        """
-        return
-        
-        
-    def predict(self, trajectory):
-        """
-        Method to predict the array `values` for each snapshot in `trajectory`.
-        
-        Parameters
-        ----------
-        trajectory : mdtraj.trajectory
-            A trajectory to predict the experimental values for.
-        
-        Returns
-        -------
-        prediction : ndarray, 2-D
-           The predicted values. Will be two dimensional, 
-           len(trajectory) X len(values).
-        """
-        return prediction
-        
-        
-    def _default_error(self):
-        """
-        Method to estimate the error of the experiment (conservatively) in the
-        absence of explicit input.
-        """
-        return error_guess
-        
-        
-    def _get_values(self):
-        """
-        Return an array `values`, in an order that ensures it will match up
-        with the method self.predict()
-        """
-        return values
-        
-        
-    def _get_errors(self):
-        """
-        Return an array `errors`, in an order that ensures it will match up
-        with the method self.predict()
-        """
-        return errors
-        
-     
-    def _acceptable_filetypes(self):
-        """
-        A list object of the file extensions this class knows how to load.
-        """
-        list_of_extensions = ['cxi', 'cbf', 'shot']
-        return list_of_extensions
-        
-        
-    def _predict_intensity_profile(self, trajectory):
-        """
-        Return the predicted intensity profile, using the Debye equation.
-        Returns just the intensities, not the q-values (a 1-d array)
-        """
-        ip = xray.debye(trajectory, q_values=self._intensity_profile[:,0])
-        return ip[:,1]
-        
-        
-    def _predict_correlations(self, trajectory):
-        """
-        """
-        pass
-
-        
-        
-
-class ChemShiftData(ExptData):
-    """
-    A class supporting chemical shift data
-    """
-    pass

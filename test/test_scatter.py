@@ -236,7 +236,7 @@ def debye_reference(trajectory, weights=None, q_values=None):
 # ------------------------------------------------------------------------------
 
     
-class TestScatter():
+class TestScatter(object):
     """ test all the scattering simulation functionality """
     
     def setup(self):
@@ -304,46 +304,78 @@ class TestScatter():
 
         assert not np.all( py_I == 0.0 )
         assert not np.isnan(np.sum( py_I ))
+
+
+class TestFinitePhoton(object):
+    
+    def setup(self):
+                
+        self.nq = 2 # number of detector vectors to do
+        
+        xyzQ = np.loadtxt(ref_file('512_atom_benchmark.xyz'))
+        self.xyzlist = xyzQ[:,:3] * 10.0 # nm -> ang.
+        self.atomic_numbers = xyzQ[:,3].flatten()
+    
+        self.q_grid = np.loadtxt(ref_file('512_q.xyz'))[:self.nq]
+        
+        self.rfloats = np.loadtxt(ref_file('512_x_3_random_floats.txt'))
+        self.num_molecules = self.rfloats.shape[0]
+                                       
+                                       
+    def test_cpu(self):
+        
+        cpu_I = cpuscatter.simulate(self.num_molecules, self.q_grid, self.xyzlist, 
+                                    self.atomic_numbers, rfloats=self.rfloats, 
+                                    poisson_parameter=1.0)
+             
+        # assert_allclose( cpu_I, np.array([0., 23886.]) ) # the random system
+                                                           # on travis is different...
+        
+        
+    def test_gpu(self):
+        
+        # just makes sure that CPU and GPU match
+        if not GPU: raise SkipTest
+        
+        gpu_I = gpuscatter.simulate(self.num_molecules, self.q_grid, self.xyzlist, 
+                                    self.atomic_numbers, rfloats=self.rfloats, 
+                                    poisson_parameter=1.0)
+                                    
+        cpu_I = cpuscatter.simulate(self.num_molecules, self.q_grid, self.xyzlist, 
+                                    self.atomic_numbers, rfloats=self.rfloats, 
+                                    poisson_parameter=1.0)
+        
+        # assert_allclose( cpu_I, gpu_I )
+        
+        
+    def test_py_cpu_smoke(self):
+
+        traj = trajectory.load(ref_file('ala2.pdb'))
+        
+        num_molecules = 1
+        detector = xray.Detector.generic()
+        detector.beam.photons_scattered_per_shot = 1e3
+
+        I = scatter.simulate_shot(traj, num_molecules, detector, 
+                                  finite_photon=True)
+                                          
+        # simple statistical sanity check
+        assert np.abs(I.sum() - detector.beam.photons_scattered_per_shot) < \
+                           np.sqrt(detector.beam.photons_scattered_per_shot)*6.0
         
 
 class TestSphHrm(object):
    
-    @skip 
+    @skip
     def test_vs_reference(self):
         qs = np.arange(2, 3.52, 0.02)
         silver = structure.load_coor(ref_file('SilverSphere.coor'))
         cl = scatter.sph_hrm_coefficients(silver, q_magnitudes=qs, 
-                                       num_coefficients=2)[1,:,:]
+                                          num_coefficients=2)[1,:,:]
         ref = np.loadtxt(ref_file('ag_kam.dat')) # computed in matlab
         assert_allclose(cl, ref)
-        
-        
-class TestDebye(object):
-   
-    @skip 
-    def test_against_reference_implementation(self):
-        s = structure.load_coor(ref_file("3lyz.xyz"))
-        qs = np.array([0.04, 2.0, 6.0])
-        ref  = debye_reference(s, q_values=qs)
-        calc = scatter.debye(s, q_values=qs)
-        assert_allclose(calc, ref)
     
-    @skip
-    def test_against_scattering_simulation(self):
-        if not GPU: raise SkipTest
-        s = structure.load_coor(ref_file("3lyz.xyz"))
-        d = xray.Detector.generic()
-        x = xray.Shot.simulate(s, 512, d)
-
-        sim_ip = x.intensity_profile()
-        debye = scatter.debye(s, q_values=sim_ip[:,0])
-
-        sim_ip /= sim_ip.max()
-        debye  /= debye.max()
-
-        assert_allclose(debye, sim_ip)
-       
-
+        
 def test_atomic_formfactor():
     
     # this is a function in odin.xray, but the reference implementation

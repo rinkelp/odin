@@ -1,6 +1,6 @@
 
 """
-tests for odin/src/python/math.py
+tests for odin/src/python/math2.py
 """
 
 import scipy
@@ -9,7 +9,7 @@ from scipy.ndimage import imread
 from numpy.testing import assert_allclose
 
 from odin import parse
-from odin import math as om
+from odin import math2 as om
 from odin.testing import ref_file, skip, expected_failure
 
 from scipy.ndimage import imread
@@ -55,6 +55,7 @@ class TestHough(object):
                
         assert_allclose(maxima, ref)
 
+    @skip
     def test_xray_rings(self):
         """ test the Hough transform on some real data """
         # final result confirmed visually
@@ -64,6 +65,7 @@ class TestHough(object):
         CM = om.CircularHough(radii=np.arange(70,95,3))
         center = CM(self.image, mode='concentric')
         
+    @skip
     def test_parallel(self):
         """ test: ensure parallel & serial Hough are consistent """
         parallel_maxima = self.CM(self.image, mode='sharpest')
@@ -71,8 +73,6 @@ class TestHough(object):
         serial_maxima = self.CM(self.image, mode='sharpest')
         assert_allclose(parallel_maxima, serial_maxima)
         
-    def test_limited_convolution(self):
-        pass
         
         
         

@@ -5,6 +5,8 @@
 #include <assert.h>
 #include <fstream>
 #include <sstream>
+#include <curand.h>
+#include <curand_kernel.h>
 #include <gpuscatter.hh>
 
 using namespace std;
@@ -103,6 +105,13 @@ void __device__ rotate(float x, float y, float z,
 
 }
 
+__global__ void init_rand ( curandState * state, unsigned long seed )
+{
+    int id = threadIdx.x;
+    curand_init ( seed, id, 0, &state[id] );
+} 
+
+
 // blockSize = tpb, templated in case we need to use a faster reduction
 // method later. 
 template<unsigned int blockSize>
@@ -121,7 +130,10 @@ void __global__ kernel(float const * const __restrict__ q_x,
                        float const * const __restrict__ randN1, 
                        float const * const __restrict__ randN2, 
                        float const * const __restrict__ randN3,
-                       unsigned int numRotations) {
+                       int   const finite_photons,
+                       int   const * const __restrict__ n_photons,
+                       unsigned int numRotations,
+                       curandState * globalState) {
 
     // shared array for block-wise reduction
     __shared__ float sdata[blockSize];
@@ -133,7 +145,27 @@ void __global__ kernel(float const * const __restrict__ q_x,
     sdata[tid] = 0;
     __syncthreads();
     
+    // --- prepare for finite photons
+    // we need some memory allocated to store results
+    int ndQ;
+    if ( finite_photons == 1 ) {
+        ndQ = nQ;
+    } else {
+        ndQ = 1; // don't allocate a lot of mem we wont use
+    }
+
+    // init rand
+
+    int * discrete_outQ = new int[ndQ]; // new array for finite photon output
+    for( int iq = 0; iq < ndQ; iq++ ) {
+        discrete_outQ[iq] = 0;
+    }
+    // --- end finite photons
+    
     while(gid < numRotations) {
+
+        // keep track of the total scattered intensity
+        float outQ_sum = 0.0;
        
         // determine the rotated locations
         float rand1 = randN1[gid]; 
@@ -209,8 +241,8 @@ void __global__ kernel(float const * const __restrict__ q_x,
             }
             if(tid == 0) {
                 atomicAdd(outQ+iq, sdata[0]); 
-            } 
-        }
+            }
+        } // end loop over q
 
         // blank out reduction buffer.
         sdata[tid] = 0;
@@ -220,7 +252,43 @@ void __global__ kernel(float const * const __restrict__ q_x,
 
         // offset by total working threads across all blocks. 
         gid += gridDim.x * blockDim.x;
+        
+        // --- discrete photon statistics, if requested ------------------------
+        if ( finite_photons == 1 ) {
+                
+            float rp;
+            float cum_q_sum;
+        
+            // for each photon, draw a rand to put it in a pixel
+            for ( int p = 0; p < n_photons[gid]; p++ ) {
+           
+                // cpu : rp = (float)rand()/(float)RAND_MAX * outQ_sum;
+                
+                curandState localState = globalState[tid]; // tid = thread id
+                rp = curand_uniform( &localState );
+                globalState[tid] = localState;
+
+                cum_q_sum = 0.0;
+                int iq = 0;
+            
+                while ( cum_q_sum < rp ) {
+                    cum_q_sum += outQ[iq];
+                    iq++;
+                }
+                discrete_outQ[iq] += 1;
+            }
+        } // --- end finite photons --------------------------------------------
+        
+    } // end loop over rotations
+    
+    // now cp the results in discrete_outQ to outQ and free memory
+    // a bit silly, but is only one loop :/
+    if ( finite_photons == 1 ) {
+        for( int iq = 0; iq < nQ; iq++ ) {
+            outQ[iq] = discrete_outQ[iq];
+        }
     }
+    delete [] discrete_outQ;
 
 }
 
@@ -260,6 +328,10 @@ GPUScatter::GPUScatter (int device_id_,
                         float* h_rand1_,
                         float* h_rand2_,
                         float* h_rand3_,
+                        
+                        // finite photons
+                        int    finite_photons_,
+                        int*   h_n_photons_,
 
                         // output
                         float* h_outQ_
@@ -293,6 +365,9 @@ GPUScatter::GPUScatter (int device_id_,
     h_rand1 = h_rand1_;
     h_rand2 = h_rand2_;
     h_rand3 = h_rand3_;
+    
+    finite_photons = finite_photons_;
+    h_n_photons = h_n_photons_;
 
     h_outQ = h_outQ_;
     
@@ -341,6 +416,7 @@ GPUScatter::GPUScatter (int device_id_,
     float *d_rand1;     deviceMalloc( (void **) &d_rand1, nRotations_size);
     float *d_rand2;     deviceMalloc( (void **) &d_rand2, nRotations_size);
     float *d_rand3;     deviceMalloc( (void **) &d_rand3, nRotations_size);
+    int   *d_n_photons; deviceMalloc( (void **) &d_n_photons, nRotations_size);
     
     // check for errors
     err = cudaGetLastError();
@@ -362,6 +438,7 @@ GPUScatter::GPUScatter (int device_id_,
     cudaMemcpy(d_rand1, &h_rand1[0], nRotations_size, cudaMemcpyHostToDevice);
     cudaMemcpy(d_rand2, &h_rand2[0], nRotations_size, cudaMemcpyHostToDevice);
     cudaMemcpy(d_rand3, &h_rand3[0], nRotations_size, cudaMemcpyHostToDevice);
+    cudaMemcpy(d_n_photons, &h_n_photons[0], nRotations_size, cudaMemcpyHostToDevice);
 
     // check for errors
     err = cudaGetLastError();
@@ -370,8 +447,26 @@ GPUScatter::GPUScatter (int device_id_,
         exit(-1);
     }
 
-    // execute the kernel
-    kernel<tpb> <<<bpg, tpb>>> (d_qx, d_qy, d_qz, d_outQ, nQ, d_rx, d_ry, d_rz, d_id, nAtoms, numAtomTypes, d_cm, d_rand1, d_rand2, d_rand3, nRotations);
+    // setup random numbers -- devStates is the seed state for each thread
+    curandState* devStates;
+    cudaMalloc ( &devStates, sizeof( curandState ) );
+    unsigned int rseed = (unsigned int) floor(h_rand1[0] * 1000000.0);
+    init_rand <<<bpg, tpb>>> ( devStates, rseed );
+
+    // check for errors
+    err = cudaGetLastError();
+    if (err != cudaSuccess) {
+        printf("Error in rand seed setup. CUDA error: %s\n", cudaGetErrorString(err));
+        exit(-1);
+    }  
+
+    // --- execute the kernel --------------------------------------------------
+    kernel<tpb> <<<bpg, tpb>>> (d_qx, d_qy, d_qz, d_outQ, nQ, d_rx, d_ry, d_rz, 
+                                d_id, nAtoms, numAtomTypes, d_cm, d_rand1, 
+                                d_rand2, d_rand3, finite_photons, d_n_photons, 
+                                nRotations, devStates);
+    // -------------------------------------------------------------------------
+    
     cudaThreadSynchronize();
     err = cudaGetLastError();
     if (err != cudaSuccess) {
@@ -403,6 +498,7 @@ GPUScatter::GPUScatter (int device_id_,
     cudaFree(d_rand2);
     cudaFree(d_rand3);
     cudaFree(d_outQ);
+    cudaFree(d_n_photons);
 
     err = cudaGetLastError();
     if (err != cudaSuccess) {
@@ -414,6 +510,7 @@ GPUScatter::GPUScatter (int device_id_,
     cudaThreadSynchronize();
     cudaDeviceSynchronize();
     cudaThreadExit();
+    
     err = cudaGetLastError();
     if (err != cudaSuccess) {
         printf("Error resetting device. CUDA error: %s\n", cudaGetErrorString(err));
