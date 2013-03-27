@@ -35,40 +35,21 @@ class ExptDataCollection(object):
             include in this structure prediction round.
         """
         
+        self.expt_data_list = expt_data_list
         self._n_data = np.sum([ d._n_data for d in expt_data_list ])
-        self._directories = [d._directory for d in expt_data_list]
         
-        self._files = {}
-        self._expttype = []
-        self._exptmeta = []
-        values         = []
-        errors         = []
+        # determine the different kinds of experiments
+        self._expttype = []        
         for d in expt_data_list:
-            self._files[d._directory] = d._files
-            
-            if isinstance(d, ScatteringData):
-                self._expttype.append('scattering')
-            elif isinstance(d, ChemShiftData):
-                self._expttype.append('chemshift')
-            else:
-                raise RuntimeError('Invalid experimental data type. Currently'
-                                   'allowed: ScatteringData, ChemShiftData.')
-                                   
-            self._exptmeta.append(d._exptmeta)
-            
-            values.append(d._values)
-            errors.append(d._errors)
-            
-        self._values = np.array(values)
-        self._errors = np.array(errors)
+            self._expttype.append( type(d).split('.')[-1] ) # dbl chk
         
-        assert len(self._values) == self._n_data
-        assert len(self._errors) == self._n_data
-        assert len(self._exptmeta) == self._n_data
-
+        return
+    
+        
     @property
     def n_data(self):
         return self._n_data
+    
         
     @property
     def exptmeta(self):
@@ -81,29 +62,39 @@ class ExptDataCollection(object):
         for scattering it would be the detector pixel location (q-vector), etc.
         """
         return self._exptmeta
+    
         
     @property
     def expttype(self):
         """
         For each data point, the kind of experiment that generated that data
         """
+        assert len(self._expttype) == self._n_data
         return self._expttype
+    
         
     @property
     def values(self):
         """
         The measured values of each data point
         """
-        return self._values
+        
+        values = np.zeros(self._n_data)
+        
+        
+        assert values.shape[0] == self._n_data
+        return
+    
         
     @property
     def errors(self):
         """
         The errors associated with each experiment.
         """
-        return self._errors
+        assert len(self._errors) == self._n_data
+        return 
+    
         
-
     def save(self, target):
         """
         Save all experimental data to disk, in one file.
