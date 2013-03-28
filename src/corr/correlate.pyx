@@ -34,28 +34,22 @@ def correlate(A,B):
 
 def randPairs(numItems,numPairs):
   """
-  generates random pairs of integers
+  Generates random pairs of integers. Does not necessarily generate 
+  exaclty "numPairs" pairs, but an approximation.
+
   Parameters
   ----------
     numItems: int
     numPairs: int
   Returns
   -------
-    list of ints [[i1,j1], [i2,j2], ... [iN,jN]]
+    ndarray of ints [[i1,j1], [i2,j2], ... [iN,jN]]
   """
-  random.seed()
-  i = 0
-  pairs = []
-  while i < numPairs:
-    ind1 = random.randrange(numItems)
-    ind2 = ind1
-    while ind2 == ind1:
-      ind2 = random.randrange(numItems)
-    pair = [ind1,ind2]
-    if pairs.count(pair) == 0:
-      pairs.append(pair)
-      i += 1
-  return pairs
+  np.random.seed()
+  rand_pairs   = np.random.randint( 0,numItems, (numPairs,2) )
+  unique_pairs = list( set( tuple(pair) for pair in rand_pairs ) )
+  inter_pairs  = filter( lambda x:x[0] != x[1], unique_pairs)
+  return inter_pairs
 
 def intra(ringsA,ringsB,num_cors=0):
   """
