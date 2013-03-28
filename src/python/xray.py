@@ -2069,10 +2069,6 @@ class Shotset(object):
         for i in range(self.num_shots):
             shotdata[('shot%d' % i)] = np.array(self.shots[i].intensities)
             shotdata[('shot%d_mask' % i)] = self.shots[i].real_mask
-            if save_interpolation:
-                shotdata[('shot%d_polar_intensities' % i)] = np.array(self.shots[i].polar_intensities)
-                shotdata[('shot%d_polar_mask' % i)]        = self.shots[i].polar_mask
-                shotdata[('shot%d_interp_params' % i)]     = self.shots[i]._pack_interp_params()
 
         io.saveh(filename, 
                  num_shots = np.array([self.num_shots]),
@@ -2107,7 +2103,7 @@ class Shotset(object):
         if filename.endswith('.shot'):
             hdf = io.loadh(filename)
 
-            num_shots   = int(hdf['num_shots'])
+            num_shots = int(hdf['num_shots'])
             
             # figure out which shots to load
             if to_load == None:
@@ -2129,16 +2125,7 @@ class Shotset(object):
                 else:
                     real_mask = None
                 
-                # load saved polar interp if it exists
-                if ('shot%d_polar_intensities' % i) in hdf.keys():
-                    polar_intensities = hdf[('shot%d_polar_intensities' % i)]
-                    polar_mask = hdf[('shot%d_polar_mask' % i)]
-                    interp_params = hdf[('shot%d_interp_params' % i)]
-                    iv = (polar_intensities, polar_mask, interp_params)
-                else:
-                    iv = None
-                
-                s = Shot(intensities, d, mask=real_mask, interpolated_values=iv)
+                s = Shot(intensities, d, mask=real_mask)
                 list_of_shots.append(s)
             
         elif filename.endswith('.cxi'):
