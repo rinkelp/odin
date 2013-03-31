@@ -254,6 +254,8 @@ class TestFilter(object):
 class TestShot(object):
         
     def setup(self):
+        self.q_values = np.array([1.0, 2.0])
+        self.num_phi  = 360
         self.d = xray.Detector.generic(spacing=0.4)
         self.i = np.abs( np.random.randn(self.d.xyz.shape[0]) )
         self.t = trajectory.load(ref_file('ala2.pdb'))
@@ -266,16 +268,9 @@ class TestShot(object):
         if os.path.exists('test.shot'): os.remove('test.shot')
         assert_array_almost_equal(s.intensity_profile(),
                                   self.shot.intensity_profile() )
-        
-    def test_sim(self):
-        if not GPU: raise SkipTest
-        shot = xray.Shot.simulate(self.t, 512, self.d)
-        
-    def test_q_values(self):
-        q_max = np.max(self.shot.detector.recpolar[:,0])
-        spacing = self.shot.q_spacing
-        qv_ref = np.arange(spacing, q_max+spacing, spacing)
-        assert_array_almost_equal(self.shot.q_values, qv_ref)
+    
+    def test_assemble(self):
+        raise NotImplementedError('test not in')
         
     def test_implicit_interpolation_smoke(self):
         s = xray.Shot(self.i, self.d)
@@ -293,20 +288,13 @@ class TestShot(object):
         print "testing interpolation methods consistent"
         assert_allclose(s1.intensities, s2.intensities)
         
-    def test_specific_q_interpolation(self):
-        qv = [0.2, 1.0, 1.1]
-        s = xray.Shot(self.i, self.d, phi_spacing=2.0, q_values=qv)
-        assert s.num_q == len(qv)
-        assert np.all(s.q_values == np.array(qv))
-        
     def test_pgc(self):
         """ test polar_grid_as_cart() property """
-        pg = self.shot.polar_grid
-        pgc = self.shot.polar_grid_as_cart
+        pg = self.shot.polar_grid(self.q_values, self.num_phi)
+        pgc = self.shot.polar_grid_as_cart(self.q_values, self.num_phi)
         mag = np.sqrt(np.sum(np.power(pgc,2), axis=1))
         assert_array_almost_equal( mag, pg[:,0] )
-        #assert_array_almost_equal( utils.arctan3(pgc[:,1], pgc[:,0]), pg[:,1] )
-        maxq = self.shot.q_values.max()
+        maxq = self.q_values.max()
         assert np.all( mag <= (maxq + 1e-6) )
 
     @skip
@@ -317,7 +305,7 @@ class TestShot(object):
         # instability in the trig functions that are used to compute this
         # function. Right now the precision below is turned way down. todo.
         
-        pgr = self.shot.polar_grid_as_real_cart
+        pgr = self.shot.polar_grid_as_real_cart(self.q_values, self.num_phi)
         pgr_z = np.zeros((pgr.shape[0],3))
         pgr_z[:,:2] = pgr.copy()
         pgr_z[:,2] = self.shot.detector.path_length
@@ -328,7 +316,7 @@ class TestShot(object):
         pgq_z = self.shot.detector.k * (S - S0)
         pgq = pgq_z[:,:2]
         
-        ref = self.shot.polar_grid_as_cart
+        ref = self.shot.polar_grid_as_cart(self.q_values, self.num_phi)
         
         maxq = self.shot.q_values.max()
         assert np.all( np.sqrt(np.sum(np.power(ref,2), axis=1)) <= (maxq + 1e-6) )
@@ -344,7 +332,7 @@ class TestShot(object):
     def test_pgr2(self):
         """ test polar_grid_as_real_cart() property against ref implementation"""
         
-        pg  = self.shot.polar_grid
+        pg  = self.shot.polar_grid(self.q_values, self.num_phi)
         ref_pgr = np.zeros_like(pg)
         k = self.shot.detector.k
         l = self.shot.detector.path_length
@@ -355,166 +343,28 @@ class TestShot(object):
         ref_pgr[:,0] = h * np.cos( pg[:,1] )
         ref_pgr[:,1] = h * np.sin( pg[:,1] )
         
-        pgr = self.shot.polar_grid_as_real_cart
+        pgr = self.shot.polar_grid_as_real_cart(self.q_values, self.num_phi)
         
-        assert_array_almost_equal(pgr, ref_pgr)        
+        assert_array_almost_equal(pgr, ref_pgr)
+        
+    def test_overlap(self):
+        raise NotImplementedError('test not in')
+        
+    def test_overlap_implicit(self):
+        raise NotImplementedError('test not in')
+        
+    def test_apply_real_mask_to_polar_grid(self):
+        raise NotImplementedError('test not in')
         
     def test_mask(self):
-        """ test masking by confirming some basic stuff is reasonable """
-        d = xray.Detector.generic(spacing=0.4)
-        n = len(self.i)
-        mask = np.zeros(n, dtype=np.bool)
-        mask[ np.random.random_integers(0, n, 10) ] = np.bool(True)
-        s = xray.Shot(self.i, d, mask=mask)
-        ip = s.intensity_profile()        
-        ref_mean = np.mean(self.i[np.bool(True)-mask])
-        assert_allclose( ref_mean, s.intensities.mean(), rtol=1e-04 )
-        assert_allclose( ref_mean, s.polar_intensities.mean(), rtol=0.25 )
-        
-    def test_mask2(self):
-        """ test masking by ref. implementation """
-        
-        n = len(self.i)
-        mask = np.zeros(n, dtype=np.bool)
-        mask[ np.random.random_integers(0, n, 10) ] = np.bool(True)
-        
-        s = xray.Shot(self.i, self.d, mask=mask)
-        
-        polar_mask = np.zeros(s.num_datapoints, dtype=np.bool)
-        xyz = s.detector.reciprocal
-        pgc = s.polar_grid_as_cart
-        
-        # the max distance, r^2 - a factor of 10 helps get the spacing right
-        r2 =  np.sum( np.power( xyz[0] - xyz[1], 2 ) ) * 10.0
-        masked_cart_points = xyz[mask,:2]
-        
-        ref_polar_mask = np.zeros(s.num_datapoints, dtype=np.bool)        
-        for mp in masked_cart_points:
-            d2 = np.sum( np.power( mp - pgc[:,:2], 2 ), axis=1 )
-            ref_polar_mask[ d2 < r2 ] = np.bool(True)
-        
-        assert_array_equal(ref_polar_mask, s.polar_mask)
-        
-    def test_nearests(self):
-        
-        print "q", self.shot.q_values
-        print "phi", self.shot.phi_values
-        
-        nq = self.shot._nearest_q(0.019)
-        assert_almost_equal(nq, 0.02)
-        
-        np = self.shot._nearest_phi(0.034)
-        assert_almost_equal(np, 0.03490658503988659)
-        
-        nd = self.shot._nearest_delta(0.034)
-        assert_almost_equal(nd, 0.03490658503988659)
-        
-    def test_q_index(self):
-        qs = self.shot.polar_grid[:,0]
-        q = self.shot._nearest_q(0.09)
-        ref = np.where(qs == q)[0]
-        qinds = self.shot._q_index(q)
-        
-        # due to numerics, where sometimes fails
-        for x in ref:
-            assert x in qinds
-            
-        a1 = self.shot.polar_grid[qinds,0]
-        a2 = np.ones(len(a1)) * q
-        assert_array_almost_equal(a1, a2)
-        
-    def test_phi_index(self):
-        phis = self.shot.polar_grid[:,1]
-        phi = self.shot._nearest_phi(6.0)
-        ref = np.where(phis == phi)[0]
-        
-        phiinds = self.shot._phi_index(phi)
-        
-        a1 = self.shot.polar_grid[phiinds,1]
-        a2 = np.ones(len(a1)) * phi
-        assert_array_almost_equal(a1, a2)
-        
-        for x in ref:
-            assert x in phiinds
-        
-    def test_I_index(self):
-        q_guess   = 0.09
-        phi_guess = 0.035
-        
-        q_ref = self.shot._nearest_q(q_guess)
-        phi_ref = self.shot._nearest_phi(phi_guess)
-        
-        index = self.shot._intensity_index(q_guess, phi_guess)
-        q   = self.shot.polar_grid[index,0]
-        phi = self.shot.polar_grid[index,1]
-        
-        assert_almost_equal(q, q_ref)
-        assert_almost_equal(phi, phi_ref)
+        raise NotImplementedError('test not in')
         
     def test_i_profile(self):
+        raise NotImplementedError('test not in')
         
-        i = self.shot.polar_intensities
-        pg = self.shot.polar_grid
-        qs = self.shot.q_values
-        p = np.zeros(len(qs))
-        
-        for x,q in enumerate(qs):
-            assert int(np.sum( (pg[:,0] == q) )) == self.shot.num_phi
-            p[x] = (i[pg[:,0]==q]).mean()
-            
-        profile = self.shot.intensity_profile()
-        ind_code = profile[:,0]
-        p_code = profile[:,1]
-        
-        qs = np.array(qs)
-        assert_array_almost_equal(qs, ind_code)                
-        assert_allclose(p, p_code, rtol=1)
-    
-    def test_correlation(self):
-        
-        # arb. parameters for testing
-        q1 = 2.0
-        q2 = 2.0
-        
-        x = self.shot.I_ring(q1)
-        y = self.shot.I_ring(q2)
-        assert len(x) == len(y)
-        
-        x -= x.mean()
-        y -= y.mean()
-        
-        ref = np.zeros(len(x))
-        for i in range(len(x)):
-            ref[i] = np.correlate(x, np.roll(y, i))
-        ref /= ref[0]
-                
-        for i in range(10):
-            delta = self.shot.phi_values[i]
-            ans = self.shot.correlate(q1, q2, delta)
-            assert_almost_equal(ans, ref[i], decimal=1)
-        
-    def test_corr_ring(self):
-                
-        # arb. parameters for testing
-        q1 = 2.0
-        q2 = 2.0
-        
-        ring = self.shot.correlate_ring(q1, q2)
-        
-        # reference computation
-        x = self.shot.I_ring(q1)
-        y = self.shot.I_ring(q2)
-        assert len(x) == len(y)
-        
-        x -= x.mean()
-        y -= y.mean()
-        
-        ref = np.zeros(len(x))
-        for i in range(len(x)):
-            ref[i] = np.correlate(x, np.roll(y, i))
-        ref /= ref[0]
-                    
-        assert_allclose(ref, ring[:,1])
+    def test_sim(self):
+        if not GPU: raise SkipTest
+        shot = xray.Shot.simulate(self.t, 512, self.d)
      
     def test_simulate_cpu_only(self):
         d = xray.Detector.generic(spacing=0.6)
@@ -530,30 +380,14 @@ class TestShot(object):
         d = xray.Detector.generic(spacing=0.6)
         x = xray.Shot.simulate(self.t, 513, d)
         
-    def test_polar_shot(self):
-        dp = xray.Detector.generic_polar(q_lim=0.6)
-        xp = xray.Shot.simulate(self.t, 10, dp)
-        
-        dc = xray.Detector.generic(spacing=0.6)
-        xc = xray.Shot.simulate(self.t, 10, dc)
-        
-        # make sure it matches up decently with non-polar
-        ref = xc.I_ring(0.4)
-        pol = xp.I_ring(0.4)
-        ref = ref * (pol[0]/ref[0]) # scale them to be the same-ish
-        
-        # not a great test, but visually things work out... there is a phase
-        # ambiguity here that's hard to account for (I mean I could FFT...)
-        rel_diff = np.abs(ref - pol) / ref
-        assert np.all(rel_diff < 1.0) 
-        
-        
-    def test_polar_shot_2(self):
-        d = xray.Detector.generic_polar(q_values=[1.0, 2.0])
-        x = xray.Shot.simulate(self.t, 1, d)
+    def test_to_rings(self):
+        raise NotImplementedError('test not in')
         
         
 class TestShotset():
+    
+    # note : Save, load, and to_rings methods are currently just being tested
+    #        via the tests in TestShot above. Should add these here later.
     
     def setup(self):
         self.shot = xray.Shot.load(ref_file('refshot.shot'))
@@ -573,90 +407,115 @@ class TestShotset():
         d = xray.Detector.generic(spacing=0.4)
         x = xray.Shotset.simulate(self.t, 512, d, 2)
    
-    @skip 
     def test_detector_checking(self):
-        # todo : figure out detector checking
-        s1 = xray.Shot.load(ref_file('refshot.shot')) 
-        s2 = xray.Shot.load(ref_file('refshot.shot'))
-        s2.interpolate_to_polar(phi_spacing=8.0)
-        
-        try:
-            st = xray.Shotset([s1, s2])
-            raise RuntimeError('detector checking should have thrown err')
-        except ValueError as e:
-            print e
-            return # this means success
-        
-    def test_intensities(self):
-        q = 0.1
-        i1 = self.shot.qintensity(q)
-        i2 = self.shotset.qintensity(q)
-        assert_almost_equal(i1, i2)
+        raise NotImplementedError('test not in')
         
     def test_profiles(self):
         i1 = self.shot.intensity_profile()
         i2 = self.shotset.intensity_profile()
         assert_array_almost_equal(i1, i2)
-        
-    def test_correlations(self):
-        q1 = 0.1
-        q2 = 0.1
-        delta = (45.0 / 360.0) * 2.0*np.pi
-        i1 = np.array(self.shot.correlate(q1, q2, delta))
-        i2 = np.array(self.shotset.correlate(q1, q2, delta))
-        assert_almost_equal(i1, i2)
-        
-    def test_rings(self):
-        q1 = 0.1
-        q2 = 0.1
-        i1 = np.array(self.shot.correlate_ring(q1, q2))
-        i2 = np.array(self.shotset.correlate_ring(q1, q2))
-        assert_array_almost_equal(i1, i2)
     
         
-class TestCorrelationCollection(object):
+class TestRings(object):
     
     def setup(self):
-        self.shot = xray.Shot.load(ref_file('refshot.shot'))
-        self.cc = xray.CorrelationCollection(self.shot)
+        self.q_values = np.array([1.0, 2.0])
+        self.num_phi  = 360
+        self.traj     = trajectory.load(ref_file('ala2.pdb'))
+        self.rings    = xray.Rings.simulate(self.traj, 1, self.q_values, 
+                                            self.num_phi, 2) # 1 molec, 2 shots
+                              
+    def test_sanity(self):
+        assert self.rings.polar_intensities.shape == (2, len(self.q_values), self.num_phi)
+                                            
+    def test_simulation(self):
         
-    def test_ring(self):
-        q1 = self.cc.q_values[0]
-        q2 = self.cc.q_values[0]
-        ring1 = self.cc.ring(q1, q2)
-        ring2 = self.shot.correlate_ring(q1, q2)[:,1]
-        assert_allclose(ring1, ring2)
+        raise NotImplementedError('test not in')
+                                      
+                                      
+    def test_q_index(self):
+        assert self.rings.q_index(1.0) == 0
+        assert self.rings.q_index(2.0) == 1
+        
+    def test_intensity_profile(self):
+        raise NotImplementedError('test not in')
+        
+    def test_correlation(self):
+        
+        q = 1.0 # chosen arb.
+        q_ind = self.rings.q_index(q)
+        
+        x = self.rings.polar_intensities[0,q_ind,:].flatten()
+        y = self.rings.polar_intensities[0,q_ind,:].flatten()
+        assert len(x) == len(y)
+        
+        x -= x.mean()
+        y -= y.mean()
+        
+        ref = np.zeros(len(x))
+        for i in range(len(x)):
+            ref[i] = np.correlate(x, np.roll(y, i))
+        ref /= ref[0]
+        
+        for i in range(10):
+            delta = i
+            ans = self.rings.correlate(q, q, delta)
+            assert_almost_equal(ans, ref[i], decimal=1)
+            
+    def test_correlation_w_mask(self):
+        raise NotImplementedError('test not in')
+
+    def test_corr_ring(self):
+
+        q1 = 1.0 # chosen arb.
+        q_ind = self.rings.q_index(q1)
+
+        ring = self.rings.correlate_ring(q1, q1)
+
+        # reference computation
+        x = self.rings.polar_intensities[0,q_ind,:].flatten()
+        y = self.rings.polar_intensities[0,q_ind,:].flatten()
+        assert len(x) == len(y)
+
+        x -= x.mean()
+        y -= y.mean()
+
+        ref = np.zeros(len(x))
+        for i in range(len(x)):
+            ref[i] = np.correlate(x, np.roll(y, i))
+        ref /= ref[0]
+
+        assert_allclose(ref, ring)
+        
+    def test_corr_ring_w_mask(self):
+        raise NotImplementedError('test not in')
         
     def test_coefficients_smoke(self):
-        cl = self.cc.legendre_coeffecients(order=6)
+        order = 6
+        cl = self.rings.legendre(order)
+        assert cl.shape == (order, self.rings.num_q, self.rings.num_q)
         
     def test_coefficients(self):
-        order = 2000
-        cc = self.cc
-
-        # inject a simple test case into the cc
-        cc.q_values = np.array([1.0])
-        cc.num_q = 1
+        
+        order = 10000
+        q1 = 0
+        q2 = 0
+        cl = self.rings.legendre(order)[:,q1,q1] # keep only q1, q1 correlation
+        assert len(cl) == order
 
         # compute the values of psi to use
-        t1 = np.arctan( 1.0 / (2.0*cc.k) )
-        t2 = np.arctan( 1.0 / (2.0*cc.k) )
+        t1 = np.arctan( self.rings.q_values[q1] / (2.0*self.rings.k) )
+        t2 = np.arctan( self.rings.q_values[q2] / (2.0*self.rings.k) )
         psi = np.arccos( np.cos(t1)*np.cos(t2) + np.sin(t1)*np.sin(t2) \
-                         * np.cos( cc.phi_values * 2. * np.pi/float(cc.num_phi) ) )
+                         * np.cos( self.rings.phi_values * 2. * \
+                         np.pi/float(self.rings.num_phi) ) )
 
-        # inject a cosine function as the correlation
-        correlation = np.cos( psi * 1000 )
-        cc._correlation_data = { (1.0, 1.0) : correlation }
-
-        # compute the coefficients and re-construct the cos function
-        cl = cc.legendre_coeffecients(order=order)
-        cl = cl[:,0,0]
-        
-        # this code was used when only the even coefficients were computed
-        # c = np.zeros( 2 * cl.shape[0] )
-        # c[::2] = cl
-        
+        # reconstruct the correlation function
         pred = np.polynomial.legendre.legval(np.cos(psi), cl)
+        
+        # make sure it matches up with the raw correlation
+        ring = self.rings._correlate_ring_by_index(q1, q2)
 
-        assert_allclose(pred, correlation, rtol=1e-01)
+        # this is a high tol, but it's workin --TJL
+        assert_allclose(pred, ring, rtol=0.25)
         

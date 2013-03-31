@@ -47,7 +47,7 @@ def simulate_shot(traj, num_molecules, detector, traj_weights=None,
         
     detector : odin.xray.Detector OR ndarray, float
         A detector object the shot will be projected onto. Can alternatively be
-        just an n x 3 array of vectors to project onto.
+        just an n x 3 array of q-vectors to project onto.
         
     num_molecules : int
         The number of molecules estimated to be in the `beam`'s focus.
