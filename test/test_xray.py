@@ -519,3 +519,8 @@ class TestRings(object):
         # this is a high tol, but it's workin --TJL
         assert_allclose(pred, ring, rtol=0.25)
         
+    def test_io(self):
+        self.rings.save('test.ring')
+        r = xray.Rings.load('test.ring')
+        assert np.all( self.rings.polar_intensities == r.polar_intensities)
+        

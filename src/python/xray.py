@@ -2065,7 +2065,7 @@ class Shotset(object):
 
         hdf.close()
 
-        return Shotset(list_of_shots)
+        return cls(list_of_shots)
         
         
 class Rings(object):
@@ -2515,14 +2515,63 @@ class Rings(object):
         
         
     def save(self, filename):
-        raise NotImplementedError()
+        """
+        Saves the Rings object to disk.
+        
+        Parameters
+        ----------
+        filename : str
+            The name of the file to write to disk. Must end in '.ring' -- if you
+            don't put this, it will be automatically added.
+        """
+        
+        if not filename.endswith('.ring'):
+            filename += '.ring'
+
+        # if self.polar_mask == None, then save a single 0
+        if self.polar_mask == None:
+            pm = np.array([0])
+        else:
+            pm = self.polar_mask
+
+        io.saveh( filename,
+                  q_values = self._q_values,
+                  polar_intensities = self.polar_intensities,
+                  k = np.array([self.k]),
+                  polar_mask = pm )
+
+        logger.info('Wrote %s to disk.' % filename)
+        
         return
     
         
     @classmethod
     def load(cls, filename):
-        raise NotImplementedError()
-        return
+        """
+        Load a Rings object from disk.
+        
+        Parameters
+        ----------
+        filename : str
+            The name of the file to write to disk. Must end in '.ring'.
+        """
+        
+        if filename.endswith('.ring'):
+            hdf = io.loadh(filename)
+        else:
+            raise ValueError('Must load a rings file (.ring)')
+
+        # deal with our codified polar mask
+        if np.all(hdf['polar_mask'] == np.array([0])):
+            pm = None
+        else:
+            pm = hdf['polar_mask']
+            
+        rings_obj = cls(hdf['q_values'], hdf['polar_intensities'], 
+                        float(hdf['k'][0]), polar_mask=pm)
+        hdf.close()
+
+        return rings_obj
     
     
         
