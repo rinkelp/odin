@@ -348,20 +348,59 @@ class TestShot(object):
         assert_array_almost_equal(pgr, ref_pgr)
         
     def test_overlap(self):
-        raise NotImplementedError('test not in')
+        
+        # test is two squares, offset
+        xy1 = np.mgrid[0:2:3j,0:2:3j].reshape(9,2)
+        xy2 = np.mgrid[0:2:2j,0:2:2j].reshape(4,2) - 0.5
+        overlap = self.shot._overlap(xy1, xy2)
+        
+        ref = np.array([0, 1, 2, 6]) # by hand
+        
+        assert_array_almost_equal(ref, overlap)
         
     def test_overlap_implicit(self):
-        raise NotImplementedError('test not in')
+        pass # todo : waiting for new basis grid method (fxn call change)
         
-    def test_apply_real_mask_to_polar_grid(self):
-        raise NotImplementedError('test not in')
+    def test_real_mask_to_polar(self):
         
-    def test_mask(self):
-        raise NotImplementedError('test not in')
+        # mask the top-left real corner, make sure pixels in [0,pi/2] are masked
+        # while others aren't
+        
+        q_values = np.array([1.0, 2.0])
+        num_phi = 360
+        
+        mask = np.ones(self.i.shape, dtype=np.bool)
+        mask[ (self.d.xyz[:,0] > 0.0) * (self.d.xyz[:,1] > 0.0) ] = np.bool(False)
+        
+        s = xray.Shot(self.i, self.d, mask=mask)
+        polar_mask = s._real_mask_to_polar(q_values, num_phi)
+        polar_grid = s.polar_grid(q_values, num_phi)
+        
+        print "polar num *not* masked, total:", np.sum(polar_mask), polar_mask.shape[0]
+        
+        # make sure quadrant I is masked
+        QI = (polar_grid[:,1] > 0.0) * (polar_grid[:,1] < (np.pi/2.0))
+        assert np.all( polar_mask[QI] == np.bool(False) )
+        
+        # make sure quadrant III is not masked
+        QIII = (polar_grid[:,1] > 3.17) * (polar_grid[:,1] < 4.6)
+        assert np.sum( np.logical_not(polar_mask[QIII]) ) == 0.0
+        
+    def test_mask_argument(self):
+        # simple smoke test to make sure we can interpolate with a mask
+        q_value = np.array([1.0, 2.0])
+        num_phi = 360
+        mask = np.random.binomial(1, 0.1, size=self.i.shape)
+        s = xray.Shot(self.i, self.d, mask=mask)
+        s._interpolate_to_polar()
         
     def test_i_profile(self):
-        raise NotImplementedError('test not in')
-        
+        t = structure.load_coor(ref_file('gold1k.coor'))
+        s = xray.Shot.simulate(t, 1, self.d)
+        p = s.intensity_profile()
+        m = s.intensity_maxima()
+        assert np.abs(p[m[0],0] - 2.6763881) < 1e-3
+                
     def test_sim(self):
         if not GPU: raise SkipTest
         shot = xray.Shot.simulate(self.t, 512, self.d)
