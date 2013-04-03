@@ -2690,6 +2690,9 @@ class Rings(object):
             the Boltzmann ensemble of the sample. If len(traj) == 1, then we 
             assume the sample consists of a single homogenous structure,
             replecated `num_molecules` times.
+            
+        num_molecules : int
+            The number of molecules estimated to be in the `beam`'s focus.
 
         q_values : ndarray/list, float
             The values of |q| to extract rings at (in Ang^{-1}).
@@ -2697,9 +2700,6 @@ class Rings(object):
         num_phi : int
             The number of equally spaced points around the azimuth to 
             interpolate onto (e.g. `num_phi`=360 means 1 deg spacing).
-                
-        num_molecules : int
-            The number of molecules estimated to be in the `beam`'s focus.
 
         num_shots : int
             The number of shots to perform and include in the Shotset.
