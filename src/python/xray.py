@@ -396,7 +396,8 @@ class Detector(Beam):
         if xyz_type == 'explicit':
             
             if type(xyz) != np.ndarray:
-                raise TypeError('Explicit xyz pixels required, `xyz` must be np.ndarray')
+                raise TypeError('Explicit xyz pixels required, `xyz` must be '
+                                'np.ndarray')
             
             self._pixels = xyz
             self._grid_list = None
@@ -499,7 +500,7 @@ class Detector(Beam):
         else:
             raise ValueError('grid_list must be a list of 3-tuples')
             
-        d = Detector(grid_list, path_length, k, xyz_type='implicit')
+        d = cls(grid_list, path_length, k, xyz_type='implicit')
         
         return d
     
@@ -1714,7 +1715,9 @@ class Shot(object):
         
         Optional Parameters
         -------------------
-        n_bins
+        n_bins : int
+            The number of bins to use in the histogram that generates the
+            intensity profile.
         
         Returns
         -------
@@ -1834,7 +1837,7 @@ class Shot(object):
     # So as to not duplicate code/logic, I am going to employ a wrapped version
     # of the Shotset save/load/to_rings methods here...
     
-    def to_rings(self, q_values=None, num_phi=360):
+    def to_rings(self, q_values, num_phi=360):
         """
         Convert the shot to an xray.Rings object, for computing correlation
         functions and other properties in polar space.
@@ -1846,9 +1849,7 @@ class Shot(object):
         Parameters
         ----------
         q_values : ndarray/list, float
-            The values of |q| to extract rings at (in Ang^{-1}). If `None`, then
-            will simply fill up a range of values at |q|=0.02 spacing. Recommend
-            you choose something here!
+            The values of |q| to extract rings at (in Ang^{-1}).
             
         num_phi : int
             The number of equally spaced points around the azimuth to 
@@ -1930,8 +1931,8 @@ class Shotset(object):
         self.shots = list_of_shots
         self.num_shots = len(list_of_shots)
     
-        self._check_detectors_same()
-        self._check_masks_same()
+        self._check_detectors_same() # injects self.detector
+        self._check_masks_same()     # injects self.mask
         
         
     def __len__(self):
@@ -1957,24 +1958,53 @@ class Shotset(object):
         
     def _check_detectors_same(self):
         """
-        For a lot of the below to work, we need to make sure that all of the 
-        q-phi grids in the shots are the same. If some are different, here
-        we recalculate them.
+        Make sure that each shot has the same detector.
         """
+        
+        # Check to make sure that the addresses of each shot's detector attr
+        # are the same. If not check to see if the pixel maps are the same. If
+        # not, complain.
 
-        # todo
+        for i in range(1, self.num_shots):
+            if not self.shots[i].detector is self.shots[0].detector:
+                if np.all(self.shots[i].detector.xyz == self.shots[0].detector.xyz):
+                    self.shots[i].detector = self.shots[0].detector
+                else:
+                    raise AttributeError('All a Shotset\'s member Shots must '
+                                         'have the same detector object.')
+            
+        self.detector = self.shots[0].detector
+        
         return
+    
 
     def _check_masks_same(self):
-        # todo
+        """
+        Make sure each shot has the same real mask.
+        """
         
-        # this could simply trip a flag in 
+        for i in range(1, self.num_shots):
+            if not self.shots[i].mask is self.shots[0].mask:
+                if np.all(self.shots[i].mask == self.shots[0].mask):
+                    self.shots[i].mask = self.shots[0].mask
+                else:
+                    raise AttributeError('All a Shotset\'s member Shots must '
+                                         'have the same mask object.')
+            
+        self.mask = self.shots[0].mask
+        
         return
     
         
-    def intensity_profile(self):
+    def intensity_profile(self, n_bins=None):
         """
         Averages over the azimuth phi to obtain an intensity profile.
+        
+        Optional Parameters
+        -------------------
+        n_bins : int
+            The number of bins to use in the histogram that generates the
+            intensity profile.
 
         Returns
         -------
@@ -1983,13 +2013,32 @@ class Shotset(object):
             the second is the average intensity at that point < I(|q|) >_phi.
         """
         
-        # todo : rewrite
-        raise NotImplementedError()
+        # compute the radii
+        r = np.sqrt( np.sum( np.power(self.detector.xyz[:,:2] - \
+                                      self.detector.center, 2), axis=1) )
+
+        assert r.shape == self.shots[0].intensities.shape
+
+        # histogram the intensities
+        if n_bins == None:
+            n_bins = freedman_diaconis(r)
+            
+        sumed_I = np.sum( np.array([ self.shots[i].intensities for i in \
+                                              range(self.num_shots) ]), axis=0 )
+        bin_values, bin_edges = np.histogram( r, weights=sumed_I, bins=n_bins )
+
+        bin_values = bin_values[1:]
+        bin_centers = bin_edges[1:-1] + np.abs(bin_edges[2] - bin_edges[1])
+
+        q_bin_centers = 2.0 * self.detector.k * np.sin( 0.5 * \
+                            np.arctan(bin_centers / self.detector.path_length) )
+
+        intensity_profile = np.vstack( (q_bin_centers, bin_values) ).T
         
         return intensity_profile
     
         
-    def to_rings(self, q_values=None, num_phi=360):
+    def to_rings(self, q_values, num_phi=360):
         """
         Convert the shot to an xray.Rings object, for computing correlation
         functions and other properties in polar space.
@@ -2001,9 +2050,7 @@ class Shotset(object):
         Parameters
         ----------
         q_values : ndarray/list, float
-            The values of |q| to extract rings at (in Ang^{-1}). If `None`, then
-            will simply fill up a range of values at |q|=0.02 spacing. Recommend
-            you choose something here!
+            The values of |q| to extract rings at (in Ang^{-1}).
 
         num_phi : int
             The number of equally spaced points around the azimuth to 
@@ -2018,8 +2065,8 @@ class Shotset(object):
         polar_intensities = np.zeros((self.num_shots, num_q, num_phi))
         polar_mask = np.zeros((self.num_shots, num_q, num_phi), dtype=np.bool)
         
-        real_mask_as_polar = self.shots[0]._real_mask_to_polar() # must be same
-                                                                 # for all shots
+        # the following must be same for all shots
+        real_mask_as_polar = self.shots[0]._real_mask_to_polar(q_values, num_phi)
         
         # loop over all shots and interpolate them to polar
         for i in range(self.num_shots):
@@ -2033,7 +2080,7 @@ class Shotset(object):
             polar_intensities[i,:,:] = pi.reshape(num_q, num_phi)
             polar_mask[i,:,:]        = pm.reshape(num_q, num_phi)
         
-        r = Rings(q_values, polar_intensities, beam.k, polar_mask)
+        r = Rings(q_values, polar_intensities, self.detector.k, polar_mask)
         
         return r
     
@@ -2175,11 +2222,14 @@ class Rings(object):
             if not polar_intensities.shape == polar_mask.shape:
                 raise ValueError('`polar_mask` must have same shape as '
                                  '`polar_intensities')
-            self.polar_mask = None
+            if not polar_mask.dtype == np.bool:
+                self.polar_mask = polar_mask.astype(np.bool)
+            else:
+                self.polar_mask = polar_mask
         else:
             raise TypeError('`polar_mask` must be np.ndarray or None')
             
-        self._q_values = q_values
+        self._q_values = np.array(q_values)
         self.polar_intensities = polar_intensities
         self.k = k
         
@@ -2246,12 +2296,16 @@ class Rings(object):
             the second is the average intensity at that point < I(|q|) >_phi.
         """
         
-        intensity_profile = zeros( (len(ip), 2), dtype=np.float )
+        intensity_profile = np.zeros( (self.num_q, 2), dtype=np.float )
         intensity_profile[:,0] = self._q_values.copy()
         
         # average over shots, phi
-        intensity_profile[:,1] = np.mean( np.mean(self.polar_intensities * \
-                             self.polar_mask.asdtype(np.float), axis=2), axis=0)
+        if self.polar_mask != None:
+            i = self.polar_intensities * self.polar_mask.astype(np.float)
+        else:
+            i = self.polar_intensities
+        
+        intensity_profile[:,1] = np.mean( np.mean(i, axis=2), axis=0)
         
         return intensity_profile
     
@@ -2276,6 +2330,12 @@ class Rings(object):
         correlation : float
             The correlation between q1/q2 at angle delta. Specifically, this
             is the correlation function with the mean subtracted <x*y> - <x><y>
+            
+        See Also
+        --------
+        correlate_ring : method
+            A faster way to compute many of these quantities for the same q's
+            but all deltas.
         """
         q_ind1 = self.q_index(q1)
         q_ind2 = self.q_index(q2)
@@ -2309,27 +2369,48 @@ class Rings(object):
         q_ind1 = int(q_ind1)
         q_ind2 = int(q_ind2)
         
+        # this is a bit messy, but below if we are using a mask:
+        # compute means/stds w/o the masked points, and proceed as usual but
+        # with a modified normalizing const (n_delta = the number of non-masked 
+        # pairs) and the masked pixel values set to zero. B/c of those zeros,
+        # the masked pixels do not contribute to the final sum (flagged: *)
+        
         x = self.polar_intensities[:,q_ind1,:]
         y = self.polar_intensities[:,q_ind2,:]
+        
+        if self.polar_mask != None:
+            
+            n_delta = np.sum(self.polar_mask[:,q_ind1,:] * \
+                             np.roll(self.polar_mask[:,q_ind2,:], delta_ind, axis=1) )
+                             
+            x -= np.sum( x[self.polar_mask[:,q_ind1,:]] ) / np.sum(self.polar_mask[:,q_ind1,:])
+            y -= np.sum( y[self.polar_mask[:,q_ind2,:]] ) / np.sum(self.polar_mask[:,q_ind2,:])
+            
+            x *= self.polar_mask[:,q_ind1,:]
+            y *= self.polar_mask[:,q_ind2,:]
+            
+            x_std = np.std( x[self.polar_mask[:,q_ind1,:]] )
+            y_std = np.std( y[self.polar_mask[:,q_ind2,:]] )
+            
+        else:            
+            x -= x.mean()
+            y -= y.mean()
+            
+            x_std = x.std()
+            y_std = y.std()
+            
+            n_delta = np.product(x.shape)
+            assert n_delta == np.product(y.shape)
+
         y = np.roll(y, delta_ind, axis=1)
-
-        # going to use np.ma below
-        if self.polar_mask:
-            x = np.ma.masked_array( x, mask=(np.bool(True) - self.polar_mask[:,q_ind1,:]) )
-            y = np.ma.masked_array( y, mask=(np.bool(True) - self.polar_mask[:,q_ind2,:]) )
-
-        # this should work w/masking
-        x -= x.mean()
-        y -= y.mean()
-
-        corr = float( np.mean(x * y) / (x.std() * y.std()) )
-
+        corr = np.sum(x * y) / (n_delta * x_std * y_std) # (*)
+        
         return corr
     
 
     def correlate_ring(self, q1, q2):
         """
-        Compute the correlation function C(q1, q2, delta) for the shot, averaged
+        Compute the correlation function C(q1, q2, delta) for the data, averaged
         for each measured value of the azimuthal angle phi, for many values
         of delta.
         
@@ -2357,9 +2438,9 @@ class Rings(object):
         
     def _correlate_ring_by_index(self, q_ind1, q_ind2):
         """
-        Compute the correlation function C(q1, q2, delta) for the shot, averaged
-        for each measured value of the azimuthal angle phi, for many values
-        of delta.
+        Compute the correlation function C(q1, q2, delta) for the dataset, 
+        averaged for each measured value of the azimuthal angle phi, for many 
+        values of delta.
         
         Parameters
         ----------
@@ -2381,23 +2462,26 @@ class Rings(object):
         x = self.polar_intensities[:,q_ind1,:]
         y = self.polar_intensities[:,q_ind2,:]
 
-        # As DTM has pointed out, here we need to be a little careful with
-        # how we deal with masked pixels. If we subtract the means from the
-        # pixels first, then perform the correlation, we can safely ignore
-        # masked pixels so long as we make sure their value is zero
-                
-        if self.polar_mask:
-            x = np.ma.masked_array( x, mask=(np.bool(True) - self.polar_mask[:,q_ind1,:]) )
-            y = np.ma.masked_array( y, mask=(np.bool(True) - self.polar_mask[:,q_ind2,:]) )
-
-        x -= x.mean()
-        y -= y.mean()
-
-        # plug in a zero at all mask positions
-        if np.ma.isMaskedArray(x):
-            x[x.mask] = 0.0
-        if np.ma.isMaskedArray(y):
-            y[y.mask] = 0.0
+        if self.polar_mask != None:
+            
+            n_deltas = np.zeros(self.num_phi)
+            
+            for i in range(self.num_phi):            
+                n_deltas[i] = np.sum(self.polar_mask[:,q_ind1,:] * \
+                                     np.roll(self.polar_mask[:,q_ind2,:], i, axis=1) )
+            
+            x -= np.sum( x[self.polar_mask[:,q_ind1,:]] ) / np.sum(self.polar_mask[:,q_ind1,:])
+            y -= np.sum( y[self.polar_mask[:,q_ind2,:]] ) / np.sum(self.polar_mask[:,q_ind2,:])
+            
+            x *= self.polar_mask[:,q_ind1,:]
+            y *= self.polar_mask[:,q_ind2,:]
+            
+        else:            
+            x -= x.mean()
+            y -= y.mean()
+            
+            n_delta = np.product(x.shape)
+            assert n_delta == np.product(y.shape)
 
         # use d-FFT + convolution thm
         ffx = fftpack.fft(x, axis=1)
@@ -2405,12 +2489,116 @@ class Rings(object):
         iff = np.real(fftpack.ifft( ffx * np.conjugate(ffy), axis=1 ))
         
         correlation_ring = iff.sum(axis=0)      # average all shots
-        correlation_ring /= correlation_ring[0] # normalize
+        
+        if self.polar_mask != None:
+            correlation_ring /= n_deltas
+        
+        correlation_ring /= correlation_ring[0] # normalize (ez-ier than stds)
 
         return correlation_ring
     
+    
+    def correlate_inter(self, q1, q2):
+        """
+        Compute the correlation function C(q1, q2, delta) for all pairs
+        of inter-shots (that is, the correlation function between uncorrelated
+        shots). This is useful for subtracting background signal.
+
+        Parameters
+        ----------
+        q1 : float
+            The magnitude of the first position to correlate.
+        q2 : float
+            The magnitude of the second position to correlate.
+
+        Returns
+        -------
+        x_correlation_ring : ndarray, float
+            A 2d array, where the first dimension is the value of the angle
+            delta employed, and the second is the correlation at that point.
+        """
+
+        logger.debug("Correlating *intra-shot* rings at %f / %f" % (q1, q2))
+
+        q_ind1 = self.q_index(q1)
+        q_ind2 = self.q_index(q2)
+
+        return self._correlate_inter_by_index(q_ind1, q_ind2)
+    
         
-    def legendre(self, order, report_error=False):
+    def _correlate_inter_by_index(self, q_ind1, q_ind2):
+        """
+        Compute the correlation function C(q1, q2, delta) for all pairs
+        of inter-shots (that is, the correlation function between uncorrelated
+        shots). This is useful for subtracting background signal.
+        
+        Parameters
+        ----------
+        q_ind1 : int
+            The index of the magnitude of the first position to correlate.
+        q_ind2 : int
+            The index of the magnitude of the second position to correlate.
+            
+        Returns
+        -------
+        x_correlation_ring : ndarray, float
+            A 2d array, where the first dimension is the value of the angle
+            delta employed, and the second is the correlation at that point.
+        """
+        
+        q_ind1 = int(q_ind1)
+        q_ind2 = int(q_ind2)
+
+        correlation_ring = np.zeros(self.num_phi) # results go here
+
+        # loop over all combinations of inter-shots
+        for i in range(self.num_shots):
+            for j in range(i+1, self.num_shots):
+
+                x = self.polar_intensities[i,q_ind1,:]
+                y = self.polar_intensities[j,q_ind2,:]
+
+                if self.polar_mask != None:
+            
+                    n_deltas = np.zeros(self.num_phi)
+            
+                    for i in range(self.num_phi):            
+                        n_deltas[i] = np.sum(self.polar_mask[i,q_ind1,:] * \
+                                             np.roll(self.polar_mask[j,q_ind2,:], 
+                                             i, axis=1) )
+            
+                    x -= np.sum( x[self.polar_mask[i,q_ind1,:]] ) / \
+                            np.sum(self.polar_mask[i,q_ind1,:])
+                    y -= np.sum( y[self.polar_mask[j,q_ind2,:]] ) / \
+                            np.sum(self.polar_mask[j,q_ind2,:])
+            
+                    x *= self.polar_mask[i,q_ind1,:]
+                    y *= self.polar_mask[j,q_ind2,:]
+            
+                else:            
+                    x -= x.mean()
+                    y -= y.mean()
+            
+                    n_delta = np.product(x.shape)
+                    assert n_delta == np.product(y.shape)
+
+                # use d-FFT + convolution thm
+                ffx = fftpack.fft(x)
+                ffy = fftpack.fft(y)
+                iff = np.real(fftpack.ifft( ffx * np.conjugate(ffy) ))
+                
+                # if we used a mask, re-normalized accordingly
+                if self.polar_mask != None:
+                    correlation_ring += iff / n_deltas
+                else:
+                    correlation_ring += iff
+        
+        correlation_ring /= correlation_ring[0] # normalize (ez-ier than stds)
+        
+        return correlation_ring
+    
+        
+    def legendre(self, order, use_inter_statistics=False):
         """
         Project the correlation functions onto a set of legendre polynomials,
         and return the coefficients of that projection.
@@ -2420,6 +2608,13 @@ class Rings(object):
         order : int
             The order at which to truncate the polynomial expansion. Note that
             this function projects only onto even numbered Legendre polynomials.
+            
+        Optional Parameters
+        -------------------
+        use_inter_statistics : bool
+            Whether or not to subtract inter-shot statistics from the
+            correlation function before projecting it. This can help remove
+            detector artifacts at the cost of a small computational overhead.
             
         Returns
         -------
@@ -2453,11 +2648,15 @@ class Rings(object):
                                  np.cos( self.phi_values * 2. * \
                                  np.pi/float(self.num_phi) ) )
 
-            	# tests indicate this method is a good way of doing the 
-            	# numerical projection
-                c, fit_data = np.polynomial.legendre.legfit(np.cos(psi), 
-                                        self._correlate_ring_by_index(i,j), 
-                                        order-1, full=True)
+    	        if use_inter_statistics:
+    	            corr = self._correlate_ring_by_index(i,j) - \
+    	                   self._correlate_inter_by_index(i,j)
+    	        else:
+    	            corr = self._correlate_ring_by_index(i,j)
+            	
+        		# tests indicate this is a good numerical projection
+                c, fit_data = np.polynomial.legendre.legfit(np.cos(psi), corr, 
+                                                            order-1, full=True)
 
                 Cl[:,i,j] = c
                 Cl[:,j,i] = c  # copy it to the lower triangle too   
@@ -2534,6 +2733,7 @@ class Rings(object):
         device_id = int(device_id)
         beam = Beam(photons_scattered_per_shot, energy=energy)
         k = beam.k
+        q_values = np.array(q_values)
             
         # --- generate the polar grid ---        
         
@@ -2553,7 +2753,8 @@ class Rings(object):
         qxyz[:,2] = np.tile( q_z, num_phi )                                      # q_z
         
         # assert that the above vectors are the correct length
-        assert np.all(np.sqrt( np.sum( np.power(qxyz,2), axis=1 ) ) == np.tile(q_values, num_phi))
+        assert np.all( np.abs( np.sqrt( np.sum( np.power(qxyz,2), axis=1 ) ) - \
+                               np.tile(q_values, num_phi)) < 1e-6 )
         
         # --- simulate the intensities ---
         

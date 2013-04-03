@@ -8,7 +8,7 @@ import warnings
 from nose import SkipTest
 
 from odin import xray, utils, parse, structure
-from odin.testing import skip, ref_file, expected_failure
+from odin.testing import skip, ref_file, expected_failure, brute_force_masked_correlation
 from odin.refdata import cromer_mann_params
 from mdtraj import trajectory, io
 
@@ -268,9 +268,6 @@ class TestShot(object):
         if os.path.exists('test.shot'): os.remove('test.shot')
         assert_array_almost_equal(s.intensity_profile(),
                                   self.shot.intensity_profile() )
-    
-    def test_assemble(self):
-        raise NotImplementedError('test not in')
         
     def test_implicit_interpolation_smoke(self):
         s = xray.Shot(self.i, self.d)
@@ -420,7 +417,11 @@ class TestShot(object):
         x = xray.Shot.simulate(self.t, 513, d)
         
     def test_to_rings(self):
-        raise NotImplementedError('test not in')
+        q_values = np.linspace(1.0, 2.0, num=10)
+        rings = self.shot.to_rings(q_values)
+        rings_ip = rings.intensity_profile()
+        shot_ip = self.shot.intensity_profile(n_bins=q_values)
+        assert_allclose(rings_ip, shot_ip)
         
         
 class TestShotset():
@@ -447,7 +448,57 @@ class TestShotset():
         x = xray.Shotset.simulate(self.t, 512, d, 2)
    
     def test_detector_checking(self):
-        raise NotImplementedError('test not in')
+        
+        # make sure err is not thrown when detectors are the same object
+        d1 = xray.Detector.generic(spacing=0.4)
+        s1 = xray.Shot.simulate(self.t, 1, d1)
+        s2 = xray.Shot.simulate(self.t, 1, d1)
+        ss = xray.Shotset([s1, s2])
+        
+        # make sure err is not thrown when detectors have the same pixels
+        d2 = xray.Detector.generic(spacing=0.4)
+        s3 = xray.Shot.simulate(self.t, 1, d2)
+        ss = xray.Shotset([s1, s3])
+        
+        # make sure err *is* thrown when detectors are different
+        d3 = xray.Detector.generic(spacing=0.5)
+        s4 = xray.Shot.simulate(self.t, 1, d3)
+        try:
+            ss = xray.Shotset([s1, s4])
+            raise RuntimeError('detector check should have thrown err')
+        except AttributeError as e:
+            print e
+        
+    def test_mask_checking(self):
+        
+        d  = xray.Detector.generic(spacing=0.4)
+        n_pixels = d.xyz.shape[0]
+        i  = np.abs( np.random.randn(n_pixels) )
+        
+        # make some masks
+        m1 = np.random.binomial(1, 0.5, n_pixels)
+        m2 = m1
+        m3 = m1.copy()
+        m4 = np.random.binomial(1, 0.5, n_pixels)
+        
+        # make sure err is not thrown when masks are the same object
+        s1 = xray.Shot(i, d, mask=m1)
+        s2 = xray.Shot(i, d, mask=m2)
+        ss = xray.Shotset([s1, s2])
+        
+        # make sure err is not thrown when masks have the same pixels
+        s1 = xray.Shot(i, d, mask=m1)
+        s3 = xray.Shot(i, d, mask=m3)
+        ss = xray.Shotset([s1, s3])
+        
+        # make sure err *is* thrown when detectors are different
+        s1 = xray.Shot(i, d, mask=m1)
+        s4 = xray.Shot(i, d, mask=m4)
+        try:
+            ss = xray.Shotset([s1, s4])
+            raise RuntimeError('mask check should have thrown err')
+        except AttributeError as e:
+            print e
         
     def test_profiles(self):
         i1 = self.shot.intensity_profile()
@@ -467,17 +518,23 @@ class TestRings(object):
     def test_sanity(self):
         assert self.rings.polar_intensities.shape == (2, len(self.q_values), self.num_phi)
                                             
-    def test_simulation(self):
-        
-        raise NotImplementedError('test not in')
-                                      
+    def test_simulation(self):        
+        rings = xray.Rings.simulate(self.traj, 1, self.q_values, 
+                                    self.num_phi, 1) # 1 molec, 1 shots
+        # todo: better than smoke test
                                       
     def test_q_index(self):
         assert self.rings.q_index(1.0) == 0
         assert self.rings.q_index(2.0) == 1
         
     def test_intensity_profile(self):
-        raise NotImplementedError('test not in')
+        q_values = [2.4, 2.67, 3.0] # should be a peak at |q|=2.67
+        t = structure.load_coor(ref_file('gold1k.coor'))
+        rings = xray.Rings.simulate(t, 10, q_values, self.num_phi, 1) # 3 molec, 1 shots
+        ip = rings.intensity_profile()
+        print ip
+        assert ip[1,1] > ip[0,1]
+        assert ip[1,1] > ip[2,1]
         
     def test_correlation(self):
         
@@ -494,39 +551,92 @@ class TestRings(object):
         ref = np.zeros(len(x))
         for i in range(len(x)):
             ref[i] = np.correlate(x, np.roll(y, i))
-        ref /= ref[0]
+        ref /= ref[0] # NORMALIZE
         
-        for i in range(10):
-            delta = i
+        for delta in range(10):
             ans = self.rings.correlate(q, q, delta)
-            assert_almost_equal(ans, ref[i], decimal=1)
+            assert_almost_equal(ans, ref[delta], decimal=1)
+            
+    def test_brute_correlation_wo_mask(self):
+        # this might be better somewhere else, but is here for now
+        x = np.random.randn(100) + 0.1 * np.arange(100)
+        x_bar = np.mean(x)
+        x -= x_bar
+        mask = np.ones(100, dtype=np.bool)
+        
+        c = brute_force_masked_correlation(x, mask)
+        ref = np.zeros(100)
+        
+        for i in range(100):
+            ref[i] = np.correlate(x, np.roll(x, i))
+        ref /= ref[0]
+            
+        assert_allclose(ref, c)
             
     def test_correlation_w_mask(self):
-        raise NotImplementedError('test not in')
-
+        # brute force compute the correlator, skipping over gaps
+        
+        # set up a rings obj with a mask
+        rings = xray.Rings.simulate(self.traj, 1, self.q_values, self.num_phi, 1)
+        polar_intensities = rings.polar_intensities
+        polar_mask = np.random.binomial(1, 0.75, size=polar_intensities.shape).astype(np.bool)
+        rings = xray.Rings(self.q_values, polar_intensities, self.rings.k,
+                           polar_mask=polar_mask)
+        
+        # compute a reference autocorrelator for the first ring
+        pm = polar_mask[0,0,:].flatten()
+        x = polar_intensities[0,0,:].flatten()
+        ref_corr = brute_force_masked_correlation(x, pm)
+        
+        # compute the correlator the usual way & compare
+        corr = np.zeros(rings.num_phi)
+        for delta in range(rings.num_phi):
+            corr[delta] = rings._correlate_by_index(0, 0, delta)
+        
+        assert_allclose(ref_corr, corr, rtol=1e-03)
+        
     def test_corr_ring(self):
-
+        
         q1 = 1.0 # chosen arb.
         q_ind = self.rings.q_index(q1)
-
+        
         ring = self.rings.correlate_ring(q1, q1)
-
+        
         # reference computation
         x = self.rings.polar_intensities[0,q_ind,:].flatten()
         y = self.rings.polar_intensities[0,q_ind,:].flatten()
         assert len(x) == len(y)
-
+        
         x -= x.mean()
         y -= y.mean()
-
+        
         ref = np.zeros(len(x))
         for i in range(len(x)):
             ref[i] = np.correlate(x, np.roll(y, i))
         ref /= ref[0]
-
+        
         assert_allclose(ref, ring)
         
     def test_corr_ring_w_mask(self):
+        # set up a rings obj with a mask
+        rings = xray.Rings.simulate(self.traj, 1, self.q_values, self.num_phi, 1)
+        polar_intensities = rings.polar_intensities
+        polar_mask = np.random.binomial(1, 0.75, size=polar_intensities.shape).astype(np.bool)
+        rings = xray.Rings(self.q_values, polar_intensities, self.rings.k,
+                           polar_mask=polar_mask)
+        
+        # compute a reference autocorrelator for the first ring
+        pm = polar_mask[0,0,:].flatten()
+        x = rings.polar_intensities[0,0,:].flatten()
+        ref_corr = brute_force_masked_correlation(x, pm)
+        
+        # compute the correlator the usual way & compare
+        corr = rings._correlate_ring_by_index(0, 0)
+        
+        assert_allclose(ref_corr, corr, rtol=1e-03)
+        
+    def test_correlate_inters(self):
+        # inject a specific and carefully engineered test case into a Rings obj
         raise NotImplementedError('test not in')
         
     def test_coefficients_smoke(self):
@@ -541,25 +651,26 @@ class TestRings(object):
         q2 = 0
         cl = self.rings.legendre(order)[:,q1,q1] # keep only q1, q1 correlation
         assert len(cl) == order
-
+        
         # compute the values of psi to use
         t1 = np.arctan( self.rings.q_values[q1] / (2.0*self.rings.k) )
         t2 = np.arctan( self.rings.q_values[q2] / (2.0*self.rings.k) )
         psi = np.arccos( np.cos(t1)*np.cos(t2) + np.sin(t1)*np.sin(t2) \
                          * np.cos( self.rings.phi_values * 2. * \
                          np.pi/float(self.rings.num_phi) ) )
-
+                         
         # reconstruct the correlation function
         pred = np.polynomial.legendre.legval(np.cos(psi), cl)
         
         # make sure it matches up with the raw correlation
         ring = self.rings._correlate_ring_by_index(q1, q2)
-
+        
         # this is a high tol, but it's workin --TJL
         assert_allclose(pred, ring, rtol=0.25)
         
     def test_io(self):
         self.rings.save('test.ring')
         r = xray.Rings.load('test.ring')
+        os.remove('test.ring')
         assert np.all( self.rings.polar_intensities == r.polar_intensities)
         
