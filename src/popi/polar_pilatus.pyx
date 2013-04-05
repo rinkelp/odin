@@ -2,7 +2,7 @@ import numpy as np
 cimport numpy as np
 import pylab as plt
 
-from odin.arnold import get_arnold as ga
+# from odin.arnold import get_arnold as ga
 
 from odin import parse
   
@@ -189,7 +189,7 @@ cdef class polarpilatus:
 
   def __dealloc__(self):
     del self.pp
-    print ga()
+    # print ga()
   
   property Xdim:
     def __get__(self): 
