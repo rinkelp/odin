@@ -22,7 +22,7 @@ from base64 import b64encode
 import numpy as np
 
 from odin import xray
-from odin.math2 import CircularHough
+from odin.math2 import CircularHough, find_center
 
 
 try:
@@ -99,7 +99,7 @@ class CBF(object):
         """
         The indicies of the pixel nearest the center
         """
-        if not hasattr(self, 'center'):
+        if not hasattr(self, '_center'):
             self._center = self._find_center()
         return self._center
         
@@ -240,8 +240,92 @@ class CBF(object):
         d = xray.Detector.from_basis(grid_list, self.path_length, b.k)
         s = xray.Shot(self.intensities.flatten().astype(np.float64), d)
         
-        return s
+        return s  
+    
         
+class Pilatus(CBF):
+    """
+    A class for dealing with CBF files that specifically were generated from a
+    Pilatus detector. This class was designed for the detector at SSRL bl 12-2,
+    but should work for other beam lines as well.
+    """
+        
+    def __init__(self, filename, mask=None):
+        """
+        
+        """
+        
+        # run CBF's init, and then add some more stuff
+        super(Pilatus, self).__init__(filename)
+        
+        # masking: start with _mask_gaps, and add mask if it got passed
+        if mask != None:
+            if not mask.shape == self.intensities_shape:
+                raise ValueError('`mask` must have same shape as intensity array '
+                   '(%s), got: %s' % (str(self.intensities_shape), str(mask.shape)))
+            self.mask = np.logical_and(mask, self._mask_gaps())
+        else:
+            self.mask = self._mask_gaps()
+            
+        return
+    
+        
+    def _find_center(self):
+        """
+        Over-ride CBF's find center method.
+        """
+        return find_center(self.intensities, self.mask)
+        
+    
+    def _mask_gaps(self, border_size=3):
+        """
+        The pixels on the edges of the detector are often noisy -- this function
+        provides a way to mask both the gaps and these border pixels.
+        
+        Parameters
+        ----------
+        border_size : int
+            The size of the border (in pixels) with which to extend the mask
+            around the detector gaps.
+        """
+        
+        border_size = int(border_size)
+        mask = np.ones(self.intensities_shape, dtype=np.bool)
+        
+        # below we have the rows (x_gaps) and columns (y_gaps) to mask
+        
+        x_gaps = [(486-border_size,494+border_size),
+                  (980-border_size,988+border_size),
+                  (1474-border_size,1482+border_size),
+                  (1968-border_size,1976+border_size)]
+        
+        y_gaps = [(194-border_size,212+border_size),
+                  (406-border_size,424+border_size),
+                  (618-border_size,636+border_size),
+                  (830-border_size,848+border_size),
+                  (1042-border_size,1060+border_size),
+                  (1254-border_size,1272+border_size),
+                  (1466-border_size,1484+border_size),
+                  (1678-border_size,1696+border_size),
+                  (1890-border_size,1908+border_size),
+                  (2102-border_size,2120+border_size),
+                  (2314-border_size,2332+border_size)]
+                  
+        for x in x_gaps:
+            mask[x[0]:x[1],:] = np.bool(False)
+            
+        for y in y_gaps:
+            mask[:,y[0]:y[1]] = np.bool(False)
+            
+        return mask
+
+
+    @staticmethod
+    def dir_to_shotset(directory):
+        """
+        """
+        raise NotImplementedError()
+    
         
 class KittyH5(object):
     """

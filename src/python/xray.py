@@ -1607,7 +1607,7 @@ class Shot(object):
                                                         pgr[p_inds,1])
             polar_mask[p_inds] = np.bool(True)
             
-            # increment index for self.intensities -- the real/measured intsn.
+            # increment index for self.intensities -- the real/measured intst.
             int_start += n_int
         
         return polar_intensities, polar_mask

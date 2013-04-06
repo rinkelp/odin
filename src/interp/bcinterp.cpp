@@ -146,9 +146,9 @@ Bcinterp::Bcinterp( int Nvals, float *vals, float x_space_, float y_space_,
     alphas.resize(size_alphas, 0.0); // generate a vector len aN of zeros
 
 	
-    for( x = 0; x < Xdim-1; x++ ) {
-        #pragma omp parallel for shared(x, dx, dy, dxdy, dIdx, dIdy, dIdxdy)
-        for( y = 0; y < Ydim-1; y++ ) {
+    for( y = 0; y < Ydim-1; y++ ) {
+        // #pragma omp parallel for shared(x, dx, dy, dxdy, dIdx, dIdy, dIdxdy)
+        for( x = 0; x < Xdim-1; x++ ) {
 
 			a00 =    F(I,x,y);
 			a10 =    F(dIdx,x,y);
@@ -191,7 +191,7 @@ Bcinterp::Bcinterp( int Nvals, float *vals, float x_space_, float y_space_,
                 throw std::out_of_range("over-run range on alphas in Bcinterp constructor");
             }
             
-            #pragma omp critical
+            // #pragma omp critical
             {
             alphas[k] = a00;
             alphas[k+1] = a10;
@@ -308,7 +308,7 @@ void Bcinterp::evaluate_array(int dim_xa, float *xa, int dim_ya, float *ya,
         throw std::invalid_argument("xa, ya, za must all be same dimension");
     }
         
-    #pragma omp parallel for shared(za)
+    // #pragma omp parallel for shared(za)
     for( int i = 0; i < dim_za; i++ ) {
         za[i] = evaluate_point(xa[i], ya[i]);
     }

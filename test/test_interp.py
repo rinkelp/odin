@@ -30,17 +30,9 @@ class TestBcinterp():
                                 self.x_corner, self.y_corner )
                                 
         # generate a reference -- need better reference
-        # x = np.arange(self.x_corner, self.x_corner + self.Xdim*self.x_space, self.x_space)
-        # y = np.arange(self.y_corner, self.y_corner + self.Ydim*self.y_space, self.y_space)
-        # 
-        # xx, yy = np.meshgrid(x,y)
-        # 
         self.new_x = np.arange(0.0, 8.0, .01) + 0.1
         self.new_y = np.arange(0.0, 8.0, .01) + 0.1
-        # self.ref = interpolate.griddata( np.array([xx.flatten(),yy.flatten()]).T, 
-        #                                  self.vals, 
-        #                                  np.array([self.new_x, self.new_y]).T,
-        #                                  method='cubic' )
+
 
     def test_for_smoke(self):
         ip = self.interp.evaluate(self.new_x, self.new_y)
@@ -52,10 +44,50 @@ class TestBcinterp():
     def test_point_vs_known(self):
         interp = Bcinterp( np.arange(1000**2),
                            0.1, 0.1, 1000, 1000, 0.0, 0.0 )
+                           
+        # the below were generated from a ref implementation, but can also
+        # be evaluated readily by eye
+        
         i = interp.evaluate(1.01, 1.01)
-        assert_almost_equal(i, 10110.1, decimal=0)
+        assert_almost_equal(i, 10110.1, decimal=1)
+        
+        i = interp.evaluate(1.5, 1.5)
+        assert_almost_equal(i, 15015.0)
+        
+        i = interp.evaluate(2.3, 2.0)
+        assert_almost_equal(i, 20023.0)
+        
+        i = interp.evaluate(20.3, 2.0)
+        assert_almost_equal(i, 20203.0)
+        
+    def test_two_dim(self):
+        
+        xa = np.array([1.5, 20.3])
+        ya = np.array([1.5, 2.0])
+        
+        interp1 = Bcinterp( np.arange(1000**2),
+                           0.1, 0.1, 1000, 1000, 0.0, 0.0 )
+                           
+        interp2 = Bcinterp( np.arange(1000**2).reshape(1000,1000),
+                           0.1, 0.1, 1000, 1000, 0.0, 0.0 )
+                           
+        assert_array_almost_equal(interp1.evaluate(xa, ya), interp2.evaluate(xa, ya))
         
     def test_trivial(self):
         interp = Bcinterp( np.ones(10*10), 1.0, 1.0, 10, 10, 0.0, 0.0 )
         interp_vals = interp.evaluate( np.arange(1,9) + 0.1, np.ones(8) + 0.1 )
         assert_allclose(np.ones(8), interp_vals)
+        
+    def test_array_vs_known(self):
+
+        interp = Bcinterp( np.arange(1000**2),
+                           0.1, 0.1, 1000, 1000, 0.0, 0.0 )
+                           
+        xa = np.array([1.5, 20.3])
+        ya = np.array([1.5, 2.0])
+        
+        i = interp.evaluate(xa, ya)
+        assert_almost_equal( i, np.array([15015.0, 20203.0]) )
+        
+        
+        
