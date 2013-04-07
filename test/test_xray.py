@@ -7,7 +7,7 @@ import os, sys
 import warnings
 from nose import SkipTest
 
-from odin import xray, utils, parse, structure
+from odin import xray, utils, parse, structure, math2
 from odin.testing import skip, ref_file, expected_failure, brute_force_masked_correlation
 from odin.refdata import cromer_mann_params
 from mdtraj import trajectory, io
@@ -66,10 +66,10 @@ class TestBasisGrid(object):
         
     def test_grid_corners(self):
         c = self.bg.get_grid_corners(0)
-        assert_array_almost_equal(c[0,:], np.zeros(3))
-        assert_array_almost_equal(c[1,:], np.array([1.0*100, 0.0, 0.0])) # slow
-        assert_array_almost_equal(c[2,:], np.array([0.0, 2.0*100, 0.0])) # fast
-        assert_array_almost_equal(c[3,:], np.array([1.0*100, 2.0*100, 0.0]))
+        assert_array_almost_equal(c[0,:], self.p)
+        assert_array_almost_equal(c[2,:], np.array([1.0*10, 0.0, 1.0])) # slow
+        assert_array_almost_equal(c[1,:], np.array([0.0, 2.0*10, 1.0])) # fast
+        assert_array_almost_equal(c[3,:], np.array([1.0*10, 2.0*10, 1.0]))
         
     def test_get_grid(self):
         assert self.bg.get_grid(0) == self.grid_list[0]
@@ -146,22 +146,21 @@ class TestDetector(object):
         hd = np.sqrt( np.power(self.d.xyz[:,0], 2) + np.power(self.d.xyz[:,1], 2) )
         
         # consistency check on the polar conversion
-        #theta = utils.arctan3( self.d.xyz[:,2], hd )
+        #theta = math2.arctan3( self.d.xyz[:,2], hd )
         #assert_array_almost_equal(theta, self.d.polar[:,1], err_msg='theta check wrong')
         
         # |q| = k*sqrt{ 2 - 2 cos(theta) }
         ref1[:,0] = self.d.k * np.sqrt( 2.0 - 2.0 * np.cos(self.d.polar[:,1]) )
-                                
-        # phi is the same as polar
+        
+        # q_theta = theta / 2 (one-theta convention)
+        ref1[:,1] = self.d.polar[:,1] / 2.0 # not working atm
+        
+        # q_phi is the same as polar
         ref1[:,2] = self.d.polar[:,2].copy()
         
         assert_array_almost_equal(ref1[:,0], self.d.recpolar[:,0], err_msg='|q|')
         assert_array_almost_equal(ref1[:,1], self.d.recpolar[:,1], err_msg='theta')
         assert_array_almost_equal(ref1[:,2], self.d.recpolar[:,2], err_msg='phi')
-       
-    def test_reciprocal_to_real(self):
-        real = self.d._reciprocal_to_real(self.d.reciprocal)
-        assert_array_almost_equal(real, self.d.real)
         
     def test_io(self):
         if os.path.exists('r.dtc'): os.system('rm r.dtc')
@@ -170,6 +169,10 @@ class TestDetector(object):
         if os.path.exists('r.dtc'): os.system('rm r.dtc') 
         assert_array_almost_equal(d.xyz, self.d.xyz)
         
+    def test_q_max(self):
+        ref_q_max = np.max(self.d.recpolar[:,0])
+        assert_almost_equal(self.d.q_max, ref_q_max)
+        
         
 class TestFilter(object):
         
@@ -177,7 +180,7 @@ class TestFilter(object):
         self.d = xray.Detector.generic(spacing=0.4)
         self.i = np.abs( np.random.randn(self.d.xyz.shape[0]) )
         self.shot = xray.Shot(self.i, self.d)
-        self.i_shape = self.shot.detector._grid_list[0][1][:2]        
+        self.i_shape = self.d.xyz.shape[0]
    
     def test_generic(self):
         p_args = (0.9, self.shot.detector)
@@ -219,6 +222,7 @@ class TestFilter(object):
         assert np.all(mask == False)
         assert_allclose(ratio - ratio.mean(), np.zeros(len(ratio)))
         
+    @skip
     def test_detector_mask(self):
         # answer confirmed visually
         cbf = parse.CBF( ref_file('test1.cbf') )
@@ -229,7 +233,7 @@ class TestFilter(object):
         ref_mask = np.load( ref_file('hist_mask_wborder.npz') )['arr_0']
         assert_array_almost_equal(mask, ref_mask)
         
-    def test_histgram_segmentation(self):
+    def test_histogram_segmentation(self):
         # answer confirmed visually
         cbf = parse.CBF( ref_file('test1.cbf') )
         intensities = cbf.intensities.reshape(cbf.intensities_shape)
@@ -344,20 +348,6 @@ class TestShot(object):
         pgr = self.shot.polar_grid_as_real_cart(self.q_values, self.num_phi)
         
         assert_array_almost_equal(pgr, ref_pgr)
-        
-    def test_overlap(self):
-        
-        # test is two squares, offset
-        xy1 = np.mgrid[0:2:3j,0:2:3j].reshape(9,2)
-        xy2 = np.mgrid[0:2:2j,0:2:2j].reshape(4,2) - 0.5
-        overlap = self.shot._overlap(xy1, xy2)
-        
-        ref = np.array([0, 1, 2, 6]) # by hand
-        
-        assert_array_almost_equal(ref, overlap)
-        
-    def test_overlap_implicit(self):
-        pass # todo : waiting for new basis grid method (fxn call change)
         
     def test_real_mask_to_polar(self):
         

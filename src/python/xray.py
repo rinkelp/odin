@@ -19,7 +19,7 @@ from scipy import interpolate, fftpack
 from scipy.ndimage import filters
 from scipy.special import legendre
 
-from odin.math2 import arctan3, rand_pairs, find_overlap, freedman_diaconis
+from odin.math2 import arctan3, smooth, find_overlap, freedman_diaconis
 from odin import scatter
 from odin.interp import Bcinterp
 
@@ -532,8 +532,8 @@ class Detector(Beam):
     @property
     def recpolar(self):
         a = self._real_to_recpolar(self.real)
-        #a[:,1] = 0.0  # re: Dermen, don't think this is right.... 
-        #                (flat ewald sphere) --TJL
+        # convention: theta is angle of q-vec with plane normal to beam
+        a[:,1] = self.polar[:,1] / 2.0 
         return a
     
         
@@ -547,8 +547,11 @@ class Detector(Beam):
             q_max = np.max(self.recpolar[:,0])
             
         elif self.xyz_type == 'implicit': 
-            # basisgrid todo
-            raise NotImplementedError()
+            q_max = 0.0
+            for i in range(self._basis_grid.num_grids):
+                c  = self._basis_grid.get_grid_corners(i)
+                qc = self._real_to_recpolar(c)
+                q_max = max([q_max, float(np.max(qc[:,0]))])
                 
         return q_max
     
@@ -573,13 +576,7 @@ class Detector(Beam):
         S = self.real.copy()
         S = self._unit_vector(S)
         
-        # generate unit vectors in the z-direction
-        S0 = np.zeros(xyz.shape)
-        S0[:,2] = np.ones(xyz.shape[0])
-        
-        assert S.shape == S0.shape
-        
-        q = self.k * (S - S0)
+        q = self.k * (S - self.beam_vector)
         
         return q
         
@@ -591,36 +588,7 @@ class Detector(Beam):
         """
         reciprocal_polar = self._to_polar( self._real_to_reciprocal(xyz) )
         return reciprocal_polar
-        
-        
-    def _reciprocal_to_real(self, qxyz):
-        """
-        Converts a q-space cartesian representation (`qxyz`) into a real-space
-        cartesian representation (`xyz`)
-        """
-        
-        # basisgrid todo (no path len)
-        raise NotImplementedError()
-        
-        assert len(qxyz.shape) == 2
-        xyz = np.zeros_like(qxyz)
-        
-        q_mag = self._norm(qxyz)
-        q_mag[q_mag == 0.0] = 1.0e-300
-        
-        h = self.path_length * np.tan( 2.0 * np.arcsin( qxyz[:,2] / q_mag ) )
-        q_xy = np.sqrt( np.sum( np.power(qxyz[:,:2], 2), axis=1 ) )
-        q_xy[q_xy == 0.0] = 1.0e-300
-        hn = ( h / q_xy )
-        
-        for i in range(2):
-            xyz[:,i] = qxyz[:,i] * hn
-
-        xyz[:,2] = self.path_length
-        xyz = xyz[::-1,:]  # for consistency with other methods
-        
-        return xyz
-        
+    
         
     @staticmethod
     def _norm(vector):
@@ -675,13 +643,20 @@ class Detector(Beam):
         Converts n m-dimensional `vector`s to polar coordinates. By polar
         coordinates, I mean the cannonical physicist's (r, theta, phi), no
         2-theta business.
+        
+        We take, as convention, the 'z' direction to be along self.beam_vector
         """
         
         polar = np.zeros( vector.shape )
         
+        # note the below is a little modified from the standard, to take into
+        # account the fact that the beam may not be only in the z direction
+        
         polar[:,0] = self._norm(vector)
-        polar[:,1] = np.arccos(vector[:,2] / (polar[:,0]+1e-16)) # cos^{-1}(z/r)
-        polar[:,2] = arctan3(vector[:,1], vector[:,0])     # y first!
+        polar[:,1] = np.arccos( np.dot(vector, self.beam_vector) / \
+                                (polar[:,0]+1e-16) )           # cos^{-1}(z.x/r)
+        polar[:,2] = arctan3(vector[:,1] - self.beam_vector[1], 
+                             vector[:,0] - self.beam_vector[0])   # y first!
         
         return polar
         
@@ -984,8 +959,7 @@ class ImageFilter(object):
         # TJL thinking : is passing a detector really the best way (most user 
         # friendly) to do this?
         
-        self.qxyz = detector.reciprocal.copy()
-        self.l = detector.path_length
+        self.reciprocal = detector.reciprocal.copy()
         self._polarization_factor = polarization_factor
         self._methods_to_apply.append('polarization')
         
@@ -996,8 +970,8 @@ class ImageFilter(object):
         """
         Apply the polarization filter to `i`
         """
-        theta_x = np.arctan( self.qxyz[:,0] / self.l )
-        theta_y = np.arctan( self.qxyz[:,1] / self.l )
+        theta_x = self.reciprocal[:,1] * np.cos(self.reciprocal[:,2])
+        theta_y = self.reciprocal[:,1] * np.sin(self.reciprocal[:,2])
         P = self._polarization_factor
         f_p = 0.5 * ( (1.0 + P) * np.power(np.cos(theta_x), 2) + \
                       (1.0 - P) * np.power(np.cos(theta_y), 2) )
@@ -1436,39 +1410,7 @@ class Shot(object):
         pg[:,1] = np.tile(h, num_phi) * np.sin( phis )
                         
         return pg
-        
-        
-    @staticmethod
-    def _overlap(xy1, xy2):
-        """
-        Find the indicies of xy1 that overlap with xy2, where both are
-        n x 2 dimensional arrays of (x,y) pixels.
-        """
-        
-        assert xy1.shape[1] == 2
-        assert xy2.shape[1] == 2
-        
-        # this will deal with arbitrary shapes
-        p_inds = np.where( find_overlap(xy1, xy2) )[0]
-        
-        return p_inds
     
-        
-    def _overlap_implicit(self, xy, grid_index):
-        """
-        xy         : ndarray, float, 2D
-        grid_index : int
-        """
-        
-        assert xy.shape[1] == 2
-        
-        c = self.detector._basis_grid.get_grid_corners(grid_index)
-
-        is_overlap = nxutils.points_inside_poly(xy, c[:,:2])
-        p_inds     = np.where(is_overlap)[0]
-        
-        return p_inds
-        
         
     def _compute_intersections(self, q_vectors, grid_index):
         """
@@ -1568,13 +1510,9 @@ class Shot(object):
         int_start = 0 # start of intensity array correpsonding to `grid`
         int_end   = 0 # end of intensity array correpsonding to `grid`
         
-        # convert the polar to cartesian coords for comparison to detector
-        # pgr = self.polar_grid_as_real_cart(q_values, num_phi)
-        
         # iterate over each grid area
         for k in range(self.detector._basis_grid.num_grids):
             
-            # extract some stuff we'll need
             p, s, f, size = self.detector._basis_grid.get_grid(k)
             
             # compute how many pixels this grid has
@@ -2746,7 +2684,7 @@ class Rings(object):
         
         # --- simulate the intensities ---
         
-        polar_intensities = np.zeros((num_shots, num_q, num_phi))
+        polar_intensities = np.zeros((num_shots, len(q_values), num_phi))
         
         for i in range(num_shots):
             I = scatter.simulate_shot(traj, num_molecules, qxyz, 

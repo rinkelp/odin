@@ -215,7 +215,7 @@ class CBF(object):
             The indicies of the pixel nearest the center of the Bragg peaks.
         """
         # todo
-        center = np.array(self.intensities_shape) / 2.0 #(1231.50, 1263.50)
+        center = np.array(self.intensities_shape) / 2.0
         return center
         
         
@@ -230,13 +230,14 @@ class CBF(object):
         """
         
         p = np.array(list(self.corner) + [self.path_length])
-        f = np.array([self.pixel_size[0], 0.0, 0.0])
-        s = np.array([0.0, self.pixel_size[1], 0.0])
+        f = np.array([self.pixel_size[0], 0.0, 0.0]) # fast is x
+        s = np.array([0.0, self.pixel_size[1], 0.0]) # slow is y
         
         bg = xray.BasisGrid()
         bg.add_grid(p, s, f, self.intensities_shape)
         
-        b = xray.Beam(1e4, wavelength=self.wavelength) # todo better value for photons
+        # todo better value for photons
+        b = xray.Beam(1e4, wavelength=self.wavelength) 
         d = xray.Detector(bg, b.k)
         s = xray.Shot(self.intensities.flatten().astype(np.float64), d)
         
