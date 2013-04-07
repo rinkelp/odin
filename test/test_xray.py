@@ -60,7 +60,17 @@ class TestBasisGrid(object):
         nbg = xray.BasisGrid()
         nbg.add_grid_using_center(center, self.s, self.f, self.shape)
         assert_array_almost_equal(nbg.to_explicit(), self.bg.to_explicit())
-    
+        
+    def test_num_pixels(self):
+        assert self.bg.num_pixels == np.product(self.shape)
+        
+    def test_grid_corners(self):
+        c = self.bg.get_grid_corners(0)
+        assert_array_almost_equal(c[0,:], np.zeros(3))
+        assert_array_almost_equal(c[1,:], np.array([1.0*100, 0.0, 0.0])) # slow
+        assert_array_almost_equal(c[2,:], np.array([0.0, 2.0*100, 0.0])) # fast
+        assert_array_almost_equal(c[3,:], np.array([1.0*100, 2.0*100, 0.0]))
+        
     def test_get_grid(self):
         assert self.bg.get_grid(0) == self.grid_list[0]
         
@@ -146,22 +156,12 @@ class TestDetector(object):
         ref1[:,2] = self.d.polar[:,2].copy()
         
         assert_array_almost_equal(ref1[:,0], self.d.recpolar[:,0], err_msg='|q|')
-        assert_array_almost_equal(np.zeros(ref1.shape[0]), self.d.recpolar[:,1], err_msg='theta')
+        assert_array_almost_equal(ref1[:,1], self.d.recpolar[:,1], err_msg='theta')
         assert_array_almost_equal(ref1[:,2], self.d.recpolar[:,2], err_msg='phi')
        
     def test_reciprocal_to_real(self):
         real = self.d._reciprocal_to_real(self.d.reciprocal)
         assert_array_almost_equal(real, self.d.real)
-       
-    def test_basis_factory(self):
-        beam = xray.Beam(self.n_photons, energy=self.energy)
-        basis = (self.spacing, self.spacing, 0.0)
-        dim = 2*(self.lim / self.spacing) + 1
-        shape = (dim, dim, 1)
-        corner = (-self.lim, -self.lim, 0.0)
-        basis_list = [(basis, shape, corner)]
-        bd = xray.Detector.from_basis(basis_list, self.l, beam)
-        assert_array_almost_equal(bd.xyz, self.d.xyz)
         
     def test_io(self):
         if os.path.exists('r.dtc'): os.system('rm r.dtc')
@@ -256,7 +256,8 @@ class TestShot(object):
     def setup(self):
         self.q_values = np.array([1.0, 2.0])
         self.num_phi  = 360
-        self.d = xray.Detector.generic(spacing=0.4)
+        self.l = 50.0
+        self.d = xray.Detector.generic(spacing=0.4, l=self.l)
         self.i = np.abs( np.random.randn(self.d.xyz.shape[0]) )
         self.t = trajectory.load(ref_file('ala2.pdb'))
         self.shot = xray.Shot(self.i, self.d)
@@ -305,7 +306,7 @@ class TestShot(object):
         pgr = self.shot.polar_grid_as_real_cart(self.q_values, self.num_phi)
         pgr_z = np.zeros((pgr.shape[0],3))
         pgr_z[:,:2] = pgr.copy()
-        pgr_z[:,2] = self.shot.detector.path_length
+        pgr_z[:,2] = self.l
         
         S = self.d._unit_vector(pgr_z)
         S0 = np.zeros_like(S)
@@ -332,7 +333,7 @@ class TestShot(object):
         pg  = self.shot.polar_grid(self.q_values, self.num_phi)
         ref_pgr = np.zeros_like(pg)
         k = self.shot.detector.k
-        l = self.shot.detector.path_length
+        l = self.l
         
         pg[ pg[:,0] == 0.0 ,0] = 1.0e-300
         h = l * np.tan( 2.0 * np.arcsin( pg[:,0] / (2.0*k) ) )

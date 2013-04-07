@@ -78,7 +78,8 @@ class CBF(object):
         p = self._info['Pixel_size'].split()
         assert p[1].strip() == p[4].strip()
         assert p[2].strip() == 'x'
-        return (float(p[0]), float(p[3]))
+        pix_size = (float(p[0]), float(p[3]))
+        return pix_size
         
     @property
     def path_length(self):
@@ -108,8 +109,8 @@ class CBF(object):
         """
         The bottom left corner position, in real space.
         """
-        #return (self.pixel_size[0] * self.center[0], self.pixel_size[1] * self.center[1])
-        return (0.0, 0.0)
+        return (-self.pixel_size[0] * self.center[0], 
+                -self.pixel_size[1] * self.center[1])
         
     @property
     def intensities(self):
@@ -144,7 +145,7 @@ class CBF(object):
         """
         Fabio provides an '_array_data.header_contents' key entry in that
         needs to be parsed. E.g. for a test PILATUS detector file generated at
-        SSRL, this dictionary entry looks like
+        SSRL 12-2, this dictionary entry looks like
         
         fabio_object.header['_array_data.header_contents'] = 
         '# Detector: PILATUS 6M, S/N 60-0101 SSRL\r\n# 2012/Apr/09 20:02:10.800
@@ -213,9 +214,8 @@ class CBF(object):
         center : tuple of ints
             The indicies of the pixel nearest the center of the Bragg peaks.
         """
-        #CM = CircularHough(radii=10, threshold=0.1, stencil_width=1, procs=1)
-        #center = CM(image, mode='concentric')
-        center = (2463/2.,2527/2.)
+        # todo
+        center = np.array(self.intensities_shape) / 2.0 #(1231.50, 1263.50)
         return center
         
         
@@ -229,15 +229,15 @@ class CBF(object):
             The CBF file as an ODIN shot.
         """
         
-        # grid_list = (basis, shape, corner)
-        # todo : do we need to center the image, changing corner?
-        basis  = tuple( list(self.pixel_size) + [0.0] )
-        shape  = tuple( list(self.intensities_shape) + [1] ) # add z dim
-        corner = tuple( list(self.corner) + [0.0] )
-        grid_list = [(basis, shape, corner )]
+        p = np.array(list(self.corner) + [self.path_length])
+        f = np.array([self.pixel_size[0], 0.0, 0.0])
+        s = np.array([0.0, self.pixel_size[1], 0.0])
         
-        b = xray.Beam(1e4, wavelength=self.wavelength)
-        d = xray.Detector.from_basis(grid_list, self.path_length, b.k)
+        bg = xray.BasisGrid()
+        bg.add_grid(p, s, f, self.intensities_shape)
+        
+        b = xray.Beam(1e4, wavelength=self.wavelength) # todo better value for photons
+        d = xray.Detector(bg, b.k)
         s = xray.Shot(self.intensities.flatten().astype(np.float64), d)
         
         return s  
