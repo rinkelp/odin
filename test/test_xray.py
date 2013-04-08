@@ -105,12 +105,27 @@ class TestDetector(object):
                                        photons_scattered_per_shot = self.n_photons,
                                        l = self.l)
                                        
-    def test_to_explicit(self):
-        raise NotImplementedError('test not in')
+    def test_implicit_to_explicit(self):
+        xyz_imp = self.d.real
+        self.d.implicit_to_explicit()
+        assert_array_almost_equal(xyz_imp, self.d.real)
         
     def test_evaluate_qmag(self):
-        raise NotImplementedError('test not in')
-    
+        # doubles as a test for _evaluate_theta
+        x = np.zeros((5, 3))
+        x[:,0] = np.random.randn(5)
+        x[:,2] = self.l
+        
+        S = x.copy()
+        S = S / np.sqrt( np.sum( np.power(S, 2), axis=1 ) )[:,None]
+        S -= self.d.beam_vector
+        
+        b = xray.Beam(1, energy=self.energy)
+        qref = b.k * np.sqrt( np.sum( np.power(S, 2), axis=1 ) )
+        
+        qmag = self.d.evaluate_qmag(x)
+        assert_allclose(qref, qmag)
+        
     def test_recpolar_n_reciprocal(self):
         q1 = np.sqrt( np.sum( np.power(self.d.reciprocal,2), axis=1) )
         q2 = self.d.recpolar[:,0]
@@ -151,10 +166,6 @@ class TestDetector(object):
         ref1 = np.zeros(self.d.xyz.shape)
         hd = np.sqrt( np.power(self.d.xyz[:,0], 2) + np.power(self.d.xyz[:,1], 2) )
         
-        # consistency check on the polar conversion
-        #theta = math2.arctan3( self.d.xyz[:,2], hd )
-        #assert_array_almost_equal(theta, self.d.polar[:,1], err_msg='theta check wrong')
-        
         # |q| = k*sqrt{ 2 - 2 cos(theta) }
         ref1[:,0] = self.d.k * np.sqrt( 2.0 - 2.0 * np.cos(self.d.polar[:,1]) )
         
@@ -168,13 +179,42 @@ class TestDetector(object):
         assert_array_almost_equal(ref1[:,1], self.d.recpolar[:,1], err_msg='theta')
         assert_array_almost_equal(ref1[:,2], self.d.recpolar[:,2], err_msg='phi')
         
-    def test_intersect(self):
-        raise NotImplementedError('test not in')
+    def test_compute_intersect(self):
+        
+        # build a simple grid and turn it into a detector
+        bg = xray.BasisGrid()
+        p = np.array([0.0, 0.0, 1.0])
+        s = np.array([1.0, 0.0, 0.0])
+        f = np.array([0.0, 1.0, 0.0])
+        shape = (10, 10)
+        bg.add_grid(p, s, f, shape)
+        d = xray.Detector(bg, 2.0*np.pi/1.4)
+        
+        # compute a set of q-vectors corresponding to a slightly offset grid
+        xyz_grid = bg.to_explicit()
+        xyz_off = xyz_grid.copy()
+        xyz_off[:,0] += 0.5
+        xyz_off[:,1] += 0.5
+        q_vectors = d._real_to_reciprocal(xyz_off)
+        
+        # b/c s/f vectors are unit vectors, where they intersect s/f is simply
+        # their coordinates. The last row and column will miss, however        
+        intersect_ref = np.logical_and( (xyz_off[:,0] <= 9.0),
+                                        (xyz_off[:,1] <= 9.0) )
+                                        
+        pix_ref = xyz_off[intersect_ref,:2]
+        
+        # compute the intersection from code
+        pix, intersect = d._compute_intersections(q_vectors, 0) # 0 --> grid_index
+        print pix, intersect
+        
+        assert_array_almost_equal(intersect_ref, intersect)
+        assert_array_almost_equal(pix_ref, pix)
         
     def test_serialization(self):
         s = self.d._to_serial()
         d2 = xray.Detector._from_serial(s)
-        assert d2 == self.d
+        assert_array_almost_equal(d2.xyz, self.d.xyz)
         
     def test_io(self):
         if os.path.exists('r.dtc'): os.system('rm r.dtc')
@@ -185,7 +225,7 @@ class TestDetector(object):
         
     def test_q_max(self):
         ref_q_max = np.max(self.d.recpolar[:,0])
-        assert_almost_equal(self.d.q_max, ref_q_max)
+        assert_almost_equal(self.d.q_max, ref_q_max, decimal=2)
         
         
 class TestFilter(object):
@@ -289,7 +329,7 @@ class TestShot(object):
         s = xray.Shot(self.i, self.d, mask=mask)
         s._interpolate_to_polar()
         
-    # missing test: test_assemble
+    # missing test: test_assemble (ok for now)
         
     def test_polar_grid(self):
         raise NotImplementedError('test not in')
@@ -300,7 +340,7 @@ class TestShot(object):
         mag = np.sqrt(np.sum(np.power(pgc,2), axis=1))
         assert_array_almost_equal( mag, pg[:,0] )
         maxq = self.q_values.max()
-        assert np.all( mag <= (maxq + 1e-6)
+        assert np.all( mag <= (maxq + 1e-6) )
         
     def test_interpolate_to_polar(self):
         raise NotImplementedError('test not in')
@@ -326,8 +366,10 @@ class TestShot(object):
         s = xray.Shot.simulate(t, 5, self.d)
         p = s.intensity_profile()
         m = s.intensity_maxima()
-        # check |q| = 2.67 is in the maxima
-        assert np.any(np.abs(p[m,0] - 2.6763881) < 1e-1)
+        assert np.any(np.abs(p[m,0] - 2.67) < 1e-1) # |q| = 2.67 is in {maxima}
+        
+    def test_rotated_beam(self):
+        raise NotImplementedError('test not in')
                 
     def test_sim(self):
         if not GPU: raise SkipTest
@@ -348,11 +390,13 @@ class TestShot(object):
         x = xray.Shot.simulate(self.t, 513, d)
         
     def test_to_rings(self):
-        q_values = np.linspace(1.0, 2.0, num=10)
+        q_values = np.linspace(0.1, 0.5, num=11)
         rings = self.shot.to_rings(q_values)
         rings_ip = rings.intensity_profile()
-        shot_ip = self.shot.intensity_profile(n_bins=10)
-        assert_allclose(rings_ip, shot_ip)
+        s_bins = np.linspace(0.02, 0.5, num=13)
+        shot_ip = self.shot.intensity_profile(n_bins=s_bins)
+        assert_allclose(rings_ip[:,0], shot_ip[:,0], err_msg='test impl error')
+        assert_allclose(rings_ip, shot_ip, err_msg='intensity mismatch')
         
     def test_io(self):
         if os.path.exists('test.shot'): os.remove('test.shot')

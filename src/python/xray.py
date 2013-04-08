@@ -572,7 +572,7 @@ class Detector(Beam):
         qmag : ndarray, float
             The array of q-magnitudes, len N.
         """
-        thetas = _evaluate_theta(xyz)
+        thetas = self._evaluate_theta(xyz)
         qmag = 2.0 * self.k * np.sin(thetas/2.0)
         return qmag
     
@@ -614,8 +614,8 @@ class Detector(Beam):
         assert xyz.shape[1] == 3
         
         # generate unit vectors in the pixel direction, origin at sample
-        S = self.real.copy()
-        S = self._unit_vector(S)
+        #S = self.real.copy()
+        S = self._unit_vector(xyz) # used to be xyz --> S
         
         q = self.k * (S - self.beam_vector)
         
@@ -710,7 +710,7 @@ class Detector(Beam):
         Parameters
         ----------
         q_vectors : np.ndarray
-            An N x 3 array representing scattering vectors in q-space.
+            An N x 3 array representing q-vectors in cartesian q-space.
             
         grid_index : int
             The index of the grid array to intersect
@@ -763,8 +763,8 @@ class Detector(Beam):
         assert pix_n.shape[1] == 2 # s/f
 
         # see if the intersection in the plane is on the detector grid
-        intersect = (pix_n[:,0] > 0.0) * (pix_n[:,0] < float(shape[0])) *\
-                    (pix_n[:,1] > 0.0) * (pix_n[:,1] < float(shape[1]))
+        intersect = (pix_n[:,0] >= 0.0) * (pix_n[:,0] <= float(shape[0]-1)) *\
+                    (pix_n[:,1] >= 0.0) * (pix_n[:,1] <= float(shape[1]-1))
             
         logger.debug('%.3f %% of pixels intersected by grid %d' % \
             ( (np.sum(intersect) / np.product(intersect.shape) * 100.0), 
