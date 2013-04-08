@@ -103,7 +103,13 @@ class TestDetector(object):
                                        lim = self.lim,
                                        energy = self.energy,
                                        photons_scattered_per_shot = self.n_photons,
-                                       l = self.l) 
+                                       l = self.l)
+                                       
+    def test_to_explicit(self):
+        raise NotImplementedError('test not in')
+        
+    def test_evaluate_qmag(self):
+        raise NotImplementedError('test not in')
     
     def test_recpolar_n_reciprocal(self):
         q1 = np.sqrt( np.sum( np.power(self.d.reciprocal,2), axis=1) )
@@ -162,6 +168,14 @@ class TestDetector(object):
         assert_array_almost_equal(ref1[:,1], self.d.recpolar[:,1], err_msg='theta')
         assert_array_almost_equal(ref1[:,2], self.d.recpolar[:,2], err_msg='phi')
         
+    def test_intersect(self):
+        raise NotImplementedError('test not in')
+        
+    def test_serialization(self):
+        s = self.d._to_serial()
+        d2 = xray.Detector._from_serial(s)
+        assert d2 == self.d
+        
     def test_io(self):
         if os.path.exists('r.dtc'): os.system('rm r.dtc')
         self.d.save('r.dtc')
@@ -181,7 +195,8 @@ class TestFilter(object):
         self.i = np.abs( np.random.randn(self.d.xyz.shape[0]) )
         self.shot = xray.Shot(self.i, self.d)
         self.i_shape = self.d.xyz.shape[0]
-   
+        
+    @skip
     def test_generic(self):
         p_args = (0.9, self.shot.detector)
         flt = xray.ImageFilter(abs_std=3.0, polarization=p_args, border_pixels=4)
@@ -266,114 +281,6 @@ class TestShot(object):
         self.t = trajectory.load(ref_file('ala2.pdb'))
         self.shot = xray.Shot(self.i, self.d)
         
-    def test_io(self):
-        if os.path.exists('test.shot'): os.remove('test.shot')
-        self.shot.save('test.shot')
-        s = xray.Shot.load('test.shot')
-        if os.path.exists('test.shot'): os.remove('test.shot')
-        assert_array_almost_equal(s.intensity_profile(),
-                                  self.shot.intensity_profile() )
-        
-    def test_implicit_interpolation_smoke(self):
-        s = xray.Shot(self.i, self.d)
-        
-    def test_unstructured_interpolation_smoke(self):
-        d = xray.Detector.generic(spacing=0.4, force_explicit=True)
-        s = xray.Shot(self.i, d)
-        
-    def test_interpolation_consistency(self):
-        """ test to ensure unstructured & implicit interpolation methods
-            give the same result """
-        de = xray.Detector.generic(spacing=0.4, force_explicit=True)
-        s1 = xray.Shot(self.i, self.d)
-        s2 = xray.Shot(self.i, de)
-        print "testing interpolation methods consistent"
-        assert_allclose(s1.intensities, s2.intensities)
-        
-    def test_pgc(self):
-        """ test polar_grid_as_cart() property """
-        pg = self.shot.polar_grid(self.q_values, self.num_phi)
-        pgc = self.shot.polar_grid_as_cart(self.q_values, self.num_phi)
-        mag = np.sqrt(np.sum(np.power(pgc,2), axis=1))
-        assert_array_almost_equal( mag, pg[:,0] )
-        maxq = self.q_values.max()
-        assert np.all( mag <= (maxq + 1e-6) )
-
-    @skip
-    def test_pgr(self):
-        """ test polar_grid_as_real_cart() property """
-        
-        # This test is not really working, I think there may be some numerical
-        # instability in the trig functions that are used to compute this
-        # function. Right now the precision below is turned way down. todo.
-        
-        pgr = self.shot.polar_grid_as_real_cart(self.q_values, self.num_phi)
-        pgr_z = np.zeros((pgr.shape[0],3))
-        pgr_z[:,:2] = pgr.copy()
-        pgr_z[:,2] = self.l
-        
-        S = self.d._unit_vector(pgr_z)
-        S0 = np.zeros_like(S)
-        S0[:,2] = np.ones(S0.shape[0])
-        pgq_z = self.shot.detector.k * (S - S0)
-        pgq = pgq_z[:,:2]
-        
-        ref = self.shot.polar_grid_as_cart(self.q_values, self.num_phi)
-        
-        maxq = self.shot.q_values.max()
-        assert np.all( np.sqrt(np.sum(np.power(ref,2), axis=1)) <= (maxq + 1e-6) )
-        assert np.all( np.sqrt(np.sum(np.power(pgq,2), axis=1)) <= (maxq + 1e-6) )
-        
-        print "pgq:", pgq
-        print "ref:", ref
-        print "diff", np.sum(np.abs(pgq - ref), axis=1)
-        
-        assert_array_almost_equal(pgq, ref)
-        
-        
-    def test_pgr2(self):
-        """ test polar_grid_as_real_cart() property against ref implementation"""
-        
-        pg  = self.shot.polar_grid(self.q_values, self.num_phi)
-        ref_pgr = np.zeros_like(pg)
-        k = self.shot.detector.k
-        l = self.l
-        
-        pg[ pg[:,0] == 0.0 ,0] = 1.0e-300
-        h = l * np.tan( 2.0 * np.arcsin( pg[:,0] / (2.0*k) ) )
-        
-        ref_pgr[:,0] = h * np.cos( pg[:,1] )
-        ref_pgr[:,1] = h * np.sin( pg[:,1] )
-        
-        pgr = self.shot.polar_grid_as_real_cart(self.q_values, self.num_phi)
-        
-        assert_array_almost_equal(pgr, ref_pgr)
-        
-    def test_real_mask_to_polar(self):
-        
-        # mask the top-left real corner, make sure pixels in [0,pi/2] are masked
-        # while others aren't
-        
-        q_values = np.array([1.0, 2.0])
-        num_phi = 360
-        
-        mask = np.ones(self.i.shape, dtype=np.bool)
-        mask[ (self.d.xyz[:,0] > 0.0) * (self.d.xyz[:,1] > 0.0) ] = np.bool(False)
-        
-        s = xray.Shot(self.i, self.d, mask=mask)
-        polar_mask = s._real_mask_to_polar(q_values, num_phi)
-        polar_grid = s.polar_grid(q_values, num_phi)
-        
-        print "polar num *not* masked, total:", np.sum(polar_mask), polar_mask.shape[0]
-        
-        # make sure quadrant I is masked
-        QI = (polar_grid[:,1] > 0.0) * (polar_grid[:,1] < (np.pi/2.0))
-        assert np.all( polar_mask[QI] == np.bool(False) )
-        
-        # make sure quadrant III is not masked
-        QIII = (polar_grid[:,1] > 3.17) * (polar_grid[:,1] < 4.6)
-        assert np.sum( np.logical_not(polar_mask[QIII]) ) == 0.0
-        
     def test_mask_argument(self):
         # simple smoke test to make sure we can interpolate with a mask
         q_value = np.array([1.0, 2.0])
@@ -382,12 +289,45 @@ class TestShot(object):
         s = xray.Shot(self.i, self.d, mask=mask)
         s._interpolate_to_polar()
         
+    # missing test: test_assemble
+        
+    def test_polar_grid(self):
+        raise NotImplementedError('test not in')
+        
+    def test_polar_grid_as_cart(self):
+        pg = self.shot.polar_grid(self.q_values, self.num_phi)
+        pgc = self.shot.polar_grid_as_cart(self.q_values, self.num_phi)
+        mag = np.sqrt(np.sum(np.power(pgc,2), axis=1))
+        assert_array_almost_equal( mag, pg[:,0] )
+        maxq = self.q_values.max()
+        assert np.all( mag <= (maxq + 1e-6)
+        
+    def test_interpolate_to_polar(self):
+        raise NotImplementedError('test not in')
+        
+    def test_implicit_interpolation(self):
+        s = xray.Shot(self.i, self.d)
+        raise NotImplementedError('test not in')
+        
+    def test_explicit_interpolation(self):
+        d = xray.Detector.generic(spacing=0.4, force_explicit=True)
+        s = xray.Shot(self.i, d)
+        raise NotImplementedError('test not in')
+        
+    def test_interpolation_consistency(self):
+        de = xray.Detector.generic(spacing=0.4, force_explicit=True)
+        s1 = xray.Shot(self.i, self.d)
+        s2 = xray.Shot(self.i, de)
+        raise NotImplementedError('test not in')
+        
     def test_i_profile(self):
+        # doubles as a test for intensity_maxima()
         t = structure.load_coor(ref_file('gold1k.coor'))
-        s = xray.Shot.simulate(t, 1, self.d)
+        s = xray.Shot.simulate(t, 5, self.d)
         p = s.intensity_profile()
         m = s.intensity_maxima()
-        assert np.abs(p[m[0],0] - 2.6763881) < 1e-3
+        # check |q| = 2.67 is in the maxima
+        assert np.any(np.abs(p[m,0] - 2.6763881) < 1e-1)
                 
     def test_sim(self):
         if not GPU: raise SkipTest
@@ -411,8 +351,16 @@ class TestShot(object):
         q_values = np.linspace(1.0, 2.0, num=10)
         rings = self.shot.to_rings(q_values)
         rings_ip = rings.intensity_profile()
-        shot_ip = self.shot.intensity_profile(n_bins=q_values)
+        shot_ip = self.shot.intensity_profile(n_bins=10)
         assert_allclose(rings_ip, shot_ip)
+        
+    def test_io(self):
+        if os.path.exists('test.shot'): os.remove('test.shot')
+        self.shot.save('test.shot')
+        s = xray.Shot.load('test.shot')
+        if os.path.exists('test.shot'): os.remove('test.shot')
+        assert_array_almost_equal(s.intensity_profile(),
+                                  self.shot.intensity_profile() )
         
         
 class TestShotset():
@@ -421,9 +369,10 @@ class TestShotset():
     #        via the tests in TestShot above. Should add these here later.
     
     def setup(self):
-        self.shot = xray.Shot.load(ref_file('refshot.shot'))
-        self.shotset = xray.Shotset([self.shot])
+        self.d = xray.Detector.generic(spacing=0.4)
         self.t = trajectory.load(ref_file('ala2.pdb'))
+        self.shot = xray.Shot.simulate(self.t, 1, self.d)
+        self.shotset = xray.Shotset([self.shot])
         
     def test_iter_n_slice(self):
         s = self.shotset[0]
