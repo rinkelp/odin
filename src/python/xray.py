@@ -22,7 +22,7 @@ from scipy.special import legendre
 from odin.math2 import arctan3, smooth, find_overlap, freedman_diaconis
 from odin import scatter
 from odin.interp import Bcinterp
-from odin.utils import unique_rows
+from odin.utils import unique_rows, maxima
 
 from mdtraj import trajectory, io
 
@@ -620,7 +620,7 @@ class Detector(Beam):
         q = self.k * (S - self.beam_vector)
         
         return q
-        
+    
         
     def _real_to_recpolar(self, xyz):
         """
@@ -645,7 +645,7 @@ class Detector(Beam):
         else:
             raise ValueError('Shape of vector wrong')
         return norm
-        
+    
         
     def _unit_vector(self, vector):
         """
@@ -702,7 +702,7 @@ class Detector(Beam):
         return polar
     
 
-    def _compute_intersections(self, q_vectors, grid_index):
+    def _compute_intersections(self, q_vectors, grid_index, run_checks=True):
         """
         Compute the points i=(x,y,z) where the scattering vectors described by
         `q_vectors` intersect the detector.
@@ -714,6 +714,11 @@ class Detector(Beam):
             
         grid_index : int
             The index of the grid array to intersect
+            
+        Optional Parameters
+        -------------------
+        run_checks: bool
+            Whether to run some good sanity checks, at small computational cost.
             
         Returns
         -------
@@ -746,18 +751,18 @@ class Detector(Beam):
         A = np.array([s,f]).T
         pix_n, resid, rank, sigma = np.linalg.lstsq( A, (i-p).T )
         
-        # this is a sanity chk that can be removed at some later date -- TJL
-        err = np.sum( np.abs((i-p) - np.transpose( np.dot(A, pix_n) )) )
-        if err > 1e-6:
-            raise RuntimeError('Error in computing where scattering vectors '
-                               'intersect with detector. Intersect not reproduced'
-                               ' (err: %f per pixel)' % (err / i.shape[0],) )
+        if run_checks:
+            err = np.sum( np.abs((i-p) - np.transpose( np.dot(A, pix_n) )) )
+            if err > 1e-6:
+                raise RuntimeError('Error in computing where scattering vectors '
+                                   'intersect with detector. Intersect not reproduced'
+                                   ' (err: %f per pixel)' % (err / i.shape[0],) )
         
-        if not np.sum(resid) < 1e-6:
-            raise RuntimeError('Error in basis grid (residuals of point '
-                               'placement too large). Perhaps fast/slow '
-                               'vectors describing basis grid are linearly '
-                               'dependant?')
+            if not np.sum(resid) < 1e-6:
+                raise RuntimeError('Error in basis grid (residuals of point '
+                                   'placement too large). Perhaps fast/slow '
+                                   'vectors describing basis grid are linearly '
+                                   'dependant?')
 
         pix_n = pix_n.T
         assert pix_n.shape[1] == 2 # s/f
@@ -787,24 +792,20 @@ class Detector(Beam):
             The real-space grid spacing
         lim : float
             The upper and lower limits of the grid
-        k : float
-            Wavenumber of the beam
+        energy : float
+            Energy of the beam (in keV)
         l : float
             The path length from the sample to the detector, in the same units
             as the detector dimensions.
+        force_explicit : bool
+            Forces the detector to be xyz_type explicit. Mostly for debugging.
+            Recommend keeping `False`.
 
         Returns
         -------
         detector : odin.xray.Detector
             An instance of the detector that meets the specifications of the 
             parameters
-            
-            
-        Optional Parameters
-        -------------------
-        force_explicit : bool
-            Forces the detector to be xyz_type explicit. Mostly for debugging.
-            Recommend keeping `False`.
         """
         
         beam = Beam(photons_scattered_per_shot, energy=energy)
@@ -1450,7 +1451,7 @@ class Shot(object):
         Returns
         -------
         interpolated_intensities : ndarray, float
-            The interpolated values.
+            The interpolated values. A one-D array, with phi as the fast scan.
             
         polar_mask : ndarray, bool
             A mask of ones and zeros. Ones are kept, zeros masked.
@@ -1487,7 +1488,12 @@ class Shot(object):
         the number of pixels in the x/y direction, and the top-left corner
         position.
         
-        NOTE: The interpolation is performed in cartesian real (xyz) space.
+        Notes
+        -----
+        --  The interpolation is performed in real space in basis vector (s/f)
+            units
+        --  The returned polar intensities are flattened, but each grid has data
+            laid out as (q_values [slow], phi [fast])
         """
         
         # initialize output space for the polar data and mask
@@ -1503,20 +1509,20 @@ class Shot(object):
         int_start = 0 # start of intensity array correpsonding to `grid`
         int_end   = 0 # end of intensity array correpsonding to `grid`
         
-        for k in range(self.detector._basis_grid.num_grids):
+        for g in range(self.detector._basis_grid.num_grids):
             
-            p, s, f, size = self.detector._basis_grid.get_grid(k)
+            p, s, f, size = self.detector._basis_grid.get_grid(g)
             
             # compute how many pixels this grid has
             n_int = int( np.product(size) )
             int_end += n_int
             
             # compute where the scattering vectors intersect the detector
-            pix_n, intersect = self.detector._compute_intersections(q_vectors, k)
+            pix_n, intersect = self.detector._compute_intersections(q_vectors, g)
             
             if np.sum(intersect) == 0:
                 logger.warning('Detector array (%d) had no pixels inside the \
-                interpolation area!' % k)
+                interpolation area!' % g)
                 continue
                         
             # interpolate onto the polar grid & update the inverse mask
@@ -1525,7 +1531,7 @@ class Shot(object):
             
             # corner: (0,0); x/y size: 1.0
             interp = Bcinterp(self.intensities[int_start:int_end], 
-                              1.0, 1.0, size[1], size[0], 0.0, 0.0) # x IS FAST!!
+                              1.0, 1.0, size[1], size[0], 0.0, 0.0) # x IS FAST!
             
             polar_intensities[intersect] = interp.evaluate(pix_n[:,1], 
                                                            pix_n[:,0])
@@ -1576,7 +1582,7 @@ class Shot(object):
         xy[:,1] = polar[:,2] # phi
         
         # mask points by simply discarding them -- tjl dbl chk todo
-        xy = xy[self.mask,:]
+        #xy = xy[self.mask,:]
         
         # because we're using a "square" interplation method, wrap around one
         # set of polar coordinates to capture the periodic nature of polar coords
@@ -1657,11 +1663,9 @@ class Shot(object):
         
         # first, smooth; then, find local maxima based on neighbors
         intensity = self.intensity_profile()
-        a = smooth(intensity[:,1], beta=smooth_strength)
-        maxima = np.where(np.r_[True, a[1:] > a[:-1]] & np.r_[a[:-1] > a[1:], True] == True)[0]
-        
-        return maxima
-        
+        m = maxima( smooth(intensity[:,1], beta=smooth_strength) )
+        return m
+    
         
     @classmethod
     def simulate(cls, traj, num_molecules, detector, traj_weights=None, 
@@ -2625,7 +2629,7 @@ class Rings(object):
                                       finite_photon=finite_photon,
                                       force_no_gpu=force_no_gpu,
                                       device_id=device_id)
-            polar_intensities[i,:,:] = I.reshape(num_phi, len(q_values)).T
+            polar_intensities[i,:,:] = I.reshape(len(q_values), num_phi)
 
             logger.info('Finished polar shot %d/%d on device %d' % (i+1, num_shots, device_id) )
 
@@ -2711,24 +2715,18 @@ def _q_grid_as_xyz(q_values, num_phi, k):
         An N x 3 array of (q_x, q_y, q_z)
     """
     
-    phi_values = np.linspace(0.0, 2.0*np.pi, num=num_phi )
+    phi_values = np.linspace( 0.0, 2.0*np.pi, num=num_phi )
     num_q = len(q_values)
     
     # q_h is the magnitude projection of the scattering vector on (x,y)
-    q_h = np.power(q_values, 2) / (2.0 * k)
-    q_z = q_values * np.sqrt( 1.0 - np.power( q_values / (2.0 * k), 2 ) )
+    q_z = - np.power(q_values, 2) / (2.0 * k)
+    q_h = q_values * np.sqrt( 1.0 - np.power( q_values / (2.0 * k), 2 ) )
         
     # construct the polar grid:
-    #   gotta tile q / repeat phi to make the reshape below work right
-    #   this is weird but consistent with other parts of the code in Shot
     qxyz = np.zeros(( num_q * num_phi, 3 ))
-    qxyz[:,0] = np.tile(q_h, num_phi) * np.cos(np.repeat(phi_values, num_q)) # q_x
-    qxyz[:,1] = np.tile(q_h, num_phi) * np.sin(np.repeat(phi_values, num_q)) # q_y
-    qxyz[:,2] = np.tile( q_z, num_phi )                                      # q_z
-    
-    # assert that the above vectors are the correct length
-    assert np.all( np.abs( np.sqrt( np.sum( np.power(qxyz,2), axis=1 ) ) - \
-                           np.tile(q_values, num_phi)) < 1e-6 )
+    qxyz[:,0] = np.repeat(q_h, num_phi) * np.cos(np.tile(phi_values, num_q)) # q_x
+    qxyz[:,1] = np.repeat(q_h, num_phi) * np.sin(np.tile(phi_values, num_q)) # q_y
+    qxyz[:,2] = np.repeat(q_z, num_phi)                                      # q_z
                            
     return qxyz
     

@@ -7,7 +7,7 @@ import os, sys
 import warnings
 from nose import SkipTest
 
-from odin import xray, utils, parse, structure, math2
+from odin import xray, utils, parse, structure, math2, utils
 from odin.testing import skip, ref_file, expected_failure, brute_force_masked_correlation
 from odin.refdata import cromer_mann_params
 from mdtraj import trajectory, io
@@ -332,7 +332,11 @@ class TestShot(object):
     # missing test: test_assemble (ok for now)
         
     def test_polar_grid(self):
-        raise NotImplementedError('test not in')
+        pg = self.shot.polar_grid([1.0], 360)
+        pg_ref = np.zeros((360, 2))
+        pg_ref[:,0] = 1.0
+        pg_ref[:,1] = np.linspace(0.0, 2.0*np.pi, num=360)
+        assert_array_almost_equal(pg, pg_ref)
         
     def test_polar_grid_as_cart(self):
         pg = self.shot.polar_grid(self.q_values, self.num_phi)
@@ -343,22 +347,39 @@ class TestShot(object):
         assert np.all( mag <= (maxq + 1e-6) )
         
     def test_interpolate_to_polar(self):
-        raise NotImplementedError('test not in')
-        
-    def test_implicit_interpolation(self):
-        s = xray.Shot(self.i, self.d)
-        raise NotImplementedError('test not in')
+        # doubles as a test for _implicit_interpolation
+        q_values = np.array([2.4, 2.67, 3.0]) # should be a peak at |q|=2.67
+        t = structure.load_coor(ref_file('gold1k.coor'))
+        s = xray.Shot.simulate(t, 3, self.d)
+        pi, pm = s._interpolate_to_polar(q_values=q_values)
+        pi = pi.reshape(360,len(q_values))
+        ip = pi.sum(1) # should be a peak at |q|=2.67
+        assert ip[1] > ip[0]
+        assert ip[1] > ip[2]
         
     def test_explicit_interpolation(self):
-        d = xray.Detector.generic(spacing=0.4, force_explicit=True)
-        s = xray.Shot(self.i, d)
-        raise NotImplementedError('test not in')
+        # doubles as a test for _implicit_interpolation
+        q_values = np.array([2.4, 2.67, 3.0]) # should be a peak at |q|=2.67
+        t = structure.load_coor(ref_file('gold1k.coor'))
+        self.d.implicit_to_explicit()
+        s = xray.Shot.simulate(t, 3, self.d)
+        pi, pm = s._interpolate_to_polar(q_values=q_values)
+        pi = pi.reshape(360,len(q_values))
+        ip = pi.sum(0) # should be a peak at |q|=2.67
+        assert ip[1] > ip[0]
+        assert ip[1] > ip[2]
+        
+        assert False # there is a bug somewhere... (visual)
         
     def test_interpolation_consistency(self):
+        q_values = np.array([0.2, 0.4])
         de = xray.Detector.generic(spacing=0.4, force_explicit=True)
         s1 = xray.Shot(self.i, self.d)
         s2 = xray.Shot(self.i, de)
-        raise NotImplementedError('test not in')
+        p1, m1 = s1._interpolate_to_polar(q_values=q_values)
+        p2, m2 = s2._interpolate_to_polar(q_values=q_values)
+        assert_allclose(p1, p2, err_msg='interp intensities dont match')
+        assert_allclose(m1, m2, err_msg='polar masks dont match')
         
     def test_i_profile(self):
         # doubles as a test for intensity_maxima()
@@ -516,7 +537,6 @@ class TestRings(object):
         t = structure.load_coor(ref_file('gold1k.coor'))
         rings = xray.Rings.simulate(t, 10, q_values, self.num_phi, 1) # 3 molec, 1 shots
         ip = rings.intensity_profile()
-        print ip
         assert ip[1,1] > ip[0,1]
         assert ip[1,1] > ip[2,1]
         
@@ -657,4 +677,48 @@ class TestRings(object):
         r = xray.Rings.load('test.ring')
         os.remove('test.ring')
         assert np.all( self.rings.polar_intensities == r.polar_intensities)
+        
+
+class TestMisc(object):
+    
+    def test_q_values(self):
+        
+        q_values = np.array([1.0, 2.0, 3.0])
+        num_phi = 360
+        k = 2.0 * np.pi / 1.4
+        
+        qxyz = xray._q_grid_as_xyz(q_values, num_phi, k)
+        
+        # assert that the above vectors are the correct length
+        assert np.all( np.abs( np.sqrt( np.sum( np.power(qxyz,2), axis=1 ) ) - \
+                               np.repeat(q_values, num_phi)) < 1e-6 )
+                               
+    def test_iprofile_consistency(self):
+        
+        t = structure.load_coor(ref_file('gold1k.coor'))
+        d = xray.Detector.generic()
+        s = xray.Shot.simulate(t, 5, d)
+        
+        # compute from polar interp
+        pi, pm = s._implicit_interpolation(q_values, num_phi)
+        pi = pi.reshape(len(q_values), num_phi)
+        ip1 = np.zeros(len(q_values), 2)
+        ip1[:,1] = q_values
+        ip1[:,1] = pi.sum(1)
+        
+        # compute from detector
+        ip2 = s.intensity_profile()
+
+        # compute from rings
+        r = xray.Rings.simulate(t, 5, q_values, 360, 1) 
+        ip3 = r.intensity_profile()
+                               
+        # make sure maxima are all similar
+        m1 = ip1[utils.maxima(ip1[:,1]),0]
+        m2 = ip2[utils.maxima(ip2[:,1]),0]
+        m3 = ip3[utils.maxima(ip3[:,1]),0]
+        
+        assert_allclose(m1, m2)
+        assert_allclose(m1, m3)
+        assert_allclose(m2, m3)
         
