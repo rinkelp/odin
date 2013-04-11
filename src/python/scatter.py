@@ -105,8 +105,7 @@ def simulate_shot(traj, num_molecules, detector, traj_weights=None,
         if detector.beam == None:
             raise RuntimeError('`detector` object must have a beam attribute if'
                                ' finite photon statistics are to be computed')
-        poisson_parameter = float(detector.beam.photons_scattered_per_shot) / \
-                            float(num_molecules)
+        poisson_parameter = float(detector.beam.photons_scattered_per_shot)
     else:
         poisson_parameter = 0.0 # flag to downstream code to not use stats
     
@@ -156,15 +155,14 @@ def simulate_shot(traj, num_molecules, detector, traj_weights=None,
             # run dat shit
             if num_cpu > 0:
                 logger.debug('Running CPU scattering code (%d/%d)...' % (num_cpu, num))
-                cpu_args = (num_cpu, qxyz, rxyz, atomic_numbers, poisson_parameter)
+                cpu_args = (num_cpu, qxyz, rxyz, atomic_numbers)
                 t_cpu = Thread(target=multi_helper, args=('cpu', cpu_args))
                 t_cpu.start()
                 threads.append(t_cpu)                
 
             if num_gpu > 0:
                 logger.debug('Sending calculation to GPU device...')
-                gpu_args = (num_gpu, qxyz, rxyz, atomic_numbers, 
-                            poisson_parameter, device_id)
+                gpu_args = (num_gpu, qxyz, rxyz, atomic_numbers, device_id)
                 t_gpu = Thread(target=multi_helper, args=('gpu', gpu_args))
                 t_gpu.start()
                 threads.append(t_gpu)
@@ -172,6 +170,14 @@ def simulate_shot(traj, num_molecules, detector, traj_weights=None,
             # ensure child processes have finished
             for t in threads:
                 t.join()
+        
+        
+    # if we're using finite photons, sample those stats
+    if poisson_parameter > 0.0:
+        n = np.random.poisson(poisson_parameter)
+        p = intensities / intensities.sum()
+        intensities = np.random.multinomial(n, p)
+        
         
     return intensities
         

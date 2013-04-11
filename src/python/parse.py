@@ -22,7 +22,7 @@ from base64 import b64encode
 import numpy as np
 
 from odin import xray
-from odin.math2 import CircularHough
+from odin.math2 import CircularHough, find_center
 
 
 try:
@@ -78,7 +78,8 @@ class CBF(object):
         p = self._info['Pixel_size'].split()
         assert p[1].strip() == p[4].strip()
         assert p[2].strip() == 'x'
-        return (float(p[0]), float(p[3]))
+        pix_size = (float(p[0]), float(p[3]))
+        return pix_size
         
     @property
     def path_length(self):
@@ -99,7 +100,7 @@ class CBF(object):
         """
         The indicies of the pixel nearest the center
         """
-        if not hasattr(self, 'center'):
+        if not hasattr(self, '_center'):
             self._center = self._find_center()
         return self._center
         
@@ -108,8 +109,8 @@ class CBF(object):
         """
         The bottom left corner position, in real space.
         """
-        #return (self.pixel_size[0] * self.center[0], self.pixel_size[1] * self.center[1])
-        return (0.0, 0.0)
+        return (-self.pixel_size[0] * self.center[0], 
+                -self.pixel_size[1] * self.center[1])
         
     @property
     def intensities(self):
@@ -144,7 +145,7 @@ class CBF(object):
         """
         Fabio provides an '_array_data.header_contents' key entry in that
         needs to be parsed. E.g. for a test PILATUS detector file generated at
-        SSRL, this dictionary entry looks like
+        SSRL 12-2, this dictionary entry looks like
         
         fabio_object.header['_array_data.header_contents'] = 
         '# Detector: PILATUS 6M, S/N 60-0101 SSRL\r\n# 2012/Apr/09 20:02:10.800
@@ -213,9 +214,8 @@ class CBF(object):
         center : tuple of ints
             The indicies of the pixel nearest the center of the Bragg peaks.
         """
-        #CM = CircularHough(radii=10, threshold=0.1, stencil_width=1, procs=1)
-        #center = CM(image, mode='concentric')
-        center = (2463/2.,2527/2.)
+        # todo
+        center = np.array(self.intensities_shape) / 2.0
         return center
         
         
@@ -229,19 +229,104 @@ class CBF(object):
             The CBF file as an ODIN shot.
         """
         
-        # grid_list = (basis, shape, corner)
-        # todo : do we need to center the image, changing corner?
-        basis  = tuple( list(self.pixel_size) + [0.0] )
-        shape  = tuple( list(self.intensities_shape) + [1] ) # add z dim
-        corner = tuple( list(self.corner) + [0.0] )
-        grid_list = [(basis, shape, corner )]
+        p = np.array(list(self.corner) + [self.path_length])
+        f = np.array([self.pixel_size[0], 0.0, 0.0]) # fast is x
+        s = np.array([0.0, self.pixel_size[1], 0.0]) # slow is y
         
-        b = xray.Beam(1e4, wavelength=self.wavelength)
-        d = xray.Detector.from_basis(grid_list, self.path_length, b.k)
+        bg = xray.BasisGrid()
+        bg.add_grid(p, s, f, self.intensities_shape)
+        
+        # todo better value for photons
+        b = xray.Beam(1e4, wavelength=self.wavelength) 
+        d = xray.Detector(bg, b.k)
         s = xray.Shot(self.intensities.flatten().astype(np.float64), d)
         
-        return s
+        return s  
+    
         
+class Pilatus(CBF):
+    """
+    A class for dealing with CBF files that specifically were generated from a
+    Pilatus detector. This class was designed for the detector at SSRL bl 12-2,
+    but should work for other beam lines as well.
+    """
+        
+    def __init__(self, filename, mask=None):
+        """
+        
+        """
+        
+        # run CBF's init, and then add some more stuff
+        super(Pilatus, self).__init__(filename)
+        
+        # masking: start with _mask_gaps, and add mask if it got passed
+        if mask != None:
+            if not mask.shape == self.intensities_shape:
+                raise ValueError('`mask` must have same shape as intensity array '
+                   '(%s), got: %s' % (str(self.intensities_shape), str(mask.shape)))
+            self.mask = np.logical_and(mask, self._mask_gaps())
+        else:
+            self.mask = self._mask_gaps()
+            
+        return
+    
+        
+    def _find_center(self):
+        """
+        Over-ride CBF's find center method.
+        """
+        return find_center(self.intensities, self.mask)
+        
+    
+    def _mask_gaps(self, border_size=3):
+        """
+        The pixels on the edges of the detector are often noisy -- this function
+        provides a way to mask both the gaps and these border pixels.
+        
+        Parameters
+        ----------
+        border_size : int
+            The size of the border (in pixels) with which to extend the mask
+            around the detector gaps.
+        """
+        
+        border_size = int(border_size)
+        mask = np.ones(self.intensities_shape, dtype=np.bool)
+        
+        # below we have the rows (x_gaps) and columns (y_gaps) to mask
+        
+        x_gaps = [(486-border_size,494+border_size),
+                  (980-border_size,988+border_size),
+                  (1474-border_size,1482+border_size),
+                  (1968-border_size,1976+border_size)]
+        
+        y_gaps = [(194-border_size,212+border_size),
+                  (406-border_size,424+border_size),
+                  (618-border_size,636+border_size),
+                  (830-border_size,848+border_size),
+                  (1042-border_size,1060+border_size),
+                  (1254-border_size,1272+border_size),
+                  (1466-border_size,1484+border_size),
+                  (1678-border_size,1696+border_size),
+                  (1890-border_size,1908+border_size),
+                  (2102-border_size,2120+border_size),
+                  (2314-border_size,2332+border_size)]
+                  
+        for x in x_gaps:
+            mask[x[0]:x[1],:] = np.bool(False)
+            
+        for y in y_gaps:
+            mask[:,y[0]:y[1]] = np.bool(False)
+            
+        return mask
+
+
+    @staticmethod
+    def dir_to_shotset(directory):
+        """
+        """
+        raise NotImplementedError()
+    
         
 class KittyH5(object):
     """

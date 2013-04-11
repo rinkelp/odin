@@ -29,13 +29,17 @@ cdef class Bcinterp:
         Parameters
         ----------
         values : ndarray, float
-            The observed value 
+            The observed values. Can either be a one- or two-dimensional array.
+            Note that x is assumed to be the fast scan direction.
     
         x_spacing, y_spacing : float
             The grid spacing, in the x/y direction
     
         x_dim, y_dim : int
             The size of the grid in the x/y dimension
+            
+        x_corner, y_corner : float
+            The location of the bottom left corner of the image.
     
         Returns
         -------
@@ -43,9 +47,16 @@ cdef class Bcinterp:
     
         See Also
         --------
-        Bcinterp.ev : function
+        Bcinterp.evaluate : function
             Evaluate the interpolated function at one or more points
         """
+        
+        if len(vals.shape) == 1:
+            pass
+        elif len(vals.shape) == 2:
+            vals = vals.flatten()
+        else:
+            raise ValueError('`vals` must be a one- or two-dimensional array')
         
         cdef np.ndarray[ndim=1, dtype=np.float32_t] v
         v = np.ascontiguousarray(vals, dtype=np.float32)
@@ -57,9 +68,9 @@ cdef class Bcinterp:
         if not (type(x_corner) == float) and (type(y_corner) == float):
             raise TypeError('`x_corner`, `y_corner` must be type: float')
          
-        if not len(vals) == Xdim * Ydim:
-            raise ValueError('`vals` must be len `Xdim` * `Ydim`')
-
+        if not np.product(vals.shape) == Xdim * Ydim:
+            raise ValueError('`vals` must have `Xdim` * `Ydim` total pixels')
+        
         self.c = new C_Bcinterp(len(vals), &v[0], x_space, y_space,
                                 Xdim, Ydim, x_corner, y_corner)
                 

@@ -28,7 +28,18 @@ int main(){
     x = 1.01;
     y = 1.01;
     i = bc.evaluate_point(x, y);
-    cout << "interp value: " << i << endl;
+    cout << "(1.01, 1.01): " << i << endl;
+
+    x = 1.5;
+    y = 1.5;
+    i = bc.evaluate_point(x, y);
+    cout << "(1.5, 1.5): " << i << endl;
+
+    x = 20.3;
+    y = 2.0;
+    i = bc.evaluate_point(x, y);
+    cout << "(20.3, 2.0): " << i << endl;
+
 
     delete [] vals;
 

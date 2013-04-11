@@ -146,9 +146,9 @@ Bcinterp::Bcinterp( int Nvals, float *vals, float x_space_, float y_space_,
     alphas.resize(size_alphas, 0.0); // generate a vector len aN of zeros
 
 	
-    for( x = 0; x < Xdim-1; x++ ) {
-        #pragma omp parallel for shared(x, dx, dy, dxdy, dIdx, dIdy, dIdxdy)
-        for( y = 0; y < Ydim-1; y++ ) {
+    for( y = 0; y < Ydim-1; y++ ) {
+        // #pragma omp parallel for shared(x, dx, dy, dxdy, dIdx, dIdy, dIdxdy)
+        for( x = 0; x < Xdim-1; x++ ) {
 
 			a00 =    F(I,x,y);
 			a10 =    F(dIdx,x,y);
@@ -183,7 +183,7 @@ Bcinterp::Bcinterp( int Nvals, float *vals, float x_space_, float y_space_,
 			a33+=    F(dIdxdy,x,y) +   F(dIdxdy,x+1,y) +   F(dIdxdy,x,y+1) +   F(dIdxdy,x+1,y+1);
 
             // store the computed values
-            unsigned int k = 16*x*(Ydim-1) + 16*y;
+            unsigned int k = 16*y*(Xdim-1) + 16*x;
             
             if( (k + 15) >= size_alphas ) {
                 cout << "error accessing alphas element: " << k+15 << endl;
@@ -191,7 +191,7 @@ Bcinterp::Bcinterp( int Nvals, float *vals, float x_space_, float y_space_,
                 throw std::out_of_range("over-run range on alphas in Bcinterp constructor");
             }
             
-            #pragma omp critical
+            // #pragma omp critical
             {
             alphas[k] = a00;
             alphas[k+1] = a10;
@@ -240,12 +240,12 @@ float Bcinterp::evaluate_point (float x, float y) {
     float xm = (x-x_corner) / x_space;
     float ym = (y-y_corner) / y_space;
     
-    if( xm < 0.0 ) {
+    if ( xm < 0.0 ) {
         cout << "Error: Attempting to evaluate point outside of convex hull.";
         cout << "xm: " << xm << " less than zero" << endl;
         throw std::out_of_range("xm less than zero");
     }
-    if( ym < 0.0 ) {
+    if ( ym < 0.0 ) {
         cout << "Error: Attempting to evaluate point outside of convex hull.";
         cout << "ym: " << ym << " less than zero" << endl;
         throw std::out_of_range("ym less than zero");
@@ -256,8 +256,8 @@ float Bcinterp::evaluate_point (float x, float y) {
 	unsigned int j = int(floor(ym));
 
 	// retrieve the alpha parameters for that specific square (these define
-	// the polynomial function over the square)
-	unsigned int aStart = 16*i*(Ydim-1) + 16*j;
+	// the polynomial function over the square). note: X is fast scan, Y slow.
+	unsigned int aStart = 16*j*(Xdim-1) + 16*i;
 	
     if( (aStart + 15) > size_alphas ) {
         cout << "accessing alphas element: " << aStart+15 << endl;
@@ -308,7 +308,7 @@ void Bcinterp::evaluate_array(int dim_xa, float *xa, int dim_ya, float *ya,
         throw std::invalid_argument("xa, ya, za must all be same dimension");
     }
         
-    #pragma omp parallel for shared(za)
+    // #pragma omp parallel for shared(za)
     for( int i = 0; i < dim_za; i++ ) {
         za[i] = evaluate_point(xa[i], ya[i]);
     }
