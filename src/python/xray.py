@@ -2104,16 +2104,16 @@ class Rings(object):
 	outOfPlane : float
 	    fraction of polarization out of the synchrotron plane (between 0 and 1)
 	"""
+	print "Warning, this method is still under development."
 	wave = self.k / 2. / np.pi
 	for i in xrange(self.num_q):
 	  q = self.q_values[i]
   	  theta = np.arcsin( q*wave / 4./ np.pi)
           SinTheta = np.sin( 2 * theta )
 	  for j in xrange(self.num_shots):
-	    I = self.polar_intensities[ j, i, : ]
 	    correction  = outOfPlane * ( 1. - SinTheta**2  * np.cos(self.phi_values)**2 )
 	    correction += (1.-outOfPlane) * (1. - SinTheta**2 * np.sin( self.phi_values)** 2)
-	    I /= correction
+	    self.polar_intensities[ j , i , : ]  /= correction
 	
     def intensity_profile(self):
         """
@@ -2181,10 +2181,10 @@ class Rings(object):
        
           if self.polar_mask != None:
 #  	    if mask use brute force cpp method 
-            mask1 = self.polar_mask[:,q_ind1,:]
-            mask2 = self.polar_mask[:,q_ind2,:]
+            mask1 = self.polar_mask[q_ind1]
+            mask2 = self.polar_mask[q_ind2]
             for i in xrange(num_cors):
-              intra += corr.correlate( rings1[i]*mask1[i], rings2[i]*mask2[i] )
+              intra += corr.correlate( rings1[i]*mask1, rings2[i]*mask2 )
           else:
 #	    otherwise use the fft method
             for i in xrange(num_cors):
@@ -2196,10 +2196,10 @@ class Rings(object):
        
           if self.polar_mask != None:
 #  	  if mask use brute force cpp method 
-            mask1 = self.polar_mask[:,q_ind1,:]
-            mask2 = self.polar_mask[:,q_ind2,:]
+            mask1 = self.polar_mask[q_ind1]
+            mask2 = self.polar_mask[q_ind2]
             for i in xrange(num_cors):
-              intra[i] = corr.correlate( rings1[i]*mask1[i], rings2[i]*mask2[i] )
+              intra[i] = corr.correlate( rings1[i]*mask1, rings2[i]*mask2 )
           else:
 #	    otherwise use the fft method
             for i in xrange(num_cors):
@@ -2261,10 +2261,10 @@ class Rings(object):
 	  inter = np.zeros( rings1.shape[1] )
         
 	  if self.polar_mask != None:
-            mask1 = self.polar_mask[:,q_ind1,:]
-            mask2 = self.polar_mask[:,q_ind2,:]
+            mask1 = self.polar_mask[q_ind1]
+            mask2 = self.polar_mask[q_ind2]
             for i,j in inter_pairs:
-              inter += corr.correlate( rings1[i]*mask1[i], rings2[j]*mask2[j] )
+              inter += corr.correlate( rings1[i]*mask1, rings2[j]*mask2 )
           else:
             for i,j in inter_pairs:
 	      inter += corr.correlate_using_fft( rings1[i], rings2[j] )
@@ -2274,11 +2274,11 @@ class Rings(object):
 	  inter = np.zeros( ( num_cors,rings1.shape[1] ) )
         
 	  if self.polar_mask != None:
-            mask1 = self.polar_mask[:,q_ind1,:]
-            mask2 = self.polar_mask[:,q_ind2,:]
+            mask1 = self.polar_mask[q_ind1]
+            mask2 = self.polar_mask[q_ind2]
 	    k = 0
             for i,j in inter_pairs:
-              inter[k] = corr.correlate( rings1[i]*mask1[i], rings2[j]*mask2[j] )
+              inter[k] = corr.correlate( rings1[i]*mask1, rings2[j]*mask2 )
 	      k += 1
           else:
 	    k = 0
