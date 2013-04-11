@@ -24,6 +24,8 @@ from odin.interp import Bcinterp
 
 from mdtraj import trajectory, io
 
+from odin import corr
+
 # ------------------------------------------------------------------------------
 # FUNDAMENTAL CONSTANTS
 
@@ -2232,8 +2234,27 @@ class Rings(object):
         self._q_values = np.array(q_values)
         self.polar_intensities = polar_intensities
         self.k = k
+	self.kam_correlator  = None
+
+#	number of inter shot correlations to compute
+	self.num_inter = None
+	
+	# Make intra and inter arrays for storing average correlators.
+	# Make dictionary for indexing these arrays at later times.
+	self.q_pairs = []
+	k = 0
+	for i in xrange( len(q_values) ):
+	  q1 = str(q_values[i])
+	  for j in xrange( i, len(q_values) ):
+	    q2 = str(q_values[j]) 
+	    self.q_pairs.append( ( q1 + '-' + q2  ,k ) )
+	    k += 1
+	self.q_pairs = dict( self.q_pairs )
+	
+	self._intra = np.zeros ( ( k , polar_intensities.shape[2] ) )
+	self._inter = np.zeros ( ( k , polar_intensities.shape[2] ) )
         
-        return
+	return
     
         
     @property
@@ -2265,7 +2286,31 @@ class Rings(object):
     def num_datapoints(self):
         return self.num_phi * self.num_q
     
-    
+    def intra(self, q1, q2=None ):
+	if q2 == None:
+	  q2 = q1
+        q_ind1 = self.q_index(q1)
+        q_ind2 = self.q_index(q2)
+	q1q2_ind = self.q_pairs[  str(q1) + '-' + str(q2) ]
+	return self._intra[q1q2_ind]
+   
+    def inter(self, q1, q2=None ):
+	if q2 == None:
+	  q2 = q1
+        q_ind1 = self.q_index(q1)
+        q_ind2 = self.q_index(q2)
+	q1q2_ind = self.q_pairs[  str(q1) + '-' + str(q2) ]
+	return self._inter[q1q2_ind]
+	
+
+
+    def get_cos_psi_vals(self,q1,q2 ):
+        wave   = self.k / 2. / np.pi
+        t1     = np.pi/2. + np.arcsin( q1*wave / 4. / np.pi ) 
+        t2     = np.pi/2. + np.arcsin( q2*wave / 4. / np.pi )
+	return np.cos(t1)*np.cos(t2) + np.sin(t1)*np.sin(t2)*\
+               np.cos( self.phi_values ) 
+ 
     def q_index(self, q):
         """
         Convert value of |q| (in inverse Angstroms) into the index used to
@@ -2281,10 +2326,39 @@ class Rings(object):
         q_ind : int
             The index to slice `polar_intensities` at to get |q|.
         """
-        q_ind = int( np.where( self.q_values == q )[0] )
-        return q_ind
-    
+        q_ind = np.where( self.q_values == q )[0] 
+	if len(q_ind) == 0:
+	  raise ValueError("There if no ring at q = "+str(q) +" inv ang. " \
+			   "There are only data for q = "+ ", ".join(np.char.mod("%.2f",self.q_values) )  )
+	else:
+          return int (q_ind )
+
+    def dePolarize(self,outOfPlane):
+	""" 
+	Applies a polarization correction to the rings.
+	
+	Parameters 
+	----------
+	outOfPlane : float
+	    fraction of polarization out of the synchrotron plane (between 0 and 1)
+	"""
         
+	wave = self.k / 2. / np.pi
+	for i in xrange(self.num_q):
+	  q = self.q_values[i]
+  	  theta = np.asin( q*wave / 4./ np.pi)
+          SinTheta = np.sin( 2 * theta )
+          nphi = self.num_phi
+	  for j in xrange(self.num_shots):
+	    I = self.polar_intensities[ j, i, : ]
+	    for k in xrange(nphi):
+              phi = float(i)*2.*np.pi/float(nphi)
+              SinPhi = sin(phi)
+              CosPhi= cos(phi)
+              correction = outOfPlane*(1.-SinTheta*SinTheta*CosPhi*CosPhi)
+              correction += (1.-outOfPlane)*(1.-SinTheta*SinTheta*SinPhi*SinPhi)
+              I[k] = I[k] / correction	
+	
     def intensity_profile(self):
         """
         Averages over the azimuth phi to obtain an intensity profile.
@@ -2296,7 +2370,7 @@ class Rings(object):
             the second is the average intensity at that point < I(|q|) >_phi.
         """
         
-        intensity_profile = np.zeros( (self.num_q, 2), dtype=np.float )
+        intensity_profile      = np.zeros( (self.num_q, 2), dtype=np.float )
         intensity_profile[:,0] = self._q_values.copy()
         
         # average over shots, phi
@@ -2310,295 +2384,243 @@ class Rings(object):
         return intensity_profile
     
         
-    def correlate(self, q1, q2, delta_ind):
+    def correlate_intra(self, q1, q2, num_cors=0,mean_only = False):
         """
-        Compute the correlation function C(q1, q2, delta) for the shot, averaged
-        for each measured value of the azimuthal angle phi.
-    
-        Parameters
-        ----------
-        q1 : float
-            The magnitude of the first position to correlate.
-        q2 : float
-            The magnitude of the second position to correlate.
-        delta_ind : int
-            The index of the angle between the first and second q-vectors to 
-            calculate the correlation for.
+        Does intRA-shot correlations for many shots.
         
-        Returns
-        -------
-        correlation : float
-            The correlation between q1/q2 at angle delta. Specifically, this
-            is the correlation function with the mean subtracted <x*y> - <x><y>
-            
-        See Also
-        --------
-        correlate_ring : method
-            A faster way to compute many of these quantities for the same q's
-            but all deltas.
-        """
-        q_ind1 = self.q_index(q1)
-        q_ind2 = self.q_index(q2)
-        return self._correlate_by_index(q_ind1, q_ind2, delta_ind)
-    
-
-    def _correlate_by_index(self, q_ind1, q_ind2, delta_ind):
-        """
-        Compute the correlation function C(q1, q2, delta) for the shot, averaged
-        for each measured value of the azimuthal angle phi. 
+	Parameters
+	----------
+	ringsA : ndarray, float 
+	    (first dim = number of rings, second dim = number of pixels per ring) 
+        ringsB : ndarray float 
+	    (first dim = number of rings, second dim = number of pixels per ring) 
         
-        Here the arguments are the raw indices to slice self.polar_intensities
+	Optional Parameters
+	-------------------
+        num_cors : int 
+	    number of corrs to compute
+	mean_only : bool
+	    whether or not to return every correlation, or the average
         
-        Parameters
-        ----------
-        q_ind1 : int
-            The index of the magnitude of the first position to correlate.
-        q_ind2 : int
-            The index of the magnitude of the second position to correlate.
-        delta_ind : int
-            The index of the angle between the first and second q-vectors to 
-            calculate the correlation for.
-        
-        Returns
-        -------
-        correlation : float
-            The correlation between q1/q2 at angle delta. Specifically, this
-            is the correlation function with the mean subtracted <x*y> - <x><y>
+	Returns
+	------- 
+	intra : ndarray, float
+	    Either the average correlation, or every correlation as a 2d array 
         """
         
-        q_ind1 = int(q_ind1)
-        q_ind2 = int(q_ind2)
-        
-        # this is a bit messy, but below if we are using a mask:
-        # compute means/stds w/o the masked points, and proceed as usual but
-        # with a modified normalizing const (n_delta = the number of non-masked 
-        # pairs) and the masked pixel values set to zero. B/c of those zeros,
-        # the masked pixels do not contribute to the final sum (flagged: *)
-        
-        x = self.polar_intensities[:,q_ind1,:]
-        y = self.polar_intensities[:,q_ind2,:]
-        
-        if self.polar_mask != None:
-            
-            n_delta = np.sum(self.polar_mask[:,q_ind1,:] * \
-                             np.roll(self.polar_mask[:,q_ind2,:], delta_ind, axis=1) )
-                             
-            x -= np.sum( x[self.polar_mask[:,q_ind1,:]] ) / np.sum(self.polar_mask[:,q_ind1,:])
-            y -= np.sum( y[self.polar_mask[:,q_ind2,:]] ) / np.sum(self.polar_mask[:,q_ind2,:])
-            
-            x *= self.polar_mask[:,q_ind1,:]
-            y *= self.polar_mask[:,q_ind2,:]
-            
-            x_std = np.std( x[self.polar_mask[:,q_ind1,:]] )
-            y_std = np.std( y[self.polar_mask[:,q_ind2,:]] )
-            
-        else:            
-            x -= x.mean()
-            y -= y.mean()
-            
-            x_std = x.std()
-            y_std = y.std()
-            
-            n_delta = np.product(x.shape)
-            assert n_delta == np.product(y.shape)
-
-        y = np.roll(y, delta_ind, axis=1)
-        corr = np.sum(x * y) / (n_delta * x_std * y_std) # (*)
-        
-        return corr
-    
-
-    def correlate_ring(self, q1, q2):
-        """
-        Compute the correlation function C(q1, q2, delta) for the data, averaged
-        for each measured value of the azimuthal angle phi, for many values
-        of delta.
-        
-        Parameters
-        ----------
-        q1 : float
-            The magnitude of the first position to correlate.
-        q2 : float
-            The magnitude of the second position to correlate.
-            
-        Returns
-        -------
-        correlation_ring : ndarray, float
-            A 2d array, where the first dimension is the value of the angle
-            delta employed, and the second is the correlation at that point.
-        """
-        
-        logger.debug("Correlating rings at %f / %f" % (q1, q2))
+	logger.debug("Correlating rings at %f / %f" % (q1, q2))
         
         q_ind1 = self.q_index(q1)
         q_ind2 = self.q_index(q2)
+	q1q2_ind = self.q_pairs[  str(q1) + '-' + str(q2) ]
         
-        return self._correlate_ring_by_index(q_ind1, q_ind2)
-    
+        rings1 = self.polar_intensities[:,q_ind1,:] # shots at ring1 
+        rings2 = self.polar_intensities[:,q_ind2,:] # shots at ring2
+
+        if num_cors == 0:
+#	  then do correlation for all shots
+          num_cors = rings1.shape[0]
+	if mean_only:
+          intra = np.zeros( rings1.shape[1]  )
+       
+          if self.polar_mask != None:
+#  	    if mask use brute force cpp method 
+            mask1 = self.polar_mask[:,q_ind1,:]
+            mask2 = self.polar_mask[:,q_ind2,:]
+            for i in xrange(num_cors):
+              intra += corr.correlate( rings1[i]*mask1[i], rings2[i]*mask2[i] )
+          else:
+#	    otherwise use the fft method
+            for i in xrange(num_cors):
+	      intra += corr.correlate_using_fft( rings1[i], rings2[i] )
+	  self._intra[q1q2_ind] = intra
+	else:
+
+          intra = np.zeros( ( num_cors,rings1.shape[1] ) )
+       
+          if self.polar_mask != None:
+#  	  if mask use brute force cpp method 
+            mask1 = self.polar_mask[:,q_ind1,:]
+            mask2 = self.polar_mask[:,q_ind2,:]
+            for i in xrange(num_cors):
+              intra[i] = corr.correlate( rings1[i]*mask1[i], rings2[i]*mask2[i] )
+          else:
+#	    otherwise use the fft method
+            for i in xrange(num_cors):
+	      intra[i] = corr.correlate_using_fft( rings1[i], rings2[i] )
+#	  save the average correlator for future use in legendre projections
+	  self._intra[q1q2_ind]   = intra.mean( axis=0 )
+
+	return intra
+ 
+    def correlate_inter(self, q1, q2, num_cors=0, mean_only = False):
+  	"""
+        Does intER-shot correlations for many shots.
         
-    def _correlate_ring_by_index(self, q_ind1, q_ind2):
+	Parameters
+	----------
+	ringsA : ndarray, float 
+	    (first dim = number of rings, second dim = number of pixels per ring) 
+        ringsB : ndarray float 
+	    (first dim = number of rings, second dim = number of pixels per ring) 
+        
+	Optional Parameters
+	-------------------
+        num_cors : int 
+	    number of corrs to compute
+	mean_only : bool
+	    whether or not to return every correlation, or the average
+        
+	Returns
+	------- 
+	inter : ndarray, float
+	    Either the average correlation, or every correlation as a 2d array 
         """
-        Compute the correlation function C(q1, q2, delta) for the dataset, 
-        averaged for each measured value of the azimuthal angle phi, for many 
-        values of delta.
         
-        Parameters
-        ----------
-        q_ind1 : int
-            The index of the magnitude of the first position to correlate.
-        q_ind2 : int
-            The index of the magnitude of the second position to correlate.
-            
-        Returns
-        -------
-        correlation_ring : ndarray, float
-            A 2d array, where the first dimension is the value of the angle
-            delta employed, and the second is the correlation at that point.
-        """
+	logger.debug("Correlating rings at %f / %f" % (q1, q2))
         
-        q_ind1 = int(q_ind1)
-        q_ind2 = int(q_ind2)
-
-        x = self.polar_intensities[:,q_ind1,:]
-        y = self.polar_intensities[:,q_ind2,:]
-
-        if self.polar_mask != None:
-            
-            n_deltas = np.zeros(self.num_phi)
-            
-            for i in range(self.num_phi):            
-                n_deltas[i] = np.sum(self.polar_mask[:,q_ind1,:] * \
-                                     np.roll(self.polar_mask[:,q_ind2,:], i, axis=1) )
-            
-            x -= np.sum( x[self.polar_mask[:,q_ind1,:]] ) / np.sum(self.polar_mask[:,q_ind1,:])
-            y -= np.sum( y[self.polar_mask[:,q_ind2,:]] ) / np.sum(self.polar_mask[:,q_ind2,:])
-            
-            x *= self.polar_mask[:,q_ind1,:]
-            y *= self.polar_mask[:,q_ind2,:]
-            
-        else:            
-            x -= x.mean()
-            y -= y.mean()
-            
-            n_delta = np.product(x.shape)
-            assert n_delta == np.product(y.shape)
-
-        # use d-FFT + convolution thm
-        ffx = fftpack.fft(x, axis=1)
-        ffy = fftpack.fft(y, axis=1)
-        iff = np.real(fftpack.ifft( ffx * np.conjugate(ffy), axis=1 ))
-        
-        correlation_ring = iff.sum(axis=0)      # average all shots
-        
-        if self.polar_mask != None:
-            correlation_ring /= n_deltas
-        
-        correlation_ring /= correlation_ring[0] # normalize (ez-ier than stds)
-
-        return correlation_ring
-    
-    
-    def correlate_inter(self, q1, q2):
-        """
-        Compute the correlation function C(q1, q2, delta) for all pairs
-        of inter-shots (that is, the correlation function between uncorrelated
-        shots). This is useful for subtracting background signal.
-
-        Parameters
-        ----------
-        q1 : float
-            The magnitude of the first position to correlate.
-        q2 : float
-            The magnitude of the second position to correlate.
-
-        Returns
-        -------
-        x_correlation_ring : ndarray, float
-            A 2d array, where the first dimension is the value of the angle
-            delta employed, and the second is the correlation at that point.
-        """
-
-        logger.debug("Correlating *intra-shot* rings at %f / %f" % (q1, q2))
-
         q_ind1 = self.q_index(q1)
         q_ind2 = self.q_index(q2)
+	q1q2_ind = self.q_pairs[  str(q1) + '-' + str(q2) ]
+        
+        rings1 = self.polar_intensities[:,q_ind1,:]
+        rings2 = self.polar_intensities[:,q_ind2,:]
+        
+        if num_cors == 0:
+#	  default
+          num_cors = rings1.shape[0]
+	elif num_cors > rings1.shape[0] * (rings1.shape[0] - 1.) / 2. :
+#	  total number of possible combinations
+	  num_cors = rings1.shape[0] * (rings1.shape[0] - 1.) / 2. 
+        
+#	I believe this is faster than the method we discussed, and 
+#	still I think the method we discussed is not entirely what we want
+#	so sticking to this method for now. -dermen
+  	np.random.seed()
+  	rand_pairs   = np.random.randint( 0,rings1.shape[0], (num_cors,2) )
+ 	unique_pairs = list( set( tuple(pair) for pair in rand_pairs ) )
+  	inter_pairs  = filter( lambda x:x[0] != x[1], unique_pairs)
 
-        return self._correlate_inter_by_index(q_ind1, q_ind2)
-    
+	if mean_only:
+	  inter = np.zeros( rings1.shape[1] )
         
-    def _correlate_inter_by_index(self, q_ind1, q_ind2):
+	  if self.polar_mask != None:
+            mask1 = self.polar_mask[:,q_ind1,:]
+            mask2 = self.polar_mask[:,q_ind2,:]
+            for i,j in inter_pairs:
+              inter += corr.correlate( rings1[i]*mask1[i], rings2[j]*mask2[j] )
+          else:
+            for i,j in inter_pairs:
+	      inter += corr.correlate_using_fft( rings1[i], rings2[j] )
+	  self._inter[q1q2_ind] = inter 
+	
+	else:
+	  inter = np.zeros( ( num_cors,rings1.shape[1] ) )
+        
+	  if self.polar_mask != None:
+            mask1 = self.polar_mask[:,q_ind1,:]
+            mask2 = self.polar_mask[:,q_ind2,:]
+	    k = 0
+            for i,j in inter_pairs:
+              inter[k] = corr.correlate( rings1[i]*mask1[i], rings2[j]*mask2[j] )
+	      k += 1
+          else:
+	    k = 0
+            for i,j in inter_pairs:
+	      inter[k] = corr.correlate_using_fft( rings1[i], rings2[j] )
+	      k += 1
+	  self._inter[q1q2_ind] = inter.mean( axis=0 )
+	
+	return inter
+
+    def correlate_kam(self,q1,q2,cor):
+	""" 
+	Corrects the azimuthal intensity correlation on a detector for detector curvature.
+	Considers the Friedel Pairs C (cos(psi) ) = C( cos( -psi) )
+	
+	Parameters 
+	----------
+	q1,q2 : float, float 
+	    Inverse angstroms values of the intenisty rings
+	cor : ndarray,  float
+	    Azimuathl correlation function of intensities along a ring in  q space
+
+	Returns
+	-------
+	kamCor : ndarray, float  
+	    The Kam correlation function and the cos(psi) values
+	"""
+	cosPsi  = self.get_cos_psi_vals(q1,q2)
+	cosPsi  = np.append( cosPsi, - cosPsi)
+	newCor  = np.append( cor, cor )
+	combin  = np.append( cosPsi, newCor).reshape( (2,cosPsi.shape[0] )).T 
+	combin  = sorted( combin, key=lambda x:x[0] )
+	kamCor  = np.vstack( tuple( combin) )
+	return kamCor
+	
+
+    def legendre(self, q1, q2, order, use_inter_statistics=False):
         """
-        Compute the correlation function C(q1, q2, delta) for all pairs
-        of inter-shots (that is, the correlation function between uncorrelated
-        shots). This is useful for subtracting background signal.
-        
+        Project the correlation functions onto a set of legendre polynomials,
+        and return the coefficients of that projection.
+
         Parameters
         ----------
-        q_ind1 : int
-            The index of the magnitude of the first position to correlate.
-        q_ind2 : int
-            The index of the magnitude of the second position to correlate.
+        order : int
+            The order at which to truncate the polynomial expansion. Note that
+            this function projects only onto even numbered Legendre polynomials.
+            
+        Optional Parameters
+        -------------------
+        use_inter_statistics : bool
+            Whether or not to subtract inter-shot statistics from the
+            correlation function before projecting it. This can help remove
+            detector artifacts at the cost of a small computational overhead.
             
         Returns
         -------
-        x_correlation_ring : ndarray, float
-            A 2d array, where the first dimension is the value of the angle
-            delta employed, and the second is the correlation at that point.
+        c: np.ndarray, float
+            An array of the legendre coefficients. Contains all coefficients
+            (both even and odd) up to order `order`            
+                               
         """
         
-        q_ind1 = int(q_ind1)
-        q_ind2 = int(q_ind2)
+        # todo : use Friedel pairs to compute entire Kam correlator (?)
 
-        correlation_ring = np.zeros(self.num_phi) # results go here
-
-        # loop over all combinations of inter-shots
-        for i in range(self.num_shots):
-            for j in range(i+1, self.num_shots):
-
-                x = self.polar_intensities[i,q_ind1,:]
-                y = self.polar_intensities[j,q_ind2,:]
-
-                if self.polar_mask != None:
-            
-                    n_deltas = np.zeros(self.num_phi)
-            
-                    for i in range(self.num_phi):            
-                        n_deltas[i] = np.sum(self.polar_mask[i,q_ind1,:] * \
-                                             np.roll(self.polar_mask[j,q_ind2,:], 
-                                             i, axis=1) )
-            
-                    x -= np.sum( x[self.polar_mask[i,q_ind1,:]] ) / \
-                            np.sum(self.polar_mask[i,q_ind1,:])
-                    y -= np.sum( y[self.polar_mask[j,q_ind2,:]] ) / \
-                            np.sum(self.polar_mask[j,q_ind2,:])
-            
-                    x *= self.polar_mask[i,q_ind1,:]
-                    y *= self.polar_mask[j,q_ind2,:]
-            
-                else:            
-                    x -= x.mean()
-                    y -= y.mean()
-            
-                    n_delta = np.product(x.shape)
-                    assert n_delta == np.product(y.shape)
-
-                # use d-FFT + convolution thm
-                ffx = fftpack.fft(x)
-                ffy = fftpack.fft(y)
-                iff = np.real(fftpack.ifft( ffx * np.conjugate(ffy) ))
-                
-                # if we used a mask, re-normalized accordingly
-                if self.polar_mask != None:
-                    correlation_ring += iff / n_deltas
-                else:
-                    correlation_ring += iff
+        # initialize space for coefficients        
         
-        correlation_ring /= correlation_ring[0] # normalize (ez-ier than stds)
-        
-        return correlation_ring
+	# iterate over each pair of rings in the collection and project the
+        # correlation between those two rings into the Legendre basis
+	
+	if not str(q1) + '-' + str(q2) in self.q_pairs:
+	  raise KeyError ( "There is no data at q1,q2 = "+str(q1)+","+str(q2)+" inv ang. "\
+			   "There are only data for q = "+ ", ".join(np.char.mod("%.2f",self.q_values) )  )
+
+
+	q1q2_ind = self.q_pairs[  str(q1) + '-' + str(q2) ]
+
+	if np.sum ( self._intra[q1q2_ind] == np.zeros( self.num_phi ) ) == self.num_phi:
+	  tmp = self.correlate_intra ( q1,q2,mean_only=True  )
+	
+	if np.sum ( self._inter[q1q2_ind] == np.zeros( self.num_phi ) ) == self.num_phi and use_inter_statistics:
+	  if self.num_inter == None:
+	    self.num_inter = int( raw_input ("No inter-shot correlations exist for q1,q2="+str(q1)+","+str(q2)+\
+			                     ".\n How many inter-shot pairs should I compute? ") )
+	  tmp = self.correlate_inter ( q1,q2, num_cors=self.num_inter, mean_only=True  )
+
+	if use_inter_statistics:
+	    corr = self.correlate_kam( q1,q2,self._intra[q1q2_ind] - \
+		   self._inter[q1q2_ind] )
+	else:
+	    corr = self.correlate_kam(q1,q2, self._intra[q1q2_ind] )
+	
+	# tests indicate this is a good numerical projection
+	c, fit_data = np.polynomial.legendre.legfit(corr[:,0], corr[:,1], 
+						    order-1, full=True)
+        return c
+
     
-        
-    def legendre(self, order, use_inter_statistics=False):
+    def legendre_matrix(self, order, use_inter_statistics=False):
         """
         Project the correlation functions onto a set of legendre polynomials,
         and return the coefficients of that projection.
@@ -2631,36 +2653,20 @@ class Rings(object):
         # todo : use Friedel pairs to compute entire Kam correlator (?)
 
         # initialize space for coefficients        
-        Cl = np.zeros((order, self.num_q, self.num_q))
+        Cl = np.zeros( (order, self.num_q, self.num_q) )
 
         # iterate over each pair of rings in the collection and project the
         # correlation between those two rings into the Legendre basis
-
+	
         for i in range(self.num_q):
+	    q1 = self.q_values[i]
             for j in range(i,self.num_q):
-
-                # compute psi, the angle between the scattering vectors
-                t1 = np.arctan( self.q_values[i] / (2.0*self.k) ) # theta1
-                t2 = np.arctan( self.q_values[j] / (2.0*self.k) ) # theta2
-
-                # compute the Kam scattering angle psi
-                psi = np.arccos( np.cos(t1)*np.cos(t2) + np.sin(t1)*np.sin(t2)*\
-                                 np.cos( self.phi_values * 2. * \
-                                 np.pi/float(self.num_phi) ) )
-
-    	        if use_inter_statistics:
-    	            corr = self._correlate_ring_by_index(i,j) - \
-    	                   self._correlate_inter_by_index(i,j)
-    	        else:
-    	            corr = self._correlate_ring_by_index(i,j)
-            	
-        		# tests indicate this is a good numerical projection
-                c, fit_data = np.polynomial.legendre.legfit(np.cos(psi), corr, 
-                                                            order-1, full=True)
-
+	        q2 = self.q_values[j]
+                c  = self.legendre(q1,q2,order=order,use_inter_statistics=use_inter_statistics)
                 Cl[:,i,j] = c
                 Cl[:,j,i] = c  # copy it to the lower triangle too   
 
+	self.num_inter = None
         return Cl
 
 
@@ -2831,6 +2837,4 @@ class Rings(object):
         hdf.close()
 
         return rings_obj
-    
-    
-        
+

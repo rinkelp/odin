@@ -1,6 +1,7 @@
 import numpy as np
 cimport numpy as np
 import random
+from scipy import fftpack
 
 cdef extern from "corr.h":
   cdef cppclass Corr:
@@ -32,55 +33,33 @@ def correlate(A,B):
   del c
   return v3
 
-def randPairs(numItems,numPairs):
+def correlate_using_fft(self, x, y):
   """
-  Generates random pairs of integers. Does not necessarily generate 
-  exaclty "numPairs" pairs, but an approximation.
+  Compute the correlation between 2 arrays using the 
+  convolution theorem. Works well for unmasked arrays.
+  Passing masked arrays will results in numerical errors.
 
   Parameters
   ----------
-    numItems: int
-    numPairs: int
+  x : 1d numpy array of floats
+      The intensities along ring 1
+  y : 1d numpy array of floats
+      The intensities along ring 2
+    
   Returns
   -------
-    ndarray of ints [[i1,j1], [i2,j2], ... [iN,jN]]
+  iff : 1d numpy darray, float
+      The correlation between x and y
   """
-  np.random.seed()
-  rand_pairs   = np.random.randint( 0,numItems, (numPairs,2) )
-  unique_pairs = list( set( tuple(pair) for pair in rand_pairs ) )
-  inter_pairs  = filter( lambda x:x[0] != x[1], unique_pairs)
-  return inter_pairs
 
-def intra(ringsA,ringsB,num_cors=0):
-  """
-  does intra shot correlations for many shots..
-  PARAMS ringsA  : ndarray floats (first dim = number of rings, second dim = number of pixels per ring) 
-         ringsB  : ndarray floats (first dim = number of rings, second dim = number of pixels per ring) 
-  OPT    num_cors:  int number of corrs to compute
-  RETURNS 1-d numpy array (average correlation)  
-  """
-  if num_cors == 0:
-    num_cors = ringsA.shape[0]
-  intra = np.zeros(( num_cors,ringsA.shape[1] ))
-  for i in xrange(num_cors):
-    intra[i] = correlate(ringsA[i],ringsB[i])
-  return intra
+  xmean = x.mean()
+  ymean = y.mean()
 
-def inter(ringsA,ringsB,num_cors = 0):
-  """
-  does inter shot correlations for many shots..
-  PARAMS ringsA  : ndarray floats (first dim = number of rings, second dim = number of pixels per ring) 
-         ringsB  : ndarray floats (first dim = number of rings, second dim = number of pixels per ring) 
-  OPT    num_cors:  int number of corrs to compute
-  RETURNS 1-d numpy array (average correlation)  
-  """
-  if num_cors == 0:
-    num_cors = ringsA.shape[0]
-  inter = np.zeros( (num_cors, ringsA.shape[1] ))
-  pairs = randPairs(ringsA.shape[1],num_cors)
-  k = 0
-  for i,j in pairs:
-    inter[k] = correlate(ringsA[i],ringsB[j])
-    k += 1
-  return inter
+  # use d-FFT + convolution thm
+  ffx = fftpack.fft( x-xmean )
+  ffy = fftpack.fft( y-ymean )
+  iff = np.real( fftpack.ifft( np.conjugate(ffx) * ffy ) ) / xmean  / ymean
+
+  return iff / float ( x.shape[0] )
+
 

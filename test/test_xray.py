@@ -11,6 +11,7 @@ from odin import xray, utils, parse, structure
 from odin.testing import skip, ref_file, expected_failure, brute_force_masked_correlation
 from odin.refdata import cromer_mann_params
 from mdtraj import trajectory, io
+from odin import corr
 
 try:
     from odin import gpuscatter
@@ -536,27 +537,6 @@ class TestRings(object):
         assert ip[1,1] > ip[0,1]
         assert ip[1,1] > ip[2,1]
         
-    def test_correlation(self):
-        
-        q = 1.0 # chosen arb.
-        q_ind = self.rings.q_index(q)
-        
-        x = self.rings.polar_intensities[0,q_ind,:].flatten()
-        y = self.rings.polar_intensities[0,q_ind,:].flatten()
-        assert len(x) == len(y)
-        
-        x -= x.mean()
-        y -= y.mean()
-        
-        ref = np.zeros(len(x))
-        for i in range(len(x)):
-            ref[i] = np.correlate(x, np.roll(y, i))
-        ref /= ref[0] # NORMALIZE
-        
-        for delta in range(10):
-            ans = self.rings.correlate(q, q, delta)
-            assert_almost_equal(ans, ref[delta], decimal=1)
-            
     def test_brute_correlation_wo_mask(self):
         # this might be better somewhere else, but is here for now
         x = np.random.randn(100) + 0.1 * np.arange(100)
@@ -572,49 +552,28 @@ class TestRings(object):
         ref /= ref[0]
             
         assert_allclose(ref, c)
-            
-    def test_correlation_w_mask(self):
-        # brute force compute the correlator, skipping over gaps
-        
-        # set up a rings obj with a mask
-        rings = xray.Rings.simulate(self.traj, 1, self.q_values, self.num_phi, 1)
-        polar_intensities = rings.polar_intensities
-        polar_mask = np.random.binomial(1, 0.75, size=polar_intensities.shape).astype(np.bool)
-        rings = xray.Rings(self.q_values, polar_intensities, self.rings.k,
-                           polar_mask=polar_mask)
-        
-        # compute a reference autocorrelator for the first ring
-        pm = polar_mask[0,0,:].flatten()
-        x = polar_intensities[0,0,:].flatten()
-        ref_corr = brute_force_masked_correlation(x, pm)
-        
-        # compute the correlator the usual way & compare
-        corr = np.zeros(rings.num_phi)
-        for delta in range(rings.num_phi):
-            corr[delta] = rings._correlate_by_index(0, 0, delta)
-        
-        assert_allclose(ref_corr, corr, rtol=1e-03)
         
     def test_corr_ring(self):
         
         q1 = 1.0 # chosen arb.
         q_ind = self.rings.q_index(q1)
         
-        ring = self.rings.correlate_ring(q1, q1)
+        ring = self.rings.correlate_intra(q1, q1)
         
         # reference computation
         x = self.rings.polar_intensities[0,q_ind,:].flatten()
         y = self.rings.polar_intensities[0,q_ind,:].flatten()
         assert len(x) == len(y)
         
-        x -= x.mean()
-        y -= y.mean()
+        xx = x -x.mean()
+        yy = y - y.mean()
         
-        ref = np.zeros(len(x))
-        for i in range(len(x)):
-            ref[i] = np.correlate(x, np.roll(y, i))
-        ref /= ref[0]
-        
+
+#	this test might fail if np.correlate considers the 0 values... -dermen
+        ref = np.zeros(len(xx))
+        for i in range(len(xx)):
+            ref[i] = np.correlate(xx, np.roll(yy, i))
+        ref /= ( x.mean()*y.mean() )
         assert_allclose(ref, ring)
         
     def test_corr_ring_w_mask(self):
@@ -631,7 +590,8 @@ class TestRings(object):
         ref_corr = brute_force_masked_correlation(x, pm)
         
         # compute the correlator the usual way & compare
-        corr = rings._correlate_ring_by_index(0, 0)
+	corr = corr.correlate(x*pm,x*pm )
+        #corr = rings._correlate_ring_by_index(0, 0)
         
         assert_allclose(ref_corr, corr, rtol=1e-03)
         
