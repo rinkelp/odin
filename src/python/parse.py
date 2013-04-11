@@ -9,7 +9,7 @@ Various parsers:
 import logging
 logging.basicConfig()
 logger = logging.getLogger(__name__)
-logger.setLevel('DEBUG')
+# logger.setLevel('DEBUG')
 
 import inspect
 import tables
@@ -22,7 +22,7 @@ from base64 import b64encode
 import numpy as np
 
 from odin import xray
-from odin.math2 import CircularHough, find_center
+from odin.math2 import find_center
 
 
 try:
@@ -37,7 +37,7 @@ class CBF(object):
     A class for parsing CBF files. Depends on fabio.
     """
     
-    def __init__(self, filename):
+    def __init__(self, filename, mask=None):
         """
         A light handle on a CBF file.
         
@@ -45,6 +45,11 @@ class CBF(object):
         ----------
         filename : str
             The path to the CBF file.
+            
+        mask : np.ndarray (dtype bool)
+            Define a mask over the data. If `None` don't use a mask (default).
+            Else should be a np array of dtype bool with the same shape as the
+            intensities in the CBF file.
         """
         
         if not FABIO_IMPORTED:
@@ -54,11 +59,35 @@ class CBF(object):
         logger.info('Reading: %s' % filename)
         self.filename = filename
         
+        
         # extract all interesting stuff w/fabio
         self._fabio_handle = fabio.open(filename)
         self._info = self._fabio_handle.header
         self._parse_array_header( self._info['_array_data.header_contents'] )
         self.intensity_dtype = self._convert_dtype(self._info['X-Binary-Element-Type'])
+            
+            
+        # interpret user provided mask
+        if mask != None:
+            if not mask.shape == self.intensities_shape:
+                raise ValueError('`mask` must have same shape as intensity array '
+                   '(%s), got: %s' % (str(self.intensities_shape), str(mask.shape)))
+            self.mask = mask
+        else:
+            self.mask = None
+            
+            
+        # add mask specific to the detector
+        if self.detector_type.startswith('PILATUS 6M'):
+            logger.info('Identified detector type as: PILATUS 6M')
+            if self.mask == None:
+                self.mask = self._pilatus_mask()
+            else:
+                self.mask *= self._pilatus_mask()
+            
+        else:
+            logger.debug('Unknown detector type: %s' % self._info['Detector'])
+            
             
         logger.debug('Finished loading file')
         
@@ -66,12 +95,14 @@ class CBF(object):
     @property
     def md5(self):
         return self._info['Content-MD5']
+    
         
     @property
     def intensities_shape(self):
         shp = (int(self._info['X-Binary-Size-Second-Dimension']), 
                int(self._info['X-Binary-Size-Fastest-Dimension']))
         return shp
+    
         
     @property
     def pixel_size(self):
@@ -80,20 +111,24 @@ class CBF(object):
         assert p[2].strip() == 'x'
         pix_size = (float(p[0]), float(p[3]))
         return pix_size
+    
         
     @property
     def path_length(self):
         # assume units are the same for all dims
         d, unit = self._info['Detector_distance'].split() 
         return float(d)
+    
         
     @property
     def wavelength(self):
         return float(self._info['Wavelength'].split()[0])
+    
         
     @property
     def polarization(self):
         return float(self._info['Polarization'])
+    
         
     @property
     def center(self):
@@ -103,6 +138,7 @@ class CBF(object):
         if not hasattr(self, '_center'):
             self._center = self._find_center()
         return self._center
+    
         
     @property
     def corner(self):
@@ -112,9 +148,15 @@ class CBF(object):
         return (-self.pixel_size[0] * self.center[0], 
                 -self.pixel_size[1] * self.center[1])
         
+        
     @property
     def intensities(self):
         return self._fabio_handle.data
+        
+        
+    @property
+    def detector_type(self):
+        return self._info['Detector:']
 
 
     def _convert_dtype(self, dtype_str):
@@ -214,19 +256,60 @@ class CBF(object):
         center : tuple of ints
             The indicies of the pixel nearest the center of the Bragg peaks.
         """
-        # todo
-        center = np.array(self.intensities_shape) / 2.0
-        return center
+        return find_center(self.intensities, mask=self.mask)
+    
         
-        
-    def as_shot(self):
+    def _pilatus_mask(self, border_size=3):
         """
-        Convert the CBF file to an ODIN shot representation.
+        The pixels on the edges of the detector are often noisy -- this function
+        provides a way to mask both the gaps and these border pixels.
+
+        Parameters
+        ----------
+        border_size : int
+            The size of the border (in pixels) with which to extend the mask
+            around the detector gaps.
+        """
+
+        border_size = int(border_size)
+        mask = np.ones(self.intensities_shape, dtype=np.bool)
+
+        # below we have the rows (x_gaps) and columns (y_gaps) to mask
+
+        x_gaps = [(486-border_size,494+border_size),
+                  (980-border_size,988+border_size),
+                  (1474-border_size,1482+border_size),
+                  (1968-border_size,1976+border_size)]
+
+        y_gaps = [(194-border_size,212+border_size),
+                  (406-border_size,424+border_size),
+                  (618-border_size,636+border_size),
+                  (830-border_size,848+border_size),
+                  (1042-border_size,1060+border_size),
+                  (1254-border_size,1272+border_size),
+                  (1466-border_size,1484+border_size),
+                  (1678-border_size,1696+border_size),
+                  (1890-border_size,1908+border_size),
+                  (2102-border_size,2120+border_size),
+                  (2314-border_size,2332+border_size)]
+
+        for x in x_gaps:
+            mask[x[0]:x[1],:] = np.bool(False)
+
+        for y in y_gaps:
+            mask[:,y[0]:y[1]] = np.bool(False)
+
+        return mask
+
+        
+    def as_shotset(self):
+        """
+        Convert the CBF file to an ODIN shotset representation.
         
         Returns
         -------
-        cbf : odin.xray.Shot
-            The CBF file as an ODIN shot.
+        cbf : odin.xray.Shotset
+            The CBF file as an ODIN shotset.
         """
         
         p = np.array(list(self.corner) + [self.path_length])
@@ -239,93 +322,39 @@ class CBF(object):
         # todo better value for photons
         b = xray.Beam(1e4, wavelength=self.wavelength) 
         d = xray.Detector(bg, b.k)
-        s = xray.Shot(self.intensities.flatten().astype(np.float64), d)
+        s = xray.Shotset(self.intensities.flatten().astype(np.float64), d, self.mask)
         
-        return s  
+        return s
     
         
-class Pilatus(CBF):
-    """
-    A class for dealing with CBF files that specifically were generated from a
-    Pilatus detector. This class was designed for the detector at SSRL bl 12-2,
-    but should work for other beam lines as well.
-    """
-        
-    def __init__(self, filename, mask=None):
+    @classmethod
+    def files_to_shotset(cls, list_of_cbf_files):
         """
-        
-        """
-        
-        # run CBF's init, and then add some more stuff
-        super(Pilatus, self).__init__(filename)
-        
-        # masking: start with _mask_gaps, and add mask if it got passed
-        if mask != None:
-            if not mask.shape == self.intensities_shape:
-                raise ValueError('`mask` must have same shape as intensity array '
-                   '(%s), got: %s' % (str(self.intensities_shape), str(mask.shape)))
-            self.mask = np.logical_and(mask, self._mask_gaps())
-        else:
-            self.mask = self._mask_gaps()
-            
-        return
-    
-        
-    def _find_center(self):
-        """
-        Over-ride CBF's find center method.
-        """
-        return find_center(self.intensities, self.mask)
-        
-    
-    def _mask_gaps(self, border_size=3):
-        """
-        The pixels on the edges of the detector are often noisy -- this function
-        provides a way to mask both the gaps and these border pixels.
+        Convert a bunch of CBF files to a single ODIN shotset instance.
         
         Parameters
         ----------
-        border_size : int
-            The size of the border (in pixels) with which to extend the mask
-            around the detector gaps.
+        list_of_cbf_files : list of str
+            A list of paths to CBF files to convert.
+        
+        Returns
+        -------
+        shotset : odin.xray.Shotset
+            A shotset object containing all the intensity data.
         """
         
-        border_size = int(border_size)
-        mask = np.ones(self.intensities_shape, dtype=np.bool)
+        # convert one CBF, and use it to get the detector, etc info
+        seed_shot = cls(fn[0]).as_shotset()
         
-        # below we have the rows (x_gaps) and columns (y_gaps) to mask
-        
-        x_gaps = [(486-border_size,494+border_size),
-                  (980-border_size,988+border_size),
-                  (1474-border_size,1482+border_size),
-                  (1968-border_size,1976+border_size)]
-        
-        y_gaps = [(194-border_size,212+border_size),
-                  (406-border_size,424+border_size),
-                  (618-border_size,636+border_size),
-                  (830-border_size,848+border_size),
-                  (1042-border_size,1060+border_size),
-                  (1254-border_size,1272+border_size),
-                  (1466-border_size,1484+border_size),
-                  (1678-border_size,1696+border_size),
-                  (1890-border_size,1908+border_size),
-                  (2102-border_size,2120+border_size),
-                  (2314-border_size,2332+border_size)]
-                  
-        for x in x_gaps:
-            mask[x[0]:x[1],:] = np.bool(False)
+        # get the intensity data from the rest of the shots
+        intensities = [seed_shot.intensities]
+        for fn in list_of_cbf_files[1:]:
+            intensities.append( cls(fn).intensities ) 
             
-        for y in y_gaps:
-            mask[:,y[0]:y[1]] = np.bool(False)
-            
-        return mask
+        ss = xray.Shotset( np.array(intensities), seed_shot.detector, 
+                           seed_shot.mask )
 
-
-    @staticmethod
-    def dir_to_shotset(directory):
-        """
-        """
-        raise NotImplementedError()
+        return ss
     
         
 class KittyH5(object):
