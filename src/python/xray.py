@@ -1995,16 +1995,15 @@ class Rings(object):
         else:
             raise TypeError('`polar_mask` must be np.ndarray or None')
             
-        self._q_values = np.array(q_values)
-        self.polar_intensities = polar_intensities
-        self.k = k
-	self.kam_correlator  = None
+        self._q_values         = np.array(q_values)           # q values of the ring data
+        self.polar_intensities = np.copy (polar_intensities ) # copy data so don't over-write
+        self.k                 = k                            # wave number
 
 #	number of inter shot correlations to compute
-	self.num_inter = None
+	self.num_inter = None # used in methods self.legendre and self.legendre_matrix; not too important
 	
-	# Make intra and inter arrays for storing average correlators.
-	# Make dictionary for indexing these arrays at later times.
+	# Make intra and inter arrays for storing "average" correlators.
+	# First, make a dictionary for indexing these arrays at later times.
 	self.q_pairs = []
 	k = 0
 	for i in xrange( len(q_values) ):
@@ -2051,6 +2050,23 @@ class Rings(object):
         return self.num_phi * self.num_q
     
     def intra(self, q1, q2=None ):
+    	"""
+    	Returns the average intRA-shot correlation between rings at q1,q2.
+    	
+    	Parameters
+    	----------
+    	q1 : float
+    	    The q values in inverse angstroms
+    	
+    	Optional Parameters
+    	-------------------
+    	q2 : float
+    	    If q2 if not passed, q2 == q1 and function returns an auto correlation at q1.
+    	
+    	Returns
+    	-------
+    	self._intra : average correlation between rings q1,q2
+    	"""
 	if q2 == None:
 	  q2 = q1
         q_ind1 = self.q_index(q1)
@@ -2059,6 +2075,23 @@ class Rings(object):
 	return self._intra[q1q2_ind]
    
     def inter(self, q1, q2=None ):
+    	"""
+    	Returns the average intER-shot correlation between rings at q1,q2.
+    	
+    	Parameters
+    	----------
+    	q1 : float
+    	    The q values in inverse angstroms
+    	
+    	Optional Parameters
+    	-------------------
+    	q2 : float
+    	    If q2 if not passed, q2 == q1 and function returns an auto correlation at q1.
+    	
+    	Returns
+    	-------
+    	self._inter : average correlation between rings q1,q2
+    	"""
 	if q2 == None:
 	  q2 = q1
         q_ind1 = self.q_index(q1)
@@ -2067,9 +2100,9 @@ class Rings(object):
 	return self._inter[q1q2_ind]
 	
     def get_cos_psi_vals(self,q1,q2 ):
-        wave   = self.k / 2. / np.pi
-        t1     = np.pi/2. + np.arcsin( q1*wave / 4. / np.pi ) 
-        t2     = np.pi/2. + np.arcsin( q2*wave / 4. / np.pi )
+        wave   = self.k / 2. / np.pi     # wavelength in angstroms
+        t1     = np.pi/2. + np.arcsin( q1*wave / 4. / np.pi ) # theta 1 in spherical coor
+        t2     = np.pi/2. + np.arcsin( q2*wave / 4. / np.pi ) # theta 2 in spherical coor 
 	return np.cos(t1)*np.cos(t2) + np.sin(t1)*np.sin(t2)*\
                np.cos( self.phi_values ) 
  
@@ -2088,7 +2121,7 @@ class Rings(object):
         q_ind : int
             The index to slice `polar_intensities` at to get |q|.
         """
-        q_ind = np.where( self.q_values == q )[0] 
+        q_ind = np.where( self.q_values == q )[0] # check if there are rings at q
 	if len(q_ind) == 0:
 	  raise ValueError("There if no ring at q = "+str(q) +" inv ang. " \
 			   "There are only data for q = "+ ", ".join(np.char.mod("%.2f",self.q_values) )  )
@@ -2176,37 +2209,46 @@ class Rings(object):
         if num_cors == 0:
 #	  then do correlation for all shots
           num_cors = rings1.shape[0]
+          
+#	Method for returning the mean correlation    
 	if mean_only:
           intra = np.zeros( rings1.shape[1]  )
-       
+#	  Check if mask exists
           if self.polar_mask != None:
-#  	    if mask use brute force cpp method 
+#  	    Use brute force cpp method 
             mask1 = self.polar_mask[q_ind1]
             mask2 = self.polar_mask[q_ind2]
             for i in xrange(num_cors):
               intra += corr.correlate( rings1[i]*mask1, rings2[i]*mask2 )
+#	  If mask does not exists
           else:
-#	    otherwise use the fft method
+#	    Use the fft method for fast computation
             for i in xrange(num_cors):
 	      intra += corr.correlate_using_fft( rings1[i], rings2[i] )
+#	  save the mean intRA-shot correlation
 	  self._intra[q1q2_ind] = intra
+	  
+	  
+#	Method for returning all correlations	  
 	else:
 
           intra = np.zeros( ( num_cors,rings1.shape[1] ) )
-       
+#	  Check if mask exists
           if self.polar_mask != None:
-#  	  if mask use brute force cpp method 
+#  	  If mask exists, use brute force cpp method 
             mask1 = self.polar_mask[q_ind1]
             mask2 = self.polar_mask[q_ind2]
             for i in xrange(num_cors):
               intra[i] = corr.correlate( rings1[i]*mask1, rings2[i]*mask2 )
+#	  If mask does not exists
           else:
-#	    otherwise use the fft method
+#	    Use the fft method
             for i in xrange(num_cors):
 	      intra[i] = corr.correlate_using_fft( rings1[i], rings2[i] )
 #	  save the average correlator for future use in legendre projections
 	  self._intra[q1q2_ind]   = intra.mean( axis=0 )
 
+#	return the correlation, be it the mean or the full set of correlations
 	return intra
  
     def correlate_inter(self, q1, q2, num_cors=0, mean_only = False):
@@ -2306,12 +2348,12 @@ class Rings(object):
 	kamCor : ndarray, float  
 	    The Kam correlation function and the cos(psi) values
 	"""
-	cosPsi  = self.get_cos_psi_vals(q1,q2)
-	cosPsi  = np.append( cosPsi, - cosPsi)
-	newCor  = np.append( cor, cor )
-	combin  = np.append( cosPsi, newCor).reshape( (2,cosPsi.shape[0] )).T 
-	combin  = sorted( combin, key=lambda x:x[0] )
-	kamCor  = np.vstack( tuple( combin) )
+	cosPsi  = self.get_cos_psi_vals(q1,q2)  # Convert azimuathal angles to cos(psi) values
+	cosPsi  = np.append( cosPsi, - cosPsi)  # Adding the Friedel pairs...
+	newCor  = np.append( cor, cor )         # C [cos(psi) ] = C [cos(-psi)]
+	combin  = np.append( cosPsi, newCor).reshape( (2,cosPsi.shape[0] )).T  # make into 2D array [ [x,f(x)],... ]
+	combin  = sorted( combin, key=lambda x:x[0] ) # sort 2D array according to x
+	kamCor  = np.vstack( tuple( combin) )         # re-convert to numpy array
 	return kamCor
 	
 
