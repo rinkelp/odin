@@ -41,7 +41,7 @@ class Beam(object):
     """
     Class that converts energies, wavelengths, frequencies, and wavenumbers.
     Each instance of this class can represent a light source.
-    
+
     Attributes
     ----------
     self.energy      (keV)
@@ -49,16 +49,16 @@ class Beam(object):
     self.frequency   (Hz)
     self.wavenumber  (angular, inv. angstroms)
     """
-    
+
     def __init__(self, photons_scattered_per_shot, **kwargs):
         """
         Generate an instance of the Beam class.
-        
+
         Parameters
         ----------
         photons_scattered_per_shot : int
             The average number of photons scattered per shot.
-        
+
         **kwargs : dict
             Exactly one of the following, in the indicated units
             -- energy:     keV
@@ -66,42 +66,42 @@ class Beam(object):
             -- frequency:  Hz
             -- wavenumber: inverse angstroms
         """
-        
+
         self.photons_scattered_per_shot = photons_scattered_per_shot
-        
+
         # make sure we have only one argument
         if len(kwargs) != 1:
             raise KeyError('Expected exactly one argument, got %d' % (len(args)+1) )
-        
+
         self.units = 'energy: keV, wavelengths: angstroms, frequencies: Hz, wavenumbers: inverse angstroms'
-        
+
         # no matter what gets provided, go straight to energy and then
         # convert to the rest from there
         for key in kwargs:
-                            
+
             if key == 'energy':
                 self.energy = float(kwargs[key])
-            
+
             elif key == 'wavenumber':
                 self.wavenumber = float(kwargs[key])
                 self.energy = self.wavenumber * h * c * 10.**7. / (2.0 * np.pi)
-                
+
             elif key == 'wavelength':
                 self.wavelength = float(kwargs[key])
                 self.energy = h * c * 10.**7. / self.wavelength
-                
+
             elif key == 'frequency':
                 self.frequency = float(kwargs[key])
                 self.energy = self.frequency * h
-                
+
             else:
                 raise ValueError('%s not a recognized kwarg' % key)
-        
+
         # perform the rest of the conversions
         self.wavelength = h * c * 10.**7. / self.energy
         self.wavenumber = 2.0 * np.pi / self.wavelength
         self.frequency = self.energy * (1000. / h)
-        
+
         # some aliases
         self.k = self.wavenumber
 
@@ -112,13 +112,13 @@ class BasisGrid(object):
     x-ray scattering detectors. Does not contain all the metadata associated
     with a full-fledged Detector class (e.g. the wavelength, etc).
 
-    Note that the geometry below is definied in "slow" and "fast" scan 
+    Note that the geometry below is definied in "slow" and "fast" scan
     dimensions. These are simply the two dimensions that define the plane
     a single rectangular pixel grid lives in. They may also be called the y and
     x dimensions without any loss of generality.
-    
+
     The convention here -- and in all of ODIN -- is one of Row-Major ordering,
-    which is consistent with C/python. This means that y is the slow dim, x is 
+    which is consistent with C/python. This means that y is the slow dim, x is
     the fast dim, and when ordering these two they will appear as (slow, fast).
 
     Note on units: units are arbitrary -- all the units must be the same for
@@ -128,11 +128,11 @@ class BasisGrid(object):
     quantities:
 
         -- p vector : DEFINES A GRIDS POSITION IN SPACE.
-                      The vector between a chosen origin (possibly interaction 
-                      site) and the corner of the grid that is smallest in both 
-                      slow and fast (x/y) dimensions of the coordinate system. 
-                      Usually this will be the "bottom left" corner, but due to 
-                      the generality of the coordinates used, this is not 
+                      The vector between a chosen origin (possibly interaction
+                      site) and the corner of the grid that is smallest in both
+                      slow and fast (x/y) dimensions of the coordinate system.
+                      Usually this will be the "bottom left" corner, but due to
+                      the generality of the coordinates used, this is not
                       necessarily true.
 
         -- s/f vect : DEFINES A GRIDS ORIENTATION IN SPACE
@@ -203,8 +203,8 @@ class BasisGrid(object):
         assert len(self._fs)     == self.num_grids
         assert len(self._shapes) == self.num_grids
         return
-    
-        
+
+
     @property
     def num_pixels(self):
         """
@@ -212,8 +212,8 @@ class BasisGrid(object):
         """
         n = np.sum([np.product(self._shapes[i]) for i in range(self.num_grids)])
         return int(n)
-    
-        
+
+
     @property
     def num_grids(self):
         return self._num_grids
@@ -226,20 +226,20 @@ class BasisGrid(object):
         Parameters
         ----------
         p : np.ndarray, float
-            3-vector from the origin to the pixel on the grid with 
+            3-vector from the origin to the pixel on the grid with
             smallest coordinate in all dimensions.
 
         s : np.ndarray, float
             3-vector pointing in the slow scan direction
 
         f : np.ndarray, float
-            3-vector pointing in the slow scan direction    
+            3-vector pointing in the slow scan direction
 
         shape : tuple or list of float
             The number of pixels in the (slow, fast) directions. Len 2.
 
         See Also
-        --------    
+        --------
         add_grid_using_center
         """
         self._check_valid_basis(p, s, f, shape)
@@ -316,44 +316,44 @@ class BasisGrid(object):
             raise ValueError('Only %d grids in object, you asked for the %d-th'
                              ' (zero indexed)' % (self.num_grids, grid_number))
 
-        grid_tuple = (self._ps[grid_number], self._ss[grid_number], 
+        grid_tuple = (self._ps[grid_number], self._ss[grid_number],
                       self._fs[grid_number], self._shapes[grid_number])
 
         return grid_tuple
-        
-        
+
+
     def get_grid_corners(self, grid_number):
         """
         Return the positions of the four corners of a grid.
-        
+
         Parameters
         ----------
         grid_number : int
             The index of the grid to get the corners of.
-            
+
         Returns
         -------
         corners : np.ndarray, float
             A 4 x 3 array, where the first dim represents the four corners, and
             the second is x/y/z. Note one corner is always just the `p` vector.
         """
-        
+
         if grid_number >= self.num_grids:
             raise ValueError('Only %d grids in object, you asked for the %d-th'
                              ' (zero indexed)' % (self.num_grids, grid_number))
-                         
-        # compute the lengths of the parallelogram sides    
+
+        # compute the lengths of the parallelogram sides
         s_side = self._fs[grid_number] * float(self._shapes[grid_number][0])
         f_side = self._ss[grid_number] * float(self._shapes[grid_number][1])
         pc = self._ps[grid_number].copy()
-        
+
         corners = np.zeros((4,3))
-        
+
         corners[0,:] = pc
         corners[1,:] = pc + s_side
         corners[2,:] = pc + f_side
         corners[3,:] = pc + s_side + f_side
-                             
+
         return corners
 
 
@@ -406,38 +406,38 @@ class BasisGrid(object):
         xyz = xyz.reshape( (shape[0], shape[1], 3) )
 
         return xyz
-    
-        
+
+
 class Detector(Beam):
     """
     Class that provides a plethora of geometric specifications for a detector
     setup. Also provides loading and saving of detector geometries.
     """
-    
+
     def __init__(self, xyz, k, beam_vector=None):
         """
         Instantiate a Detector object.
-        
+
         Detector objects provide a handle for the many representations of
         detector geometry in scattering experiments, namely:
-        
+
         -- real space
         -- real space in polar coordinates
         -- reciprocal space (q-space)
         -- reciprocal space in polar coordinates (q, theta, phi)
-        
+
         Note the the origin is assumed to be the interaction site.
-        
+
         Parameters
         ----------
         xyz : ndarray OR xray.BasisGrid
             An a specification the (x,y,z) positions of each pixel. This can
             either be n x 3 array with the explicit positions of each pixel,
-            or a BasisGrid object with a vectorized representation of the 
+            or a BasisGrid object with a vectorized representation of the
             pixels. The latter yeilds higher performance, and is recommended.
-            
+
         k : float or odin.xray.Beam
-            The wavenumber of the incident beam to use. Optionally a Beam 
+            The wavenumber of the incident beam to use. Optionally a Beam
             object, defining the beam energy.
 
         Optional Parameters
@@ -446,28 +446,28 @@ class Detector(Beam):
             The 3-vector describing the beam direction. If `None`, then the
             beam is assumed to be purely in the z-direction.
         """
-            
+
         if type(xyz) == np.ndarray:
             logger.debug('xyz type: np.ndarray, initializing an explicit detector')
-            
+
             self._pixels = xyz
             self._basis_grid = None
             self.num_pixels = xyz.shape[0]
             self._xyz_type = 'explicit'
-                
+
         elif type(xyz) == BasisGrid:
             logger.debug('xyz type: BasisGrid, initializing an implicit detector')
-            
+
             self._pixels = None
-            self._basis_grid = xyz            
+            self._basis_grid = xyz
             self.num_pixels = self._basis_grid.num_pixels
             self._xyz_type = 'implicit'
-            
+
         else:
             raise TypeError("`xyz` type must be one of {'np.ndarray', "
                             "'odin.xray.BasisGrid'}")
-        
-        
+
+
         # parse wavenumber
         if isinstance(k, Beam):
             self.k = k.wavenumber
@@ -477,7 +477,7 @@ class Detector(Beam):
             self.beam = None
         else:
             raise TypeError('`k` must be a float or odin.xray.Beam')
-        
+
         # parse beam_vector -- is guarenteed to be a unit vector
         if beam_vector != None:
             if beam_vector.shape == (3,):
@@ -486,10 +486,10 @@ class Detector(Beam):
                 raise ValueError('`beam_vector` must be a 3-vector')
         else:
             self.beam_vector = np.array([0.0, 0.0, 1.0])
-        
+
         return
-    
-            
+
+
     def implicit_to_explicit(self):
         """
         Convert an implicit detector to an explicit one (where the xyz pixels
@@ -500,44 +500,44 @@ class Detector(Beam):
         self._pixels = self.xyz
         self._xyz_type = 'explicit'
         return
-    
-             
+
+
     @property
     def xyz_type(self):
         return self._xyz_type
-        
-        
+
+
     @property
     def xyz(self):
         if self.xyz_type == 'explicit':
             return self._pixels
         elif self.xyz_type == 'implicit':
             return self._basis_grid.to_explicit()
-            
-                
+
+
     @property
     def real(self):
         return self.xyz.copy()
-    
-        
+
+
     @property
     def polar(self):
         return self._real_to_polar(self.real)
-    
-        
+
+
     @property
     def reciprocal(self):
         return self._real_to_reciprocal(self.real)
-    
-        
+
+
     @property
     def recpolar(self):
         a = self._real_to_recpolar(self.real)
         # convention: theta is angle of q-vec with plane normal to beam
-        a[:,1] = self.polar[:,1] / 2.0 
+        a[:,1] = self.polar[:,1] / 2.0
         return a
-    
-        
+
+
     @property
     def q_max(self):
         """
@@ -546,27 +546,27 @@ class Detector(Beam):
 
         if self.xyz_type == 'explicit':
             q_max = np.max(self.recpolar[:,0])
-            
-        elif self.xyz_type == 'implicit': 
+
+        elif self.xyz_type == 'implicit':
             q_max = 0.0
             for i in range(self._basis_grid.num_grids):
                 c  = self._basis_grid.get_grid_corners(i)
                 qc = self._real_to_recpolar(c)
                 q_max = max([q_max, float(np.max(qc[:,0]))])
-                
+
         return q_max
-    
-    
+
+
     def evaluate_qmag(self, xyz):
         """
         Given the positions of pixels `xyz`, compute the corresponding |q|
         value for each.
-        
+
         Parameters
         ----------
         qxyz : ndarray, float
             The array of pixels (shape : N x 3)
-            
+
         Returns
         -------
         qmag : ndarray, float
@@ -575,18 +575,18 @@ class Detector(Beam):
         thetas = self._evaluate_theta(xyz)
         qmag = 2.0 * self.k * np.sin(thetas/2.0)
         return qmag
-    
-        
+
+
     def _evaluate_theta(self, xyz):
         """
         Given the positions of pixels `xyz`, compute the corresponding
         scattering angle theta for each.
-        
+
         Parameters
         ----------
         qxyz : ndarray, float
             The array of pixels (shape : N x 3)
-            
+
         Returns
         -------
         qmag : ndarray, float
@@ -595,33 +595,33 @@ class Detector(Beam):
         u_xyz  = self._unit_vector(xyz)
         thetas = np.arccos(np.dot( u_xyz, self.beam_vector ))
         return thetas
-    
-        
+
+
     def _real_to_polar(self, xyz):
         """
         Convert the real-space representation to polar coordinates.
         """
         polar = self._to_polar(xyz)
         return polar
-        
-        
+
+
     def _real_to_reciprocal(self, xyz):
         """
         Convert the real-space to reciprocal-space in cartesian form.
         """
-        
+
         assert len(xyz.shape) == 2
         assert xyz.shape[1] == 3
-        
+
         # generate unit vectors in the pixel direction, origin at sample
         #S = self.real.copy()
         S = self._unit_vector(xyz) # used to be xyz --> S
-        
+
         q = self.k * (S - self.beam_vector)
-        
+
         return q
-    
-        
+
+
     def _real_to_recpolar(self, xyz):
         """
         Convert the real-space to reciprocal-space in polar form, that is
@@ -629,8 +629,8 @@ class Detector(Beam):
         """
         reciprocal_polar = self._to_polar( self._real_to_reciprocal(xyz) )
         return reciprocal_polar
-    
-        
+
+
     @staticmethod
     def _norm(vector):
         """
@@ -645,18 +645,18 @@ class Detector(Beam):
         else:
             raise ValueError('Shape of vector wrong')
         return norm
-    
-        
+
+
     def _unit_vector(self, vector):
         """
         Returns a unit-norm version of `vector`.
-        
+
         Parameters
         ----------
         vector : ndarray, float
             An n x m vector of floats, where m is assumed to be the dimension
             of the space.
-            
+
         Returns
         -------
         unit_vectors : ndarray,float
@@ -664,100 +664,100 @@ class Detector(Beam):
         """
 
         norm = self._norm(vector)
-        
+
         if len(vector.shape) == 1:
             unit_vectors = vector / norm
-        
+
         elif len(vector.shape) == 2:
             unit_vectors = np.zeros( vector.shape )
             for i in range(vector.shape[0]):
                 unit_vectors[i,:] = vector[i,:] / norm[i]
-                
+
         else:
             raise ValueError('invalid shape for `vector`: %s' % str(vector.shape))
-        
+
         return unit_vectors
-    
-        
+
+
     def _to_polar(self, vector):
         """
         Converts n m-dimensional `vector`s to polar coordinates. By polar
         coordinates, I mean the cannonical physicist's (r, theta, phi), no
         2-theta business.
-        
+
         We take, as convention, the 'z' direction to be along self.beam_vector
         """
-        
+
         polar = np.zeros( vector.shape )
-        
+
         # note the below is a little modified from the standard, to take into
         # account the fact that the beam may not be only in the z direction
-        
+
         polar[:,0] = self._norm(vector)
         polar[:,1] = np.arccos( np.dot(vector, self.beam_vector) / \
                                 (polar[:,0]+1e-16) )           # cos^{-1}(z.x/r)
-        polar[:,2] = arctan3(vector[:,1] - self.beam_vector[1], 
+        polar[:,2] = arctan3(vector[:,1] - self.beam_vector[1],
                              vector[:,0] - self.beam_vector[0])   # y first!
-        
+
         return polar
-    
+
 
     def _compute_intersections(self, q_vectors, grid_index, run_checks=True):
         """
         Compute the points i=(x,y,z) where the scattering vectors described by
         `q_vectors` intersect the detector.
-        
+
         Parameters
         ----------
         q_vectors : np.ndarray
             An N x 3 array representing q-vectors in cartesian q-space.
-            
+
         grid_index : int
             The index of the grid array to intersect
-            
+
         Optional Parameters
         -------------------
         run_checks: bool
             Whether to run some good sanity checks, at small computational cost.
-            
+
         Returns
         -------
         pix_n : ndarray, float
             The coefficients of the position of each intersection in terms of
             the basis grids s/f vectors.
-            
+
         intersect: ndarray, bool
             A boolean array of which of `q_vectors` intersect with the grid
             plane. First column is slow scan vector (s),  second is fast (f).
-        
+
         References
         ----------
         .[1] http://en.wikipedia.org/wiki/Line-plane_intersection
         """
-        
+
         if not self.xyz_type == 'implicit':
             raise RuntimeError('intersections can only be computed for implicit'
                                ' detectors')
 
         # compute the scattering vectors correspoding to q_vectors
         S = (q_vectors / self.k) + self.beam_vector
-        
+
         # compute intersections
         p, s, f, shape = self._basis_grid.get_grid(grid_index)
         n = self._unit_vector( np.cross(s, f) )
         i = (np.dot(p, n) / np.dot(S, n))[:,None] * S
-        
+
         # convert to pixel units by solving for the coefficients of proj
         A = np.array([s,f]).T
         pix_n, resid, rank, sigma = np.linalg.lstsq( A, (i-p).T )
-        
+
         if run_checks:
             err = np.sum( np.abs((i-p) - np.transpose( np.dot(A, pix_n) )) )
             if err > 1e-6:
                 raise RuntimeError('Error in computing where scattering vectors '
                                    'intersect with detector. Intersect not reproduced'
                                    ' (err: %f per pixel)' % (err / i.shape[0],) )
-        
+
             if not np.sum(resid) < 1e-6:
                 raise RuntimeError('Error in basis grid (residuals of point '
                                    'placement too large). Perhaps fast/slow '
@@ -770,21 +770,21 @@ class Detector(Beam):
         # see if the intersection in the plane is on the detector grid
         intersect = (pix_n[:,0] >= 0.0) * (pix_n[:,0] <= float(shape[0]-1)) *\
                     (pix_n[:,1] >= 0.0) * (pix_n[:,1] <= float(shape[1]-1))
-            
+
         logger.debug('%.3f %% of pixels intersected by grid %d' % \
-            ( (np.sum(intersect) / np.product(intersect.shape) * 100.0), 
+            ( (np.sum(intersect) / np.product(intersect.shape) * 100.0),
             grid_index) )
-            
+
         return pix_n[intersect], intersect
-        
-        
+
+
     @classmethod
-    def generic(cls, spacing=1.00, lim=100.0, energy=10.0, 
-                photons_scattered_per_shot=1e4, l=50.0, 
+    def generic(cls, spacing=1.00, lim=100.0, energy=10.0,
+                photons_scattered_per_shot=1e4, l=50.0,
                 force_explicit=False):
         """
         Generates a simple grid detector that can be used for testing
-        (factory function). 
+        (factory function).
 
         Optional Parameters
         -------------------
@@ -804,10 +804,10 @@ class Detector(Beam):
         Returns
         -------
         detector : odin.xray.Detector
-            An instance of the detector that meets the specifications of the 
+            An instance of the detector that meets the specifications of the
             parameters
         """
-        
+
         beam = Beam(photons_scattered_per_shot, energy=energy)
 
         if not force_explicit:
@@ -815,13 +815,13 @@ class Detector(Beam):
             p = np.array([-lim, -lim, l])   # corner position
             f = np.array([0.0, spacing, 0.0]) # slow scan is x
             s = np.array([spacing, 0.0, 0.0]) # fast scan is y
-            
+
             dim = int(2*(lim / spacing) + 1)
             shape = (dim, dim)
-                        
+
             basis = BasisGrid()
             basis.add_grid(p, s, f, shape)
-            
+
             detector = cls(basis, beam)
 
         else:
@@ -836,15 +836,15 @@ class Detector(Beam):
             detector = cls(xyz, beam)
 
         return detector
-    
-        
+
+
     def _to_serial(self):
         """ serialize the object to an array """
         s = np.array( cPickle.dumps(self) )
         s.shape=(1,) # a bit nasty...
         return s
-        
-        
+
+
     @classmethod
     def _from_serial(self, serialized):
         """ recover a Detector object from a serialized array """
@@ -852,8 +852,8 @@ class Detector(Beam):
             serialized = serialized[0]
         d = cPickle.loads( str(serialized) )
         return d
-    
-        
+
+
     def save(self, filename):
         """
         Writes the current Detector to disk.
@@ -863,16 +863,16 @@ class Detector(Beam):
         filename : str
             The path to the shotset file to save.
         """
-                
+
         if not filename.endswith('.dtc'):
             filename += '.dtc'
-        
+
         io.saveh(filename, detector=self._to_serial())
         logger.info('Wrote %s to disk.' % filename)
 
         return
-        
-        
+
+
     @classmethod
     def load(cls, filename):
         """
@@ -888,12 +888,12 @@ class Detector(Beam):
         shotset : odin.xray.Shotset
             A shotset object
         """
-        
+
         if not filename.endswith('.dtc'):
             raise ValueError('Must load a detector file (.dtc extension)')
-        
+
         hdf = io.loadh(filename)
-        d = cls._from_serial(hdf['detector'])        
+        d = cls._from_serial(hdf['detector'])
         return d
 
 
@@ -902,15 +902,15 @@ class ImageFilter(object):
     A pre-processor class that provides a set of 'filters' that generally
     improve the x-ray image data. The complete list of possibilities includes,
     along with the function name that implements that functionality in (.):
-        
+
         -- removing `hot` outlier pixels   (hot_pixels)
         -- correcting for polarization     (polarization)
         -- remove edges around ASICs       (mask_edges)
-        
+
     The way this class works is that you generate an ImageFilter object, 'turn
     on' the features from the list above you want, and then apply that filter
     to some raw intensity data.
-    
+
     Example
     -------
     >>> flt = ImageFilter()          # initialize class
@@ -920,14 +920,14 @@ class ImageFilter(object):
     >>> # now apply the filter to some data
     >>> new_intensities1, mask1 = flt(intensities1)
     >>> new_intensities2, mask2 = flt(intensities2)
-        
+
     For ease, the ImageFilter initialization method also takes kwargs that
     instantiate a class with some filters already applied. Eg. the above filter
     is equivalent to
-        
+
     >>> flt = ImageFilter(abs_std=3.0, polarization=0.99)
     """
-        
+
     # Note to programmer: here is how this class works. Each method consists
     # of two parts, one public that "turns on" the method for the filter
     # and one private that is called _apply_<filtername> that actually does
@@ -938,30 +938,30 @@ class ImageFilter(object):
     #
     # Also don't forget to add your method to the self.apply() method, which
     # checks self._methods_to_apply for what to do.
-        
+
     def __init__(self, abs_std=None, polarization=None, border_pixels=None):
         """
         Initialize an image filter. Optional kwargs initialize the filter with
         some standard filters activated. Otherwise, you have to turn each filter
         on one-by-one.
-        
+
         Optional Parameters
         -------------------
         abs_std : float
             Filter out any pixel that is further than `abs_std` * STD from the
             mean (i.e. this an n-sigma cutoff).
-        
+
         polarization : tuple (float, odin.xray.detector)
             A 2-tuple of the polarization factor to apply to the data, and the
             detector to employ.
-        
+
         border_pixels : int
             Filters this number of pixels around the border of each detector
             ASIC. ASICs are detected automatically.
         """
-        
+
         self._methods_to_apply = list()
-        
+
         # parse the kwargs and turn them into filters
         if abs_std:
             self.hot_pixels(abs_std)
@@ -969,19 +969,19 @@ class ImageFilter(object):
             self.polarization(*polarization)
         if border_pixels:
             self.detector_mask(border_pixels)
-            
+
         return
-        
-        
+
+
     def __call__(self, intensities, intensities_shape=None):
         """
         Apply the `ImageFilter` to `intensities`. An alias for self.apply().
-        
+
         Parameters
         ----------
         intensities : ndarray, float
             The intensity data.
-        
+
         Optional Parameters
         -------------------
         intensities_shape : two-tuple
@@ -989,24 +989,24 @@ class ImageFilter(object):
             intensities array will be re-shaped to this shape.
         """
         return self.apply(intensities, intensities_shape=intensities_shape)
-        
-        
+
+
     def apply(self, intensities, intensities_shape=None):
         """
         Apply the `ImageFilter` to `intensities`.
-        
+
         Parameters
         ----------
         intensities : ndarray, float
             The intensity data.
-            
+
         Optional Parameters
         -------------------
         intensities_shape : two-tuple
             The shape of the intensities (a 2-d array). If passed, the
             intensities array will be re-shaped to this shape.
         """
-        
+
         # we'll guarentee flat array, but make available the shape if necessary
         if len(intensities.shape) == 1:
             if intensities_shape == None:
@@ -1017,28 +1017,28 @@ class ImageFilter(object):
         else:
             self._intensities_shape = intensities.shape
             intensities = intensities.flatten()
-        
+
         # initialize mask
         mask = np.zeros(self._intensities_shape, dtype=np.bool)
-        
+
         # iterate through each filter method, if it's called for apply it
         if 'hot_pixels' in self._methods_to_apply:
             intensities, mask = self._apply_hot_pixels(intensities, mask)
-        
+
         if 'polarization' in self._methods_to_apply:
             intensities = self._apply_polarization(intensities)
-        
+
         if 'detector_mask' in self._methods_to_apply:
             intensities, mask = self._apply_detector_mask(intensities, mask)
 
         return intensities, mask
-        
-        
+
+
     def hot_pixels(self, abs_std=3.0):
         """
         Filter out any pixel that is further than `abs_std` * STD from the
         mean (i.e. this an n-sigma cutoff).
-        
+
         Parameters
         ----------
         abs_std : float
@@ -1047,8 +1047,8 @@ class ImageFilter(object):
         self._abs_std = abs_std
         self._methods_to_apply.append('hot_pixels')
         return
-        
-        
+
+
     def _apply_hot_pixels(self, i, mask):
         """
         Apply the hot pixel filter to `i`
@@ -1057,28 +1057,28 @@ class ImageFilter(object):
         cutoff = self._abs_std * i.std()
         mask[ np.abs(i - i.mean()) > cutoff ] = np.bool(False)
         return i, mask
-        
-        
+
+
     def polarization(self, polarization_factor, detector):
         """
         Remove the effects of beam polarization on the detected intensities.
-        
+
         Parameters
         ----------
         polarization_factor : float
-            
+
         """
-        
-        # TJL thinking : is passing a detector really the best way (most user 
+
+        # TJL thinking : is passing a detector really the best way (most user
         # friendly) to do this?
-        
+
         self.reciprocal = detector.reciprocal.copy()
         self._polarization_factor = polarization_factor
         self._methods_to_apply.append('polarization')
-        
+
         return
-        
-        
+
+
     def _apply_polarization(self, i):
         """
         Apply the polarization filter to `i`
@@ -1091,27 +1091,27 @@ class ImageFilter(object):
         corrected_i = i.flatten() * f_p
         return corrected_i
 
-        
+
     def detector_mask(self, border_pixels=1, num_bins=1e5, beta=1.0):
         """
-        Mask the detector mask and edges of each ASIC, to a width of 
+        Mask the detector mask and edges of each ASIC, to a width of
         `border_pixels`. These border pixels are sometimes likely to spike.
-        
+
         Parameters
         ----------
         border_pixels : int
             The width of the border around each ASIC to mask, in pixel units.
-            
+
         Additional Parameters
         ---------------------
         num_bins : int
-            The number of bins to use in the histogram-based image segmentation 
+            The number of bins to use in the histogram-based image segmentation
             used to find the mask regions. In tests, 10k worked well. If the
             detector mask is not getting separated from the measured pixels,
             increase this number.
-            
+
         beta : float
-            The smoothing parameter used to smooth the histogram-based image 
+            The smoothing parameter used to smooth the histogram-based image
             segmentation. If the detector mask is not getting separated from the
             measured pixels, lower this number. beta=10.0 worked well in tests.
         """
@@ -1120,93 +1120,93 @@ class ImageFilter(object):
         self._beta = beta
         self._methods_to_apply.append('detector_mask')
         return
-        
-        
+
+
     def _apply_detector_mask(self, i, mask):
         """
         Apply the edge mask filter to `i`, the intensities.
         """
-        dmask = self._find_detector_mask(i, num_bins=self._num_bins, 
+        dmask = self._find_detector_mask(i, num_bins=self._num_bins,
                                          beta=self._beta)
         mask += self._mask_border(dmask, self._border_pixels)
         return i, mask
-        
-        
+
+
     def _find_detector_mask(self, intensities, num_bins=1e5, beta=1.0):
         """
-        Find the detector regions by histogramming. The histogram of intensities 
+        Find the detector regions by histogramming. The histogram of intensities
         should be bi-modal, so we need to split it into two groups. To do this,
         smooth and choose the first local minimum.
         """
-        
+
         # reshape intensties for convienence
         intensities = intensities.reshape(self._intensities_shape)
-        
+
         mask = np.zeros(intensities.shape, dtype=np.bool)
         hist, bin_edges = np.histogram( intensities, bins=num_bins )
-        
+
         a = smooth(hist, beta=beta)
         minima = np.where(np.r_[True, a[1:] < a[:-1]] & np.r_[a[:-1] < a[1:], True] == True)[0]
         cutoff = a[minima[0]]
-        
+
         logger.debug("Mask cutoff: %f" % cutoff)
         mask[ intensities < cutoff ]  = np.bool(True)
         mask[ intensities >= cutoff ] = np.bool(False)
-        
+
         mask = mask.reshape(self._intensities_shape) # ensure mask is square
-        
+
         return mask
-        
-        
+
+
     def _mask_border(self, mask, border_pixels):
         """
         Returns a version of `mask` with an additional `border_pixels` masked
         around the masked region.
         """
-        
+
         if border_pixels < 1:
             logger.warning('_mask_border() called with `border_pixels`=%d' % border_pixels)
             return mask
-        
+
         if len(mask.shape) == 1:
             mask = mask.reshape(self._intensities_shape)
             # logger.critical("Mask shape: %s" % str(mask.shape))
             # raise ValueError('mask must be two-dimensional')
-        
+
         # recall : in an array np.bool(True) + np.bool(True) = np.bool(True)
         for i in range(1,border_pixels+1):
             mask += np.roll(mask, i, axis=0)
             mask += np.roll(mask, -i, axis=0)
-        
+
             mask += np.roll(mask, i, axis=1)
             mask += np.roll(mask, -i, axis=1)
-        
+
         return mask
-        
-        
+
+
     def _find_detector_mask_by_region(self, intensities):
         """
         Return a mask representing the detector. This works by segmenting the
-        image along sharp edges, finding the means of each segment, and 
-        splitting the segments into two clusters (measured/mask) using 
+        image along sharp edges, finding the means of each segment, and
+        splitting the segments into two clusters (measured/mask) using
         a histogramming method.
         """
-        
+
         logger.debug("Locating detector mask regions...")
         logger.warning("Finding the mask by region is (1) slow and (2) untested"
                        ". Recommend using _find_detector_mask().")
-        
+
         # shape-check intensities
         assert len(intensities.shape) == 2
-        
+
         # find the detector edges, they will be 0's -- unclassified are -1's
         classified = self._find_edges(intensities) - 1.0
-        
+
         # loop over all non-edge pixels, and classify regions by lumping
-        # adjacent pixels into groups -- results in `classified`        
+        # adjacent pixels into groups -- results in `classified`
         def adjacent(i,j):
             """
-            Return a list of the indices of the unclassified pixels adjacent 
+            Return a list of the indices of the unclassified pixels adjacent
             to (i,j).
             """
             logger.debug("Finding pixels adjacent to: %s" % str((i,j)))
@@ -1217,12 +1217,12 @@ class ImageFilter(object):
                         if (classified[pixel] == -1):
                             l_adj.append( pixel )
             return l_adj
-        
+
         # we want to classify pixels by recursively growing adjacent regions
         adjacents = list()
         while (classified == -1).sum() > 0:
             logger.debug("Unclassified remaining: %d" % (classified == -1).sum())
-            
+
             # choose a new pixel to grow a region out of
             for i in range(intensities.shape[0]):
                 for j in range(intensities.shape[1]):
@@ -1230,38 +1230,38 @@ class ImageFilter(object):
                         seed_pixel = (i,j)
                         break
                     break
-                    
+
             logger.debug("Seed pixel: %s" % str(seed_pixel))
-            
+
             # create a new region
             classified[seed_pixel] = classified.max() + 1
             adjacents.extend( adjacent(*seed_pixel) )
-            
+
             # grow that region
             while len(adjacents) > 0:
                 p = adjacents.pop()
                 classified[p] = classified.max()
                 adjacents.extend( adjacent(*p) )
-                
+
         # next, compute the means of each region and histogram
         num_regions = classified.max() # recall zero are the edges
         means = np.zeros(num_regions)
         for i in range(1,num_regions):
             means[i] = np.mean( intensities[ classified == i ] )
-            
+
         # histogram the means
         num_bins = num_regions/10
         if num_bins < 10: num_bins = 10
         hist, bin_edges = np.histogram(means, bins=num_bins)
-        
+
         # the result should be bi-modal, so we need to split it into two groups
         # to do this, smooth and choose the central local minimum
-        
+
         # todo dbl chk below
         a = smooth(hist, beta=3.0) # fiddle
         minima = np.where(np.r_[True, a[1:] < a[:-1]] & np.r_[a[:-1] < a[1:], True] == True)[0]
         cutoff = minima[1]
-        
+
         # now generate a mask, and use the above cutoff to classify regions
         # as detector mask or not. Do this in-place on `classified`. Put
         # `1` in measured places, `0` in edges/mask locations (recall 0 was
@@ -1271,12 +1271,12 @@ class ImageFilter(object):
                 classified = 1
             else:
                 classified = 0
-        
+
         # we want the mask to be true at masked positions
         classified = 1 - classified
-        
+
         return classified
-    
+
 
     def _find_edges(self, image, threshold=0.1):
         """
@@ -1293,25 +1293,25 @@ class ImageFilter(object):
         image = (image > (image.max() * threshold)).astype(np.int8)
 
         return image
-    
-        
+
+
 class Shotset(object):
     """
     A collection of xray 'shots', and methods for anaylzing statistical
     properties across shots (each shot a single x-ray image).
     """
-        
+
     def __init__(self, intensities, detector, mask=None):
         """
         Instantiate a Shotset class.
-        
+
         Parameters
         ----------
         intensities : ndarray, float
             Either a list of one-D arrays, or a two-dimensional array. The first
             dimension should index shots, the second intensities for each pixel
             in that shot.
-        
+
         detector : odin.xray.Detector
             A detector object, containing the pixel positions in space.
 
@@ -1328,35 +1328,35 @@ class Shotset(object):
             raise ValueError('`detector` argument must be type: xray.Detector')
         else:
             self.detector = detector
-            
+
         # parse intensities
         if type(intensities) == list:
             intensities = np.array(intensities)
-        
+
         if type(intensities) == np.ndarray:
             s = intensities.shape
-            
+
             if len(s) == 1:
                 if not s[0] == self.detector.num_pixels:
                     raise ValueError('`intensities` does not have the same '
                                      'number of pixels as `detector`')
                 self.intensities = intensities[None,:]
-                
+
             elif len(s) == 2:
                 if not s[1] == self.detector.num_pixels:
                     raise ValueError('`intensities` does not have the same '
                                      'number of pixels as `detector`')
                 self.intensities = intensities
-                
+
             else:
                 raise ValueError('`intensities` has a invalid number of '
                                  'dimensions, must be 1 or 2 (got: %d)' % len(s))
-            
+
         else:
             raise TypeError('`intensities` must be type ndarray')
-            
+
         assert len(self.intensities.shape) == 2
-            
+
         # parse mask
         if mask != None:
             mask = mask.flatten()
@@ -1366,20 +1366,20 @@ class Shotset(object):
         else:
             #self.mask = np.zeros(self.detector.num_pixels, dtype=np.bool)
             self.mask = None
-        
-        
+
+
         return
-    
-        
+
+
     @property
     def num_shots(self):
         return self.intensities.shape[0]
-    
-        
+
+
     def __len__(self):
         return self.num_shots
-    
-            
+
+
     def __getitem__(self, key):
         """
         Slice the shotset into a smaller shotset.
@@ -1388,8 +1388,8 @@ class Shotset(object):
             raise TypeError('Only int or np.ndarray:dtype int can slice a Shot')
         new_i = self.intensities[key,:].copy()
         return Shotset(new_i, self.detector, self.mask)
-    
-        
+
+
     def __add__(self, other):
         if not isinstance(other, Shotset):
             raise TypeError('Cannot add types: %s and Shotset' % type(other))
@@ -1399,13 +1399,13 @@ class Shotset(object):
             raise RuntimeError('shotset objects must share the same mask to add')
         new_i = np.vstack(( self.intensities, other.intensities ))
         return Shotset(new_i, self.detector, self.mask)
-    
-        
+
+
     @property
     def average_intensity(self):
         return self.intensities.sum(0) # average over shots
-    
-        
+
+
     @staticmethod
     def num_phi_to_values(num_phi):
         """
@@ -1413,13 +1413,13 @@ class Shotset(object):
         """
         phi_values = np.linspace(0.0, 2.0*np.pi, num=num_phi)
         return phi_values
-    
-        
+
+
     @staticmethod
     def num_phi_to_spacing(num_phi):
         return 2.0*np.pi / float(num_phi)
-    
-        
+
+
     def assemble_image(self, shot_index=None, num_x=None, num_y=None):
         """
         Assembles the Shot object into a real-space image.
@@ -1429,7 +1429,7 @@ class Shotset(object):
         shot_index : int
             The shot inside the Shotset to assemble. If `None`, will assemble
             an average image.
-        
+
         num_x,num_y : int
             The number of pixels in the x/y direction that will comprise the final
             grid.
@@ -1444,7 +1444,7 @@ class Shotset(object):
             >>> show()
             ...
         """
-        
+
         if shot_index == None:
             inten = self.average_intensity
         else:
@@ -1461,13 +1461,13 @@ class Shotset(object):
         y = np.linspace(points[:,1].min(), points[:,1].max(), num_y)
         grid_x, grid_y = np.meshgrid(x,y)
 
-        grid_z = interpolate.griddata(points, inten, 
-                                      (grid_x,grid_y), method='nearest', 
+        grid_z = interpolate.griddata(points, inten,
+                                      (grid_x,grid_y), method='nearest',
                                       fill_value=0.0)
 
         return grid_z
-    
-        
+
+
     def polar_grid(self, q_values, num_phi):
         """
         Return the pixels that comprise the polar grid in (q, phi) space.
@@ -1498,36 +1498,36 @@ class Shotset(object):
         pg_real[:,1] = np.repeat(q_values, num_phi) * np.sin( phis )
 
         return pg_real
-    
-        
+
+
     def interpolate_to_polar(self, q_values=None, num_phi=360, q_spacing=0.02):
         """
-        Interpolate our cartesian-based measurements into a polar coordiante 
+        Interpolate our cartesian-based measurements into a polar coordiante
         system.
-        
+
         Parameters
         ----------
         q_values : ndarray OR list OF floats
             If supplied, the interpolation will only be performed at these
             values of |q|, and the `q_spacing` parameter will be ignored.
-            
+
         num_phi : int
             The number of equally-spaced points around the azimuth to
             interpolate (e.g. `num_phi`=360 means points at 1 deg spacing).
 
         q_spacing : float
             The q-vector spacing, in inverse angstroms.
-        
+
         Returns
         -------
         interpolated_intensities : ndarray, float
             The interpolated values. A three-D array, (shots, q_values, phis)
-            
+
         polar_mask : ndarray, bool
             A mask of ones and zeros. Ones are kept, zeros masked. Shape and
             pixels correspond to `interpolated_intensities`.
         """
-        
+
         # compute q_values if need be
         if q_values != None:
             q_values = np.array(q_values)
@@ -1535,12 +1535,12 @@ class Shotset(object):
             q_min     = q_spacing
             q_max     = self.detector.q_max
             q_values  = np.arange(q_min, q_max, q_spacing)
-        
-        
+
+
         # check to see what method we want to use to interpolate. Here,
         # `unstructured` is more general, but slower; implicit/structured assume
         # the detectors are grids, and are therefore faster but specific
-        
+
         if self.detector.xyz_type == 'explicit':
             polar_intensities, polar_mask = self._explicit_interpolation(q_values, num_phi)
         elif self.detector.xyz_type == 'implicit':
@@ -1548,18 +1548,18 @@ class Shotset(object):
         else:
             raise RuntimeError('Invalid detector passed to Shot(), must be of '
                                'xyz_type {explicit, implicit}')
-        
+
         return polar_intensities, polar_mask
-    
-        
+
+
     def _implicit_interpolation(self, q_values, num_phi):
         """
         Interpolate onto a polar grid from an `implicit` detector geometry.
-        
+
         This detector geometry is specified by the x and y pixel spacing,
         the number of pixels in the x/y direction, and the top-left corner
         position.
-        
+
         Notes
         -----
         --  The interpolation is performed in real space in basis vector (s/f)
@@ -1567,116 +1567,116 @@ class Shotset(object):
         --  The returned polar intensities are flattened, but each grid has data
             laid out as (q_values [slow], phi [fast])
         """
-        
+
         # initialize output space for the polar data and mask
         num_q = len(q_values)
         polar_intensities = np.zeros((self.num_shots, num_q, num_phi))
         polar_mask        = np.zeros((num_q * num_phi), dtype=np.bool) # reshaped later
         q_vectors         = _q_grid_as_xyz(q_values, num_phi, self.detector.k)
-        
-                
+
+
         # --- loop over all the arrays that comprise the detector ---
         #     use grid interpolation on each
-        
+
         int_start = 0 # start of intensity array correpsonding to `grid`
         int_end   = 0 # end of intensity array correpsonding to `grid`
-        
+
         for g in range(self.detector._basis_grid.num_grids):
-            
+
             p, s, f, size = self.detector._basis_grid.get_grid(g)
-            
+
             # compute how many pixels this grid has
             n_int = int( np.product(size) )
             int_end += n_int
-            
+
             # compute where the scattering vectors intersect the detector
             pix_n, intersect = self.detector._compute_intersections(q_vectors, g)
-            
+
             if np.sum(intersect) == 0:
                 logger.warning('Detector array (%d) had no pixels inside the \
                 interpolation area!' % g)
                 continue
-                        
+
             # --- loop over shots
             for i in range(self.num_shots):
-                
+
                 # interpolate onto the polar grid & update the inverse mask
                 # --> perform the interpolation in pixel units, and then convert
                 #     evaluated values to pixel units before evalutating
-            
+
                 # corner: (0,0); x/y size: 1.0; x is fast, y slow
                 shot_pi = np.zeros(num_q * num_phi)
                 shot_pm = np.zeros(num_q * num_phi, dtype=np.bool)
-                
-                interp = Bcinterp(self.intensities[i,int_start:int_end], 
+
+                interp = Bcinterp(self.intensities[i,int_start:int_end],
                                   1.0, 1.0, size[1], size[0], 0.0, 0.0)
-            
+
                 shot_pi[intersect] = interp.evaluate(pix_n[:,1], pix_n[:,0])
                 polar_intensities[i,:,:] = shot_pi.reshape(num_q, num_phi)
-                
-                
+
+
             # mask points that missed
             polar_mask[intersect] = np.bool(True)
-            
+
             # next, mask any points that should be masked by the real mask
             if self.mask == None:
                 pass # if we have no work to do, skip this step...
             else:
-                
+
                 # to get the bicubic interpolation right, need to mask 16-px box
                 # around any masked pixel. To do this, loop over masked px and
                 # mask any polar pixel within 2-pixel units in either x or y dim
 
                 assert self.mask.dtype == np.bool
                 sub_mask = self.mask[int_start:int_end].reshape(size)
-                sixteen_mask = filters.minimum_filter(sub_mask, size=(4,4), 
+                sixteen_mask = filters.minimum_filter(sub_mask, size=(4,4),
                                                       mode='nearest')
-                
+
                 u = unique_rows( np.floor(pix_n) ).astype(np.int)
                 polar_mask[intersect] = sixteen_mask[u] # false if masked
-            
+
             # increment index for self.intensities -- the real/measured intst.
             int_start += n_int
-            
+
         polar_mask = polar_mask.reshape(num_q, num_phi)
-        
+
         return polar_intensities, polar_mask
-        
-        
+
+
     def _explicit_interpolation(self, q_values, num_phi):
         """
         Perform an interpolation to polar coordinates assuming that the detector
         pixels do not form a rectangular grid.
-        
+
         NOTE: The interpolation is performed in polar momentum (q) space.
         """
-        
+
         # initialize output space for the polar data and mask
         num_q = len(q_values)
         polar_intensities = np.zeros((self.num_shots, num_q, num_phi))
         polar_mask        = np.zeros(num_q * num_phi, dtype=np.bool)
         xy = self.detector.recpolar[:,[0,2]]
-        
+
         # because we're using a "square" interplation method, wrap around one
         # set of polar coordinates to capture the periodic nature of polar coords
         add = ( xy[:,1] == xy[:,1].min() )
         xy_add = xy[add]
         xy_add[:,1] += 2.0 * np.pi
         aug_xy = np.concatenate(( xy, xy_add ))
-        
+
         if self.mask != None:
             aug_mask = np.concatenate(( self.mask, self.mask[add] ))
         else:
             # slice all
             aug_mask = slice(0, self.detector.num_pixels + len(add))
-        
+
         for i in range(self.num_shots):
-        
-            aug_int = np.concatenate(( self.intensities[i,:], 
+
+            aug_int = np.concatenate(( self.intensities[i,:],
                                        self.intensities[i,add] ))
-        
+
             # do the interpolation
-            z_interp = interpolate.griddata( aug_xy[aug_mask], aug_int[aug_mask], 
+            z_interp = interpolate.griddata( aug_xy[aug_mask], aug_int[aug_mask],
                                              self.polar_grid(q_values, num_phi),
                                              method='linear', fill_value=np.nan)
 
@@ -1686,11 +1686,11 @@ class Shotset(object):
             nans = np.isnan(z_interp)
             polar_intensities[i,nans.reshape(num_q, num_phi)] = 0.0
             polar_mask[np.logical_not(nans)] = np.bool(True)
-        
+
         polar_mask = polar_mask.reshape(num_q, num_phi)
-        
+
         return polar_intensities, polar_mask
-    
+
 
     def intensity_profile(self, q_spacing=0.02):
         """
@@ -1699,7 +1699,7 @@ class Shotset(object):
         Optional Parameters
         -------------------
         q_spacing : float
-            The resolution of the |q|-axis 
+            The resolution of the |q|-axis
 
         Returns
         -------
@@ -1710,9 +1710,9 @@ class Shotset(object):
 
         q = self.detector.recpolar[:,0]
         q_vals = np.arange(0.0, q.max(), q_spacing)
-        
+
         ind = np.digitize(q, q_vals)
-        
+
         avg = np.zeros(len(q_vals))
         for i in range(ind.max()):
             x = (ind == i)
@@ -1720,16 +1720,16 @@ class Shotset(object):
                 avg[i] = np.mean( self.average_intensity[x] )
             else:
                 avg[i] = 0.0
-        
+
         intensity_profile = np.vstack( (q_vals, avg) ).T
-        
+
         return intensity_profile
 
-    
+
     def intensity_maxima(self, smooth_strength=10.0):
         """
         Find the positions where the intensity profile is maximized.
-        
+
         Parameters
         ----------
         smooth_strength : float
@@ -1737,33 +1737,33 @@ class Shotset(object):
             that noise is not picked up as a local maxima. Increase this value
             if you're picking up noise as maxima, decrease it if you're missing
             maxima.
-        
+
         Returns
         -------
         maxima : list of floats
             A list of the |q| positions where the intensity is maximized.
         """
-        
+
         # first, smooth; then, find local maxima based on neighbors
         intensity = self.intensity_profile()
         m = maxima( smooth(intensity[:,1], beta=smooth_strength) )
         return m
-    
-        
+
+
     @classmethod
-    def simulate(cls, traj, detector, num_molecules, num_shots, traj_weights=None, 
+    def simulate(cls, traj, detector, num_molecules, num_shots, traj_weights=None,
                  finite_photon=False, force_no_gpu=False, device_id=0):
         """
         Simulate a scattering 'shot', i.e. one exposure of x-rays to a sample, and
         return that as a Shot object (factory function).
 
-        Assumes we have a Boltzmann distribution of `num_molecules` identical  
+        Assumes we have a Boltzmann distribution of `num_molecules` identical
         molecules (`trajectory`), exposed to a beam defined by `beam` and projected
         onto `detector`.
 
         Each conformation is randomly rotated before the scattering simulation is
-        performed. Atomic form factors from X, finite photon statistics, and the 
-        dilute-sample (no scattering interference from adjacent molecules) 
+        performed. Atomic form factors from X, finite photon statistics, and the
+        dilute-sample (no scattering interference from adjacent molecules)
         approximation are employed.
 
         Parameters
@@ -1771,54 +1771,54 @@ class Shotset(object):
         traj : mdtraj.trajectory
             A trajectory object that contains a set of structures, representing
             the Boltzmann ensemble of the sample. If len(traj) == 1, then we assume
-            the sample consists of a single homogenous structure, replecated 
+            the sample consists of a single homogenous structure, replecated
             `num_molecules` times.
-    
+
         detector : odin.xray.Detector
             A detector object the shot will be projected onto.
-    
+
         num_molecules : int
             The number of molecules estimated to be in the `beam`'s focus.
-            
+
         num_shots : int
             The number of shots to simulate.
-    
+
         Optional Parameters
         -------------------
         traj_weights : ndarray, float
             If `traj` contains many structures, an array that provides the Boltzmann
             weight of each structure. Default: if traj_weights == None, weights
             each structure equally.
-            
+
         finite_photon : bool
             Use finite photon statistics in the simulation.
-    
+
         force_no_gpu : bool
             Run the (slow) CPU version of this function.
- 
+
         device_id : int
             The index of the GPU to run on.
-    
+
         Returns
         -------
         shotset : odin.xray.Shotset
             A Shotset instance, containing the simulated shots.
         """
-        
+
         I = np.zeros((num_shots, detector.num_pixels))
-        
+
         for i in range(num_shots):
-            I[i,:] = scatter.simulate_shot(traj, num_molecules, detector, 
+            I[i,:] = scatter.simulate_shot(traj, num_molecules, detector,
                                            traj_weights=traj_weights,
-                                           finite_photon=finite_photon, 
+                                           finite_photon=finite_photon,
                                            force_no_gpu=force_no_gpu,
                                            device_id=device_id)
-                                           
+
         ss = cls(I, detector)
-        
+
         return ss
-    
-        
+
+
     def to_rings(self, q_values, num_phi=360):
         """
         Convert the shot to an xray.Rings object, for computing correlation
@@ -1834,17 +1834,17 @@ class Shotset(object):
             The values of |q| to extract rings at (in Ang^{-1}).
 
         num_phi : int
-            The number of equally spaced points around the azimuth to 
+            The number of equally spaced points around the azimuth to
             interpolate onto (e.g. `num_phi`=360 means 1 deg spacing).
         """
-        
+
         logger.info('Converting %d shots to polar space (Rings)' % self.num_shots)
-        pi, pm = self.interpolate_to_polar(q_values=q_values, num_phi=num_phi)        
+        pi, pm = self.interpolate_to_polar(q_values=q_values, num_phi=num_phi)
         r = Rings(q_values, pi, self.detector.k, pm)
-        
+
         return r
-    
-                    
+
+
     def save(self, filename, save_interpolation=True):
         """
         Writes the current Shotset data to disk.
@@ -1853,7 +1853,7 @@ class Shotset(object):
         ----------
         filename : str
             The path to the shotset file to save.
-            
+
         Optional Parameters
         -------------------
         save_interpolation : bool
@@ -1873,16 +1873,16 @@ class Shotset(object):
         else:
             mask = self.mask
 
-        io.saveh(filename, 
+        io.saveh(filename,
                  num_shots = np.array([self.num_shots]),
                  detector  = self.detector._to_serial(),
                  mask      = mask,
                  **shotdata)
 
         logger.info('Wrote %s to disk.' % filename)
-        
+
         return
-    
+
 
     @classmethod
     def load(cls, filename, to_load=None):
@@ -1893,7 +1893,7 @@ class Shotset(object):
         ----------
         filename : str
             The path to the shotset file.
-            
+
         to_load : ndarray/list, ints
             The indices of the shots in `filename` to load. Can be used to sub-
             sample the shotset.
@@ -1903,14 +1903,14 @@ class Shotset(object):
         shotset : odin.xray.Shotset
             A shotset object
         """
-        
-        
+
+
         # load from a shot file
         if filename.endswith('.shot'):
             hdf = io.loadh(filename)
 
             num_shots = int(hdf['num_shots'])
-            
+
             # figure out which shots to load
             if to_load == None:
                 to_load = range(num_shots)
@@ -1919,69 +1919,69 @@ class Shotset(object):
                     to_load = np.array(to_load)
                 except:
                     raise TypeError('`to_load` must be a ndarry/list of ints')
-        
+
             list_of_intensities = []
             d = Detector._from_serial(hdf['detector'])
             mask = hdf['mask']
-            
+
             # check for our flag that there is no mask
             if np.all(mask == np.array([0])):
                 mask = None
-            
+
             for i in to_load:
                 i = int(i)
                 list_of_intensities.append( hdf[('shot%d' % i)] )
-                
+
             hdf.close()
-            
-            
+
+
         elif filename.endswith('.cxi'):
             raise NotImplementedError() # todo
-            
+
         else:
             raise ValueError('Must load a shotset file [.shot, .cxi]')
-        
+
 
         return cls(list_of_intensities, d, mask)
-        
-        
+
+
 class Rings(object):
     """
     Class to keep track of intensity data in a polar space.
     """
-    
+
     def __init__(self, q_values, polar_intensities, k, polar_mask=None):
         """
-        Interpolate our cartesian-based measurements into a polar coordiante 
+        Interpolate our cartesian-based measurements into a polar coordiante
         system.
-        
+
         Parameters
         ----------
         q_values : ndarray OR list OF floats
             The values of |q| in `polar_intensities`, in inverse Angstroms.
-        
+
         polar_intensities : ndarray, float
             Intensities in polar space. Should be shape:
-            
+
                 N x len(`q_values`) x num_phi
-            
+
             with N the number of shots (any value) and `num_phi` the number of
             points (equally spaced) around the azimuth.
-            
+
         k : float
             The wavenumber of the energy used to acquire the data.
-            
+
         polar_mask : ndarray, bool
             A mask of ones and zeros. Ones are kept, zeros masked. Should be the
             same shape as `polar_intensities`, but LESS THE FRIST DIMENSION.
-            That is, the polar mask is the same for all shots. Can also be 
+            That is, the polar mask is the same for all shots. Can also be
             `None`, meaning no masked pixels
         """
-        
+
         if not polar_intensities.shape[1] == len(q_values):
             raise ValueError('`polar_intensities` must have same len as '
                              '`q_values` in its second dimension.')
-        
+
         if polar_mask == None:
             self.polar_mask = None
         elif type(polar_mask) == np.ndarray:
@@ -1994,160 +1994,160 @@ class Rings(object):
                 self.polar_mask = polar_mask
         else:
             raise TypeError('`polar_mask` must be np.ndarray or None')
-            
+
         self._q_values         = np.array(q_values)           # q values of the ring data
         self.polar_intensities = np.copy (polar_intensities ) # copy data so don't over-write
         self.k                 = k                            # wave number
 
-#	number of inter shot correlations to compute
-	self.num_inter = None # used in methods self.legendre and self.legendre_matrix; not too important
-	
-	# Make intra and inter arrays for storing "average" correlators.
-	# First, make a dictionary for indexing these arrays at later times.
-	self.q_pairs = []
-	k = 0
-	for i in xrange( len(q_values) ):
-	  q1 = str(q_values[i])
-	  for j in xrange( i, len(q_values) ):
-	    q2 = str(q_values[j]) 
-	    self.q_pairs.append( ( q1 + '-' + q2  ,k ) )
-	    k += 1
-	self.q_pairs = dict( self.q_pairs )
-	
-	self._intra = np.zeros ( ( k , polar_intensities.shape[2] ) )
-	self._inter = np.zeros ( ( k , polar_intensities.shape[2] ) )
-        
-	return
-    
-        
+#       number of inter shot correlations to compute
+        self.num_inter = None # used in methods self.legendre and self.legendre_matrix; not too important
+
+        # Make intra and inter arrays for storing "average" correlators.
+        # First, make a dictionary for indexing these arrays at later times.
+        self.q_pairs = []
+        k = 0
+        for i in xrange( len(q_values) ):
+            q1 = str(q_values[i])
+            for j in xrange( i, len(q_values) ):
+                q2 = str(q_values[j])
+                self.q_pairs.append( ( q1 + '-' + q2  ,k ) )
+                k += 1
+        self.q_pairs = dict( self.q_pairs )
+
+        self._intra = np.zeros ( ( k , polar_intensities.shape[2] ) )
+        self._inter = np.zeros ( ( k , polar_intensities.shape[2] ) )
+
+        return
+
+
     @property
     def num_shots(self):
         return self.polar_intensities.shape[0]
-    
-        
+
+
     @property
     def phi_values(self):
         return np.linspace(0.0, 2.0*np.pi, num=self.num_phi)
-        
-        
+
+
     @property
     def q_values(self):
         return self._q_values
-    
-        
+
+
     @property
     def num_phi(self):
         return self.polar_intensities.shape[2]
-    
+
 
     @property
     def num_q(self):
         return len(self._q_values)
-    
+
 
     @property
     def num_datapoints(self):
         return self.num_phi * self.num_q
-    
+
     def intra(self, q1, q2=None ):
-    	"""
-    	Returns the average intRA-shot correlation between rings at q1,q2.
-    	
-    	Parameters
-    	----------
-    	q1 : float
-    	    The q values in inverse angstroms
-    	
-    	Optional Parameters
-    	-------------------
-    	q2 : float
-    	    If q2 if not passed, q2 == q1 and function returns an auto correlation at q1.
-    	
-    	Returns
-    	-------
-    	self._intra : average correlation between rings q1,q2
-    	"""
-	if q2 == None:
-	  q2 = q1
+        """
+        Returns the average intRA-shot correlation between rings at q1,q2.
+
+        Parameters
+        ----------
+        q1 : float
+            The q values in inverse angstroms
+
+        Optional Parameters
+        -------------------
+        q2 : float
+            If q2 if not passed, q2 == q1 and function returns an auto correlation at q1.
+
+        Returns
+        -------
+        self._intra : average correlation between rings q1,q2
+        """
+        if q2 == None:
+            q2 = q1
         q_ind1 = self.q_index(q1)
         q_ind2 = self.q_index(q2)
-	q1q2_ind = self.q_pairs[  str(q1) + '-' + str(q2) ]
-	return self._intra[q1q2_ind]
-   
+        q1q2_ind = self.q_pairs[  str(q1) + '-' + str(q2) ]
+        return self._intra[q1q2_ind]
+
     def inter(self, q1, q2=None ):
-    	"""
-    	Returns the average intER-shot correlation between rings at q1,q2.
-    	
-    	Parameters
-    	----------
-    	q1 : float
-    	    The q values in inverse angstroms
-    	
-    	Optional Parameters
-    	-------------------
-    	q2 : float
-    	    If q2 if not passed, q2 == q1 and function returns an auto correlation at q1.
-    	
-    	Returns
-    	-------
-    	self._inter : average correlation between rings q1,q2
-    	"""
-	if q2 == None:
-	  q2 = q1
+        """
+        Returns the average intER-shot correlation between rings at q1,q2.
+
+        Parameters
+        ----------
+        q1 : float
+            The q values in inverse angstroms
+
+        Optional Parameters
+        -------------------
+        q2 : float
+            If q2 if not passed, q2 == q1 and function returns an auto correlation at q1.
+
+        Returns
+        -------
+        self._inter : average correlation between rings q1,q2
+        """
+        if q2 == None:
+            q2 = q1
         q_ind1 = self.q_index(q1)
         q_ind2 = self.q_index(q2)
-	q1q2_ind = self.q_pairs[  str(q1) + '-' + str(q2) ]
-	return self._inter[q1q2_ind]
-	
+        q1q2_ind = self.q_pairs[  str(q1) + '-' + str(q2) ]
+        return self._inter[q1q2_ind]
+
     def get_cos_psi_vals(self,q1,q2 ):
         wave   = self.k / 2. / np.pi     # wavelength in angstroms
         t1     = np.pi/2. + np.arcsin( q1*wave / 4. / np.pi ) # theta 1 in spherical coor
-        t2     = np.pi/2. + np.arcsin( q2*wave / 4. / np.pi ) # theta 2 in spherical coor 
-	return np.cos(t1)*np.cos(t2) + np.sin(t1)*np.sin(t2)*\
-               np.cos( self.phi_values ) 
- 
+        t2     = np.pi/2. + np.arcsin( q2*wave / 4. / np.pi ) # theta 2 in spherical coor
+        return np.cos(t1)*np.cos(t2) + np.sin(t1)*np.sin(t2)*\
+               np.cos( self.phi_values )
+
     def q_index(self, q):
         """
         Convert value of |q| (in inverse Angstroms) into the index used to
         slice `polar_intensities`.
-        
+
         Parameters
         ----------
         q : float
             The value of |q| in inv Angstroms
-            
+
         Returns
         -------
         q_ind : int
             The index to slice `polar_intensities` at to get |q|.
         """
         q_ind = np.where( self.q_values == q )[0] # check if there are rings at q
-	if len(q_ind) == 0:
-	  raise ValueError("There if no ring at q = "+str(q) +" inv ang. " \
-			   "There are only data for q = "+ ", ".join(np.char.mod("%.2f",self.q_values) )  )
-	else:
-          return int (q_ind )
+        if len(q_ind) == 0:
+            raise ValueError("There if no ring at q = "+str(q) +" inv ang. " \
+                             "There are only data for q = "+ ", ".join(np.char.mod("%.2f",self.q_values) )  )
+        else:
+            return int (q_ind )
 
     def dePolarize(self,outOfPlane):
-	""" 
-	Applies a polarization correction to the rings.
-	
-	Parameters 
-	----------
-	outOfPlane : float
-	    fraction of polarization out of the synchrotron plane (between 0 and 1)
-	"""
-	print "Warning, this method is still under development."
-	wave = self.k / 2. / np.pi
-	for i in xrange(self.num_q):
-	  q = self.q_values[i]
-  	  theta = np.arcsin( q*wave / 4./ np.pi)
-          SinTheta = np.sin( 2 * theta )
-	  for j in xrange(self.num_shots):
-	    correction  = outOfPlane * ( 1. - SinTheta**2  * np.cos(self.phi_values)**2 )
-	    correction += (1.-outOfPlane) * (1. - SinTheta**2 * np.sin( self.phi_values)** 2)
-	    self.polar_intensities[ j , i , : ]  /= correction
-	
+        """
+        Applies a polarization correction to the rings.
+
+        Parameters
+        ----------
+        outOfPlane : float
+            fraction of polarization out of the synchrotron plane (between 0 and 1)
+        """
+        print "Warning, this method is still under development."
+        wave = self.k / 2. / np.pi
+        for i in xrange(self.num_q):
+            q = self.q_values[i]
+            theta = np.arcsin( q*wave / 4./ np.pi)
+            SinTheta = np.sin( 2 * theta )
+            for j in xrange(self.num_shots):
+                correction  = outOfPlane * ( 1. - SinTheta**2  * np.cos(self.phi_values)**2 )
+                correction += (1.-outOfPlane) * (1. - SinTheta**2 * np.sin( self.phi_values)** 2)
+                self.polar_intensities[ j , i , : ]  /= correction
+
     def intensity_profile(self):
         """
         Averages over the azimuth phi to obtain an intensity profile.
@@ -2158,204 +2158,204 @@ class Rings(object):
             An n x 2 array, where the first dimension is the magnitude |q| and
             the second is the average intensity at that point < I(|q|) >_phi.
         """
-        
+
         intensity_profile      = np.zeros( (self.num_q, 2), dtype=np.float )
         intensity_profile[:,0] = self._q_values.copy()
-        
+
         # average over shots, phi
         if self.polar_mask != None:
             i = self.polar_intensities * self.polar_mask.astype(np.float)
         else:
             i = self.polar_intensities
-        
+
         intensity_profile[:,1] = np.mean( np.mean(i, axis=2), axis=0)
-        
+
         return intensity_profile
-    
-        
+
+
     def correlate_intra(self, q1, q2, num_cors=0,mean_only = False):
         """
         Does intRA-shot correlations for many shots.
-        
-	Parameters
-	----------
-	ringsA : ndarray, float 
-	    (first dim = number of rings, second dim = number of pixels per ring) 
-        ringsB : ndarray float 
-	    (first dim = number of rings, second dim = number of pixels per ring) 
-        
-	Optional Parameters
-	-------------------
-        num_cors : int 
-	    number of corrs to compute
-	mean_only : bool
-	    whether or not to return every correlation, or the average
-        
-	Returns
-	------- 
-	intra : ndarray, float
-	    Either the average correlation, or every correlation as a 2d array 
+
+        Parameters
+        ----------
+        ringsA : ndarray, float
+            (first dim = number of rings, second dim = number of pixels per ring)
+        ringsB : ndarray float
+            (first dim = number of rings, second dim = number of pixels per ring)
+
+        Optional Parameters
+        -------------------
+        num_cors : int
+            number of corrs to compute
+        mean_only : bool
+            whether or not to return every correlation, or the average
+
+        Returns
+        -------
+        intra : ndarray, float
+            Either the average correlation, or every correlation as a 2d array
         """
-        
-	logger.debug("Correlating rings at %f / %f" % (q1, q2))
-        
+
+        logger.debug("Correlating rings at %f / %f" % (q1, q2))
+
         q_ind1 = self.q_index(q1)
         q_ind2 = self.q_index(q2)
-	q1q2_ind = self.q_pairs[  str(q1) + '-' + str(q2) ]
-        
-        rings1 = self.polar_intensities[:,q_ind1,:] # shots at ring1 
+        q1q2_ind = self.q_pairs[  str(q1) + '-' + str(q2) ]
+
+        rings1 = self.polar_intensities[:,q_ind1,:] # shots at ring1
         rings2 = self.polar_intensities[:,q_ind2,:] # shots at ring2
 
         if num_cors == 0:
-#	  then do correlation for all shots
-          num_cors = rings1.shape[0]
-          
-#	Method for returning the mean correlation    
-	if mean_only:
-          intra = np.zeros( rings1.shape[1]  )
-#	  Check if mask exists
-          if self.polar_mask != None:
-#  	    Use brute force cpp method 
-            mask1 = self.polar_mask[q_ind1]
-            mask2 = self.polar_mask[q_ind2]
-            for i in xrange(num_cors):
-              intra += corr.correlate( rings1[i]*mask1, rings2[i]*mask2 )
-#	  If mask does not exists
-          else:
-#	    Use the fft method for fast computation
-            for i in xrange(num_cors):
-	      intra += corr.correlate_using_fft( rings1[i], rings2[i] )
-#	  save the mean intRA-shot correlation
-	  self._intra[q1q2_ind] = intra
-	  
-	  
-#	Method for returning all correlations	  
-	else:
+#         then do correlation for all shots
+            num_cors = rings1.shape[0]
 
-          intra = np.zeros( ( num_cors,rings1.shape[1] ) )
-#	  Check if mask exists
-          if self.polar_mask != None:
-#  	  If mask exists, use brute force cpp method 
-            mask1 = self.polar_mask[q_ind1]
-            mask2 = self.polar_mask[q_ind2]
-            for i in xrange(num_cors):
-              intra[i] = corr.correlate( rings1[i]*mask1, rings2[i]*mask2 )
-#	  If mask does not exists
-          else:
-#	    Use the fft method
-            for i in xrange(num_cors):
-	      intra[i] = corr.correlate_using_fft( rings1[i], rings2[i] )
-#	  save the average correlator for future use in legendre projections
-	  self._intra[q1q2_ind]   = intra.mean( axis=0 )
+#       Method for returning the mean correlation
+        if mean_only:
+            intra = np.zeros( rings1.shape[1]  )
+#         Check if mask exists
+            if self.polar_mask != None:
+#           Use brute force cpp method
+                mask1 = self.polar_mask[q_ind1]
+                mask2 = self.polar_mask[q_ind2]
+                for i in xrange(num_cors):
+                    intra += corr.correlate( rings1[i]*mask1, rings2[i]*mask2 )
+#         If mask does not exists
+            else:
+#           Use the fft method for fast computation
+                for i in xrange(num_cors):
+                    intra += corr.correlate_using_fft( rings1[i], rings2[i] )
+#         save the mean intRA-shot correlation
+            self._intra[q1q2_ind] = intra
 
-#	return the correlation, be it the mean or the full set of correlations
-	return intra
- 
+
+#       Method for returning all correlations
+        else:
+
+            intra = np.zeros( ( num_cors,rings1.shape[1] ) )
+#         Check if mask exists
+            if self.polar_mask != None:
+#         If mask exists, use brute force cpp method
+                mask1 = self.polar_mask[q_ind1]
+                mask2 = self.polar_mask[q_ind2]
+                for i in xrange(num_cors):
+                    intra[i] = corr.correlate( rings1[i]*mask1, rings2[i]*mask2 )
+#         If mask does not exists
+            else:
+#           Use the fft method
+                for i in xrange(num_cors):
+                    intra[i] = corr.correlate_using_fft( rings1[i], rings2[i] )
+#         save the average correlator for future use in legendre projections
+            self._intra[q1q2_ind]   = intra.mean( axis=0 )
+
+#       return the correlation, be it the mean or the full set of correlations
+        return intra
+
     def correlate_inter(self, q1, q2, num_cors=0, mean_only = False):
-  	"""
-        Does intER-shot correlations for many shots.
-        
-	Parameters
-	----------
-	ringsA : ndarray, float 
-	    (first dim = number of rings, second dim = number of pixels per ring) 
-        ringsB : ndarray float 
-	    (first dim = number of rings, second dim = number of pixels per ring) 
-        
-	Optional Parameters
-	-------------------
-        num_cors : int 
-	    number of corrs to compute
-	mean_only : bool
-	    whether or not to return every correlation, or the average
-        
-	Returns
-	------- 
-	inter : ndarray, float
-	    Either the average correlation, or every correlation as a 2d array 
         """
-        
-	logger.debug("Correlating rings at %f / %f" % (q1, q2))
-        
+        Does intER-shot correlations for many shots.
+
+        Parameters
+        ----------
+        ringsA : ndarray, float
+            (first dim = number of rings, second dim = number of pixels per ring)
+        ringsB : ndarray float
+            (first dim = number of rings, second dim = number of pixels per ring)
+
+        Optional Parameters
+        -------------------
+        num_cors : int
+            number of corrs to compute
+        mean_only : bool
+            whether or not to return every correlation, or the average
+
+        Returns
+        -------
+        inter : ndarray, float
+            Either the average correlation, or every correlation as a 2d array
+        """
+
+        logger.debug("Correlating rings at %f / %f" % (q1, q2))
+
         q_ind1 = self.q_index(q1)
         q_ind2 = self.q_index(q2)
-	q1q2_ind = self.q_pairs[  str(q1) + '-' + str(q2) ]
-        
+        q1q2_ind = self.q_pairs[  str(q1) + '-' + str(q2) ]
+
         rings1 = self.polar_intensities[:,q_ind1,:]
         rings2 = self.polar_intensities[:,q_ind2,:]
-        
-        if num_cors == 0:
-#	  default
-          num_cors = rings1.shape[0]
-	elif num_cors > rings1.shape[0] * (rings1.shape[0] - 1.) / 2. :
-#	  total number of possible combinations
-	  num_cors = rings1.shape[0] * (rings1.shape[0] - 1.) / 2. 
-        
-#	I believe this is faster than the method we discussed, and 
-#	still I think the method we discussed is not entirely what we want
-#	so sticking to this method for now. -dermen
-  	np.random.seed()
-  	rand_pairs   = np.random.randint( 0,rings1.shape[0], (num_cors,2) )
- 	unique_pairs = list( set( tuple(pair) for pair in rand_pairs ) )
-  	inter_pairs  = filter( lambda x:x[0] != x[1], unique_pairs)
 
-	if mean_only:
-	  inter = np.zeros( rings1.shape[1] )
-        
-	  if self.polar_mask != None:
-            mask1 = self.polar_mask[q_ind1]
-            mask2 = self.polar_mask[q_ind2]
-            for i,j in inter_pairs:
-              inter += corr.correlate( rings1[i]*mask1, rings2[j]*mask2 )
-          else:
-            for i,j in inter_pairs:
-	      inter += corr.correlate_using_fft( rings1[i], rings2[j] )
-	  self._inter[q1q2_ind] = inter 
-	
-	else:
-	  inter = np.zeros( ( num_cors,rings1.shape[1] ) )
-        
-	  if self.polar_mask != None:
-            mask1 = self.polar_mask[q_ind1]
-            mask2 = self.polar_mask[q_ind2]
-	    k = 0
-            for i,j in inter_pairs:
-              inter[k] = corr.correlate( rings1[i]*mask1, rings2[j]*mask2 )
-	      k += 1
-          else:
-	    k = 0
-            for i,j in inter_pairs:
-	      inter[k] = corr.correlate_using_fft( rings1[i], rings2[j] )
-	      k += 1
-	  self._inter[q1q2_ind] = inter.mean( axis=0 )
-	
-	return inter
+        if num_cors == 0:
+#         default
+            num_cors = rings1.shape[0]
+        elif num_cors > rings1.shape[0] * (rings1.shape[0] - 1.) / 2. :
+#         total number of possible combinations
+            num_cors = rings1.shape[0] * (rings1.shape[0] - 1.) / 2.
+
+#       I believe this is faster than the method we discussed, and
+#       still I think the method we discussed is not entirely what we want
+#       so sticking to this method for now. -dermen
+        np.random.seed()
+        rand_pairs   = np.random.randint( 0,rings1.shape[0], (num_cors,2) )
+        unique_pairs = list( set( tuple(pair) for pair in rand_pairs ) )
+        inter_pairs  = filter( lambda x:x[0] != x[1], unique_pairs)
+
+        if mean_only:
+            inter = np.zeros( rings1.shape[1] )
+
+            if self.polar_mask != None:
+                mask1 = self.polar_mask[q_ind1]
+                mask2 = self.polar_mask[q_ind2]
+                for i,j in inter_pairs:
+                    inter += corr.correlate( rings1[i]*mask1, rings2[j]*mask2 )
+            else:
+                for i,j in inter_pairs:
+                    inter += corr.correlate_using_fft( rings1[i], rings2[j] )
+            self._inter[q1q2_ind] = inter
+
+        else:
+            inter = np.zeros( ( num_cors,rings1.shape[1] ) )
+
+            if self.polar_mask != None:
+                mask1 = self.polar_mask[q_ind1]
+                mask2 = self.polar_mask[q_ind2]
+                k = 0
+                for i,j in inter_pairs:
+                    inter[k] = corr.correlate( rings1[i]*mask1, rings2[j]*mask2 )
+                    k += 1
+            else:
+                k = 0
+                for i,j in inter_pairs:
+                    inter[k] = corr.correlate_using_fft( rings1[i], rings2[j] )
+                    k += 1
+            self._inter[q1q2_ind] = inter.mean( axis=0 )
+
+        return inter
 
     def correlate_kam(self,q1,q2,cor):
-	""" 
-	Corrects the azimuthal intensity correlation on a detector for detector curvature.
-	Considers the Friedel Pairs C (cos(psi) ) = C( cos( -psi) )
-	
-	Parameters 
-	----------
-	q1,q2 : float, float 
-	    Inverse angstroms values of the intenisty rings
-	cor : ndarray,  float
-	    Azimuathl correlation function of intensities along a ring in  q space
+        """
+        Corrects the azimuthal intensity correlation on a detector for detector curvature.
+        Considers the Friedel Pairs C (cos(psi) ) = C( cos( -psi) )
 
-	Returns
-	-------
-	kamCor : ndarray, float  
-	    The Kam correlation function and the cos(psi) values
-	"""
-	cosPsi  = self.get_cos_psi_vals(q1,q2)  # Convert azimuathal angles to cos(psi) values
-	cosPsi  = np.append( cosPsi, - cosPsi)  # Adding the Friedel pairs...
-	newCor  = np.append( cor, cor )         # C [cos(psi) ] = C [cos(-psi)]
-	combin  = np.append( cosPsi, newCor).reshape( (2,cosPsi.shape[0] )).T  # make into 2D array [ [x,f(x)],... ]
-	combin  = sorted( combin, key=lambda x:x[0] ) # sort 2D array according to x
-	kamCor  = np.vstack( tuple( combin) )         # re-convert to numpy array
-	return kamCor
-	
+        Parameters
+        ----------
+        q1,q2 : float, float
+            Inverse angstroms values of the intenisty rings
+        cor : ndarray,  float
+            Azimuathl correlation function of intensities along a ring in  q space
+
+        Returns
+        -------
+        kamCor : ndarray, float
+            The Kam correlation function and the cos(psi) values
+        """
+        cosPsi  = self.get_cos_psi_vals(q1,q2)  # Convert azimuathal angles to cos(psi) values
+        cosPsi  = np.append( cosPsi, - cosPsi)  # Adding the Friedel pairs...
+        newCor  = np.append( cor, cor )         # C [cos(psi) ] = C [cos(-psi)]
+        combin  = np.append( cosPsi, newCor).reshape( (2,cosPsi.shape[0] )).T  # make into 2D array [ [x,f(x)],... ]
+        combin  = sorted( combin, key=lambda x:x[0] ) # sort 2D array according to x
+        kamCor  = np.vstack( tuple( combin) )         # re-convert to numpy array
+        return kamCor
+
 
     def legendre(self, q1, q2, order, use_inter_statistics=False):
         """
@@ -2367,56 +2367,56 @@ class Rings(object):
         order : int
             The order at which to truncate the polynomial expansion. Note that
             this function projects only onto even numbered Legendre polynomials.
-            
+
         Optional Parameters
         -------------------
         use_inter_statistics : bool
             Whether or not to subtract inter-shot statistics from the
             correlation function before projecting it. This can help remove
             detector artifacts at the cost of a small computational overhead.
-            
+
         Returns
         -------
         c: np.ndarray, float
             An array of the legendre coefficients. Contains all coefficients
-            (both even and odd) up to order `order`            
+            (both even and odd) up to order `order`
         """
-        
+
         # todo : use Friedel pairs to compute entire Kam correlator (?)
 
-        # initialize space for coefficients        
-        
-	# iterate over each pair of rings in the collection and project the
+        # initialize space for coefficients
+
+        # iterate over each pair of rings in the collection and project the
         # correlation between those two rings into the Legendre basis
-	
-	if not str(q1) + '-' + str(q2) in self.q_pairs:
-	  raise KeyError ( "There is no data at q1,q2 = "+str(q1)+","+str(q2)+" inv ang. "\
-			   "There are only data for q = "+ ", ".join(np.char.mod("%.2f",self.q_values) )  )
+
+        if not str(q1) + '-' + str(q2) in self.q_pairs:
+            raise KeyError ( "There is no data at q1,q2 = "+str(q1)+","+str(q2)+" inv ang. "\
+                             "There are only data for q = "+ ", ".join(np.char.mod("%.2f",self.q_values) )  )
 
 
-	q1q2_ind = self.q_pairs[  str(q1) + '-' + str(q2) ]
+        q1q2_ind = self.q_pairs[  str(q1) + '-' + str(q2) ]
 
-	if np.sum ( self._intra[q1q2_ind] == np.zeros( self.num_phi ) ) == self.num_phi:
-	  tmp = self.correlate_intra ( q1,q2,mean_only=True  )
-	
-	if np.sum ( self._inter[q1q2_ind] == np.zeros( self.num_phi ) ) == self.num_phi and use_inter_statistics:
-	  if self.num_inter == None:
-	    self.num_inter = int( raw_input ("No inter-shot correlations exist for q1,q2="+str(q1)+","+str(q2)+\
-			                     ".\n How many inter-shot pairs should I compute? ") )
-	  tmp = self.correlate_inter ( q1,q2, num_cors=self.num_inter, mean_only=True  )
+        if np.sum ( self._intra[q1q2_ind] == np.zeros( self.num_phi ) ) == self.num_phi:
+            tmp = self.correlate_intra ( q1,q2,mean_only=True  )
 
-	if use_inter_statistics:
-	    corr = self.correlate_kam( q1,q2,self._intra[q1q2_ind] - \
-		   self._inter[q1q2_ind] )
-	else:
-	    corr = self.correlate_kam(q1,q2, self._intra[q1q2_ind] )
-	
-	# tests indicate this is a good numerical projection
-	c, fit_data = np.polynomial.legendre.legfit(corr[:,0], corr[:,1], 
-						    order-1, full=True)
+        if np.sum ( self._inter[q1q2_ind] == np.zeros( self.num_phi ) ) == self.num_phi and use_inter_statistics:
+            if self.num_inter == None:
+                self.num_inter = int( raw_input ("No inter-shot correlations exist for q1,q2="+str(q1)+","+str(q2)+\
+                                                 ".\n How many inter-shot pairs should I compute? ") )
+            tmp = self.correlate_inter ( q1,q2, num_cors=self.num_inter, mean_only=True  )
+
+        if use_inter_statistics:
+            corr = self.correlate_kam( q1,q2,self._intra[q1q2_ind] - \
+                   self._inter[q1q2_ind] )
+        else:
+            corr = self.correlate_kam(q1,q2, self._intra[q1q2_ind] )
+
+        # tests indicate this is a good numerical projection
+        c, fit_data = np.polynomial.legendre.legfit(corr[:,0], corr[:,1],
+                                                    order-1, full=True)
         return c
 
-    
+
     def legendre_matrix(self, order, use_inter_statistics=False):
         """
         Project the correlation functions onto a set of legendre polynomials,
@@ -2427,73 +2427,73 @@ class Rings(object):
         order : int
             The order at which to truncate the polynomial expansion. Note that
             this function projects only onto even numbered Legendre polynomials.
-            
+
         Optional Parameters
         -------------------
         use_inter_statistics : bool
             Whether or not to subtract inter-shot statistics from the
             correlation function before projecting it. This can help remove
             detector artifacts at the cost of a small computational overhead.
-            
+
         Returns
         -------
         Cl: np.ndarray, float
             An array of the legendre coefficients. Contains all coefficients
             (both even and odd) up to order `order`. The returned object is a
             3-D array indexed by
-            
+
                 (order, q_ind1, q_ind2)
-                
+
             where the q_ind values are the indices that map onto self.q_values.
         """
-        
+
         # todo : use Friedel pairs to compute entire Kam correlator (?)
 
-        # initialize space for coefficients        
+        # initialize space for coefficients
         Cl = np.zeros( (order, self.num_q, self.num_q) )
 
         # iterate over each pair of rings in the collection and project the
         # correlation between those two rings into the Legendre basis
-	
+
         for i in range(self.num_q):
-	    q1 = self.q_values[i]
+            q1 = self.q_values[i]
             for j in range(i,self.num_q):
-	        q2 = self.q_values[j]
+                q2 = self.q_values[j]
                 c  = self.legendre(q1,q2,order=order,use_inter_statistics=use_inter_statistics)
                 Cl[:,i,j] = c
-                Cl[:,j,i] = c  # copy it to the lower triangle too   
+                Cl[:,j,i] = c  # copy it to the lower triangle too
 
-	self.num_inter = None
+        self.num_inter = None
         return Cl
 
 
     @classmethod
     def simulate(cls, traj, num_molecules, q_values, num_phi, num_shots,
-                 energy=10, traj_weights=None, finite_photon=False, 
-                 force_no_gpu=False, photons_scattered_per_shot=1e4, 
+                 energy=10, traj_weights=None, finite_photon=False,
+                 force_no_gpu=False, photons_scattered_per_shot=1e4,
                  device_id=0):
         """
-        Simulate many scattering 'shot's, i.e. one exposure of x-rays to a 
-        sample, but onto a polar detector. Return that as a Rings object 
+        Simulate many scattering 'shot's, i.e. one exposure of x-rays to a
+        sample, but onto a polar detector. Return that as a Rings object
         (factory function).
 
-        Assumes we have a Boltzmann distribution of `num_molecules` identical  
-        molecules (`trajectory`), exposed to a beam defined by `beam` and 
+        Assumes we have a Boltzmann distribution of `num_molecules` identical
+        molecules (`trajectory`), exposed to a beam defined by `beam` and
         projected onto `detector`.
 
         Each conformation is randomly rotated before the scattering simulation is
-        performed. Atomic form factors from X, finite photon statistics, and the 
-        dilute-sample (no scattering interference from adjacent molecules) 
+        performed. Atomic form factors from X, finite photon statistics, and the
+        dilute-sample (no scattering interference from adjacent molecules)
         approximation are employed.
 
         Parameters
         ----------
         traj : mdtraj.trajectory
             A trajectory object that contains a set of structures, representing
-            the Boltzmann ensemble of the sample. If len(traj) == 1, then we 
+            the Boltzmann ensemble of the sample. If len(traj) == 1, then we
             assume the sample consists of a single homogenous structure,
             replecated `num_molecules` times.
-            
+
         num_molecules : int
             The number of molecules estimated to be in the `beam`'s focus.
 
@@ -2501,7 +2501,7 @@ class Rings(object):
             The values of |q| to extract rings at (in Ang^{-1}).
 
         num_phi : int
-            The number of equally spaced points around the azimuth to 
+            The number of equally spaced points around the azimuth to
             interpolate onto (e.g. `num_phi`=360 means 1 deg spacing).
 
         num_shots : int
@@ -2511,9 +2511,9 @@ class Rings(object):
         -------------------
         energy : float
             The energy, in keV
-        
+
         traj_weights : ndarray, float
-            If `traj` contains many structures, an array that provides the 
+            If `traj` contains many structures, an array that provides the
             Boltzmann weight of each structure. Default: if traj_weights == None
             weights each structure equally.
 
@@ -2522,7 +2522,7 @@ class Rings(object):
 
         force_no_gpu : bool
             Run the (slow) CPU version of this function.
-            
+
         photons_scattered_per_shot : int
             The number of photons scattered to the detector per shot. For use
             with `finite_photon`.
@@ -2537,15 +2537,15 @@ class Rings(object):
         beam = Beam(photons_scattered_per_shot, energy=energy)
         k = beam.k
         q_values = np.array(q_values)
-            
+
         qxyz = _q_grid_as_xyz(q_values, num_phi, k)
-        
+
         # --- simulate the intensities ---
-        
+
         polar_intensities = np.zeros((num_shots, len(q_values), num_phi))
-        
+
         for i in range(num_shots):
-            I = scatter.simulate_shot(traj, num_molecules, qxyz, 
+            I = scatter.simulate_shot(traj, num_molecules, qxyz,
                                       traj_weights=traj_weights,
                                       finite_photon=finite_photon,
                                       force_no_gpu=force_no_gpu,
@@ -2555,19 +2555,19 @@ class Rings(object):
             logger.info('Finished polar shot %d/%d on device %d' % (i+1, num_shots, device_id) )
 
         return cls(q_values, polar_intensities, k, polar_mask=None)
-        
-        
+
+
     def save(self, filename):
         """
         Saves the Rings object to disk.
-        
+
         Parameters
         ----------
         filename : str
             The name of the file to write to disk. Must end in '.ring' -- if you
             don't put this, it will be automatically added.
         """
-        
+
         if not filename.endswith('.ring'):
             filename += '.ring'
 
@@ -2584,21 +2584,21 @@ class Rings(object):
                   polar_mask = pm )
 
         logger.info('Wrote %s to disk.' % filename)
-        
+
         return
-    
-        
+
+
     @classmethod
     def load(cls, filename):
         """
         Load a Rings object from disk.
-        
+
         Parameters
         ----------
         filename : str
             The name of the file to write to disk. Must end in '.ring'.
         """
-        
+
         if filename.endswith('.ring'):
             hdf = io.loadh(filename)
         else:
@@ -2609,8 +2609,8 @@ class Rings(object):
             pm = None
         else:
             pm = hdf['polar_mask']
-            
-        rings_obj = cls(hdf['q_values'], hdf['polar_intensities'], 
+
+        rings_obj = cls(hdf['q_values'], hdf['polar_intensities'],
                         float(hdf['k'][0]), polar_mask=pm)
         hdf.close()
 
@@ -2619,34 +2619,33 @@ class Rings(object):
 def _q_grid_as_xyz(q_values, num_phi, k):
     """
     Generate a q-grid in cartesian space: (q_x, q_y, q_z).
-    
+
     Parameters
     ----------
     q_values : ndarray/list, float
         The values of |q| to extract rings at (in Ang^{-1}).
 
     num_phi : int
-        The number of equally spaced points around the azimuth to 
+        The number of equally spaced points around the azimuth to
         interpolate onto (e.g. `num_phi`=360 means 1 deg spacing).
-        
+
     Returns
     -------
     qxyz : ndarray, float
         An N x 3 array of (q_x, q_y, q_z)
     """
-    
+
     phi_values = np.linspace( 0.0, 2.0*np.pi, num=num_phi )
     num_q = len(q_values)
-    
+
     # q_h is the magnitude projection of the scattering vector on (x,y)
     q_z = - np.power(q_values, 2) / (2.0 * k)
     q_h = q_values * np.sqrt( 1.0 - np.power( q_values / (2.0 * k), 2 ) )
-        
+
     # construct the polar grid:
     qxyz = np.zeros(( num_q * num_phi, 3 ))
     qxyz[:,0] = np.repeat(q_h, num_phi) * np.cos(np.tile(phi_values, num_q)) # q_x
     qxyz[:,1] = np.repeat(q_h, num_phi) * np.sin(np.tile(phi_values, num_q)) # q_y
     qxyz[:,2] = np.repeat(q_z, num_phi)                                      # q_z
-                           
+
     return qxyz
-    

@@ -349,28 +349,24 @@ class TestShotset(object):
         
     def test_interpolate_to_polar(self):
         # doubles as a test for _implicit_interpolation
-        q_values = np.array([2.0, 2.67, 3.0]) # should be a peak at |q|=2.67
+        q_values = np.array([2.0, 2.67, 3.7]) # should be a peak at |q|=2.67
         t = structure.load_coor(ref_file('gold1k.coor'))
         s = xray.Shotset.simulate(t, self.d, 3, 1)
         pi, pm = s.interpolate_to_polar(q_values=q_values)
-        pi = pi.reshape(360,len(q_values))
-        ip = pi.sum(1) # should be a peak at |q|=2.67
+        ip = np.sum(pi[0,:,:], axis=1)
         assert ip[1] > ip[0]
         assert ip[1] > ip[2]
         
     def test_explicit_interpolation(self):
-        # doubles as a test for _implicit_interpolation
-        q_values = np.array([2.0, 2.67, 3.0]) # should be a peak at |q|=2.67
+        # doubles as a test for _explicit_interpolation
+        q_values = np.array([2.0, 2.67, 3.7]) # should be a peak at |q|=2.67
         t = structure.load_coor(ref_file('gold1k.coor'))
         self.d.implicit_to_explicit()
         s = xray.Shotset.simulate(t, self.d, 3, 1)
         pi, pm = s.interpolate_to_polar(q_values=q_values)
-        pi = pi.reshape(360,len(q_values))
-        ip = pi.sum(0) # should be a peak at |q|=2.67
+        ip = np.sum(pi[0,:,:], axis=1)
         assert ip[1] > ip[0]
         assert ip[1] > ip[2]
-        
-        assert False # there is a bug somewhere... (visual)
         
     def test_interpolation_consistency(self):
         q_values = np.array([0.2, 0.4])
@@ -379,6 +375,8 @@ class TestShotset(object):
         s2 = xray.Shotset(self.i, de)
         p1, m1 = s1.interpolate_to_polar(q_values=q_values)
         p2, m2 = s2.interpolate_to_polar(q_values=q_values)
+        p1 /= p1.mean()
+        p2 /= p2.mean()
         assert_allclose(p1, p2, err_msg='interp intensities dont match')
         assert_allclose(m1, m2, err_msg='polar masks dont match')
         
@@ -531,8 +529,11 @@ class TestRings(object):
         
     def test_coefficients_smoke(self):
         order = 6
-        cl = self.rings.legendre(order)
-        assert cl.shape == (order, self.rings.num_q, self.rings.num_q)
+        cl1 = self.rings.legendre(order, self.q_values[0], self.q_values[0])
+        assert cl1.shape == (order,)
+        
+        cl2 = self.rings.legendre_matrix(order)
+        assert cl2.shape == (order, self.rings.num_q, self.rings.num_q)
         
     def test_coefficients(self):
         
