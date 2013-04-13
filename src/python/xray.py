@@ -1996,26 +1996,8 @@ class Rings(object):
             raise TypeError('`polar_mask` must be np.ndarray or None')
 
         self._q_values         = np.array(q_values)           # q values of the ring data
-        self.polar_intensities = np.copy (polar_intensities ) # copy data so don't over-write
+        self.polar_intensities = np.copy(polar_intensities)   # copy data so don't over-write
         self.k                 = k                            # wave number
-
-#       number of inter shot correlations to compute
-        self.num_inter = None # used in methods self.legendre and self.legendre_matrix; not too important
-
-        # Make intra and inter arrays for storing "average" correlators.
-        # First, make a dictionary for indexing these arrays at later times.
-        self.q_pairs = []
-        k = 0
-        for i in xrange( len(q_values) ):
-            q1 = str(q_values[i])
-            for j in xrange( i, len(q_values) ):
-                q2 = str(q_values[j])
-                self.q_pairs.append( ( q1 + '-' + q2  ,k ) )
-                k += 1
-        self.q_pairs = dict( self.q_pairs )
-
-        self._intra = np.zeros ( ( k , polar_intensities.shape[2] ) )
-        self._inter = np.zeros ( ( k , polar_intensities.shape[2] ) )
 
         return
 
@@ -2048,65 +2030,38 @@ class Rings(object):
     @property
     def num_datapoints(self):
         return self.num_phi * self.num_q
-
-    def intra(self, q1, q2=None ):
+    
+        
+    def _cospsi(self, q1, q2):
         """
-        Returns the average intRA-shot correlation between rings at q1,q2.
-
+        For each value if phi, compute the cosine of the angle between the
+        reciprocal scattering vectors q1/q2 at angular separation phi.
+        
+        cos(psi) = f[phi, q1, q2]
+        
         Parameters
         ----------
-        q1 : float
-            The q values in inverse angstroms
-
-        Optional Parameters
-        -------------------
-        q2 : float
-            If q2 if not passed, q2 == q1 and function returns an auto correlation at q1.
-
+        q1/q2 : float
+            The |q| values, in inv. ang.
+            
         Returns
         -------
-        self._intra : average correlation between rings q1,q2
+        cospsi : ndarray, float
+            The cosine of psi, the angle between the scattering vectors.
         """
-        if q2 == None:
-            q2 = q1
-        q_ind1 = self.q_index(q1)
-        q_ind2 = self.q_index(q2)
-        q1q2_ind = self.q_pairs[  str(q1) + '-' + str(q2) ]
-        return self._intra[q1q2_ind]
-
-    def inter(self, q1, q2=None ):
-        """
-        Returns the average intER-shot correlation between rings at q1,q2.
-
-        Parameters
-        ----------
-        q1 : float
-            The q values in inverse angstroms
-
-        Optional Parameters
-        -------------------
-        q2 : float
-            If q2 if not passed, q2 == q1 and function returns an auto correlation at q1.
-
-        Returns
-        -------
-        self._inter : average correlation between rings q1,q2
-        """
-        if q2 == None:
-            q2 = q1
-        q_ind1 = self.q_index(q1)
-        q_ind2 = self.q_index(q2)
-        q1q2_ind = self.q_pairs[  str(q1) + '-' + str(q2) ]
-        return self._inter[q1q2_ind]
-
-    def get_cos_psi_vals(self,q1,q2 ):
+        
+        # this function was formerly: get_cos_psi_vals
+        
         wave   = self.k / 2. / np.pi     # wavelength in angstroms
         t1     = np.pi/2. + np.arcsin( q1*wave / 4. / np.pi ) # theta 1 in spherical coor
         t2     = np.pi/2. + np.arcsin( q2*wave / 4. / np.pi ) # theta 2 in spherical coor
-        return np.cos(t1)*np.cos(t2) + np.sin(t1)*np.sin(t2)*\
-               np.cos( self.phi_values )
+        cospsi = np.cos(t1)*np.cos(t2) + np.sin(t1)*np.sin(t2) *\
+                 np.cos( self.phi_values )
+              
+        return cospsi
+    
 
-    def q_index(self, q):
+    def q_index(self, q, tolerance=1e-4):
         """
         Convert value of |q| (in inverse Angstroms) into the index used to
         slice `polar_intensities`.
@@ -2116,37 +2071,53 @@ class Rings(object):
         q : float
             The value of |q| in inv Angstroms
 
+        tolerance : float
+            The tolerance in |q|. Will return values of q that are within this
+            tolerance.
+
         Returns
         -------
         q_ind : int
             The index to slice `polar_intensities` at to get |q|.
         """
-        q_ind = np.where( self.q_values == q )[0] # check if there are rings at q
-        if len(q_ind) == 0:
+        
+        # check if there are rings at q
+        q_ind = np.where( np.abs(self.q_values - q) < tolerance )[0]
+        
+        if len(q_ind) == 1:
             raise ValueError("There if no ring at q = "+str(q) +" inv ang. " \
                              "There are only data for q = "+ ", ".join(np.char.mod("%.2f",self.q_values) )  )
-        else:
-            return int (q_ind )
+        elif len(q_ind) > 1:
+            raise ValueError("Multiple q-values found! Try decreasing the value"
+                             "of the `tolerance` parameter.")
+        
+        return int(q_ind)
+    
 
-    def dePolarize(self,outOfPlane):
+    def depolarize(self, out_of_plane):
         """
         Applies a polarization correction to the rings.
 
         Parameters
         ----------
-        outOfPlane : float
+        out_of_plane : float
             fraction of polarization out of the synchrotron plane (between 0 and 1)
         """
-        print "Warning, this method is still under development."
+        
+        logger.warning("Warning, depolarize is UNTESTED!!")
         wave = self.k / 2. / np.pi
+        
         for i in xrange(self.num_q):
             q = self.q_values[i]
             theta = np.arcsin( q*wave / 4./ np.pi)
             SinTheta = np.sin( 2 * theta )
             for j in xrange(self.num_shots):
-                correction  = outOfPlane * ( 1. - SinTheta**2  * np.cos(self.phi_values)**2 )
-                correction += (1.-outOfPlane) * (1. - SinTheta**2 * np.sin( self.phi_values)** 2)
-                self.polar_intensities[ j , i , : ]  /= correction
+                correction  = out_of_plane * ( 1. - SinTheta**2  * np.cos(self.phi_values)**2 )
+                correction += (1.-out_of_plane) * (1. - SinTheta**2 * np.sin( self.phi_values)** 2)
+                self.polar_intensities[j,i,:]  /= correction
+                
+        return
+    
 
     def intensity_profile(self):
         """
@@ -2173,21 +2144,21 @@ class Rings(object):
         return intensity_profile
 
 
-    def correlate_intra(self, q1, q2, num_cors=0,mean_only = False):
+    def correlate_intra(self, q1, q2, num_shots=0, mean_only=False):
         """
         Does intRA-shot correlations for many shots.
 
         Parameters
         ----------
-        ringsA : ndarray, float
-            (first dim = number of rings, second dim = number of pixels per ring)
-        ringsB : ndarray float
-            (first dim = number of rings, second dim = number of pixels per ring)
+        q1 : float
+            The |q| value of the first ring
+        q2 : float
+            The |q| value of the second ring
 
         Optional Parameters
         -------------------
-        num_cors : int
-            number of corrs to compute
+        num_shots : int
+            number of shots to compute correlators for
         mean_only : bool
             whether or not to return every correlation, or the average
 
@@ -2201,71 +2172,73 @@ class Rings(object):
 
         q_ind1 = self.q_index(q1)
         q_ind2 = self.q_index(q2)
-        q1q2_ind = self.q_pairs[  str(q1) + '-' + str(q2) ]
 
         rings1 = self.polar_intensities[:,q_ind1,:] # shots at ring1
         rings2 = self.polar_intensities[:,q_ind2,:] # shots at ring2
 
-        if num_cors == 0:
-#         then do correlation for all shots
-            num_cors = rings1.shape[0]
+        if num_shots == 0:
+            # then do correlation for all shots
+            num_shots = self.num_shots
 
-#       Method for returning the mean correlation
+        # Method for returning the mean correlation
         if mean_only:
-            intra = np.zeros( rings1.shape[1]  )
-#         Check if mask exists
+            intra = np.zeros( self.num_q  )
+            
+            # Check if mask exists
             if self.polar_mask != None:
-#           Use brute force cpp method
+
+                # Use brute force cpp method
                 mask1 = self.polar_mask[q_ind1]
                 mask2 = self.polar_mask[q_ind2]
-                for i in xrange(num_cors):
+                for i in xrange(num_shots):
                     intra += corr.correlate( rings1[i]*mask1, rings2[i]*mask2 )
-#         If mask does not exists
+                    
+            # If mask does not exist, use the fft method for fast computation
             else:
-#           Use the fft method for fast computation
-                for i in xrange(num_cors):
+                for i in xrange(num_shots):
                     intra += corr.correlate_using_fft( rings1[i], rings2[i] )
-#         save the mean intRA-shot correlation
-            self._intra[q1q2_ind] = intra
 
 
-#       Method for returning all correlations
+        # Method for returning all correlations
         else:
-
-            intra = np.zeros( ( num_cors,rings1.shape[1] ) )
-#         Check if mask exists
+            intra = np.zeros( ( num_shots, self.num_q ) )
+            
+            # Check if mask exists
             if self.polar_mask != None:
-#         If mask exists, use brute force cpp method
+                
+                # If mask exists, use brute force cpp method
                 mask1 = self.polar_mask[q_ind1]
                 mask2 = self.polar_mask[q_ind2]
-                for i in xrange(num_cors):
-                    intra[i] = corr.correlate( rings1[i]*mask1, rings2[i]*mask2 )
-#         If mask does not exists
+                
+                # todo : WARNING -- depending on our convention as to the correlation
+                #                   function, this may BE INCORRECT
+                for i in xrange(num_shots):
+                    intra[i,:] = corr.correlate( rings1[i]*mask1, rings2[i]*mask2 )
+                    
+            # If mask does not exist, use the fft method
             else:
-#           Use the fft method
-                for i in xrange(num_cors):
-                    intra[i] = corr.correlate_using_fft( rings1[i], rings2[i] )
-#         save the average correlator for future use in legendre projections
-            self._intra[q1q2_ind]   = intra.mean( axis=0 )
+                for i in xrange(num_shots):
+                    intra[i,:] = corr.correlate_using_fft( rings1[i], rings2[i] )
 
-#       return the correlation, be it the mean or the full set of correlations
+        # return the correlation, be it the mean or the full set of correlations
         return intra
+    
 
-    def correlate_inter(self, q1, q2, num_cors=0, mean_only = False):
+    def correlate_inter(self, q1, q2, num_shots=0, mean_only=False):
         """
         Does intER-shot correlations for many shots.
 
         Parameters
         ----------
-        ringsA : ndarray, float
-            (first dim = number of rings, second dim = number of pixels per ring)
-        ringsB : ndarray float
-            (first dim = number of rings, second dim = number of pixels per ring)
+        q1 : float
+            The |q| value of the first ring
+        q2 : float
+            The |q| value of the second ring
 
         Optional Parameters
         -------------------
-        num_cors : int
-            number of corrs to compute
+        num_shots : int
+            number of shots to compute correlators for
         mean_only : bool
             whether or not to return every correlation, or the average
 
@@ -2279,28 +2252,22 @@ class Rings(object):
 
         q_ind1 = self.q_index(q1)
         q_ind2 = self.q_index(q2)
-        q1q2_ind = self.q_pairs[  str(q1) + '-' + str(q2) ]
 
         rings1 = self.polar_intensities[:,q_ind1,:]
         rings2 = self.polar_intensities[:,q_ind2,:]
 
-        if num_cors == 0:
-#         default
-            num_cors = rings1.shape[0]
-        elif num_cors > rings1.shape[0] * (rings1.shape[0] - 1.) / 2. :
-#         total number of possible combinations
-            num_cors = rings1.shape[0] * (rings1.shape[0] - 1.) / 2.
+        if num_shots == 0:
+            num_shots = self.num_shots
+            
+        elif num_shots > self.num_shots * (self.num_shots - 1.) / 2. :
+            # total number of possible combinations
+            num_shots = self.num_shots * (self.num_shots - 1.) / 2.
 
-#       I believe this is faster than the method we discussed, and
-#       still I think the method we discussed is not entirely what we want
-#       so sticking to this method for now. -dermen
-        np.random.seed()
-        rand_pairs   = np.random.randint( 0,rings1.shape[0], (num_cors,2) )
-        unique_pairs = list( set( tuple(pair) for pair in rand_pairs ) )
-        inter_pairs  = filter( lambda x:x[0] != x[1], unique_pairs)
+        # TJL saiz: this is better. Scales better and is actually right.
+        inter_pairs = utils.random_pairs(self.num_shots, num_shots)
 
         if mean_only:
-            inter = np.zeros( rings1.shape[1] )
+            inter = np.zeros( self.num_q )
 
             if self.polar_mask != None:
                 mask1 = self.polar_mask[q_ind1]
@@ -2310,10 +2277,9 @@ class Rings(object):
             else:
                 for i,j in inter_pairs:
                     inter += corr.correlate_using_fft( rings1[i], rings2[j] )
-            self._inter[q1q2_ind] = inter
 
         else:
-            inter = np.zeros( ( num_cors,rings1.shape[1] ) )
+            inter = np.zeros( ( num_shots,rings1.shape[1] ) )
 
             if self.polar_mask != None:
                 mask1 = self.polar_mask[q_ind1]
@@ -2327,13 +2293,14 @@ class Rings(object):
                 for i,j in inter_pairs:
                     inter[k] = corr.correlate_using_fft( rings1[i], rings2[j] )
                     k += 1
-            self._inter[q1q2_ind] = inter.mean( axis=0 )
 
         return inter
+    
 
-    def correlate_kam(self,q1,q2,cor):
+    def _convert_to_kam(self, q1, q2, cor):
         """
-        Corrects the azimuthal intensity correlation on a detector for detector curvature.
+        Corrects the azimuthal intensity correlation on a detector for detector 
+        curvature.
         Considers the Friedel Pairs C (cos(psi) ) = C( cos( -psi) )
 
         Parameters
@@ -2341,20 +2308,22 @@ class Rings(object):
         q1,q2 : float, float
             Inverse angstroms values of the intenisty rings
         cor : ndarray,  float
-            Azimuathl correlation function of intensities along a ring in  q space
+            Azimuathl correlation function of intensities along ring in q space
 
         Returns
         -------
-        kamCor : ndarray, float
+        kam_corr : ndarray, float
             The Kam correlation function and the cos(psi) values
         """
-        cosPsi  = self.get_cos_psi_vals(q1,q2)  # Convert azimuathal angles to cos(psi) values
-        cosPsi  = np.append( cosPsi, - cosPsi)  # Adding the Friedel pairs...
+        
+        cosPsi  = self._cospsi(q1,q2)           # azimuathal to cos(psi)
+        cosPsi  = np.append( cosPsi, -cosPsi )  # Adding the Friedel pairs...
         newCor  = np.append( cor, cor )         # C [cos(psi) ] = C [cos(-psi)]
-        combin  = np.append( cosPsi, newCor).reshape( (2,cosPsi.shape[0] )).T  # make into 2D array [ [x,f(x)],... ]
-        combin  = sorted( combin, key=lambda x:x[0] ) # sort 2D array according to x
-        kamCor  = np.vstack( tuple( combin) )         # re-convert to numpy array
-        return kamCor
+        
+        kam_corr = np.vstack((cosPsi, newCor)).T
+        kam_corr = kam_corr[ np.argsort(kam_corr[:,0]) ] # sort ascending angle
+        
+        return kam_corr
 
 
     def legendre(self, q1, q2, order, use_inter_statistics=False):
@@ -2382,34 +2351,16 @@ class Rings(object):
             (both even and odd) up to order `order`
         """
 
-        # todo : use Friedel pairs to compute entire Kam correlator (?)
-
-        # initialize space for coefficients
-
         # iterate over each pair of rings in the collection and project the
         # correlation between those two rings into the Legendre basis
 
-        if not str(q1) + '-' + str(q2) in self.q_pairs:
-            raise KeyError ( "There is no data at q1,q2 = "+str(q1)+","+str(q2)+" inv ang. "\
-                             "There are only data for q = "+ ", ".join(np.char.mod("%.2f",self.q_values) )  )
-
-
-        q1q2_ind = self.q_pairs[  str(q1) + '-' + str(q2) ]
-
-        if np.sum ( self._intra[q1q2_ind] == np.zeros( self.num_phi ) ) == self.num_phi:
-            tmp = self.correlate_intra ( q1,q2,mean_only=True  )
-
-        if np.sum ( self._inter[q1q2_ind] == np.zeros( self.num_phi ) ) == self.num_phi and use_inter_statistics:
-            if self.num_inter == None:
-                self.num_inter = int( raw_input ("No inter-shot correlations exist for q1,q2="+str(q1)+","+str(q2)+\
-                                                 ".\n How many inter-shot pairs should I compute? ") )
-            tmp = self.correlate_inter ( q1,q2, num_cors=self.num_inter, mean_only=True  )
-
         if use_inter_statistics:
-            corr = self.correlate_kam( q1,q2,self._intra[q1q2_ind] - \
-                   self._inter[q1q2_ind] )
+            corr = self.correlate_intra(q1, q2, mean_only=True) - \
+                   self.correlate_inter(q1, q2, mean_only=True)
         else:
-            corr = self.correlate_kam(q1,q2, self._intra[q1q2_ind] )
+            corr = self.correlate_intra(q1, q2, mean_only=True)
+        
+        corr = self._convert_to_kam( q1, q2, corr )
 
         # tests indicate this is a good numerical projection
         c, fit_data = np.polynomial.legendre.legfit(corr[:,0], corr[:,1],
@@ -2447,8 +2398,6 @@ class Rings(object):
             where the q_ind values are the indices that map onto self.q_values.
         """
 
-        # todo : use Friedel pairs to compute entire Kam correlator (?)
-
         # initialize space for coefficients
         Cl = np.zeros( (order, self.num_q, self.num_q) )
 
@@ -2459,11 +2408,11 @@ class Rings(object):
             q1 = self.q_values[i]
             for j in range(i,self.num_q):
                 q2 = self.q_values[j]
-                c  = self.legendre(q1,q2,order=order,use_inter_statistics=use_inter_statistics)
+                c  = self.legendre(q1, q2, order=order, 
+                                   use_inter_statistics=use_inter_statistics)
                 Cl[:,i,j] = c
                 Cl[:,j,i] = c  # copy it to the lower triangle too
 
-        self.num_inter = None
         return Cl
 
 
