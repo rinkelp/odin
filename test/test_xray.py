@@ -447,7 +447,7 @@ class TestRings(object):
 
     def test_coefficients_smoke(self):
         order = 6
-        cl1 = self.rings.legendre(order, self.q_values[0], self.q_values[0])
+        cl1 = self.rings.legendre(self.q_values[0], self.q_values[0], order)
         assert cl1.shape == (order,)
 
         cl2 = self.rings.legendre_matrix(order)

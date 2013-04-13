@@ -1686,9 +1686,9 @@ class Rings(object):
         # check if there are rings at q
         q_ind = np.where( np.abs(self.q_values - q) < tolerance )[0]
         
-        if len(q_ind) == 1:
-            raise ValueError("There if no ring at q = "+str(q) +" inv ang. " \
-                             "There are only data for q = "+ ", ".join(np.char.mod("%.2f",self.q_values) )  )
+        if len(q_ind) == 0:
+            raise ValueError("No ring data at q="+str(q) +" inv ang. " \
+                             "There are only data for q="+", ".join(np.char.mod("%.2f",self.q_values) )  )
         elif len(q_ind) > 1:
             raise ValueError("Multiple q-values found! Try decreasing the value"
                              "of the `tolerance` parameter.")
