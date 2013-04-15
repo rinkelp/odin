@@ -614,9 +614,7 @@ class Detector(Beam):
         assert xyz.shape[1] == 3
 
         # generate unit vectors in the pixel direction, origin at sample
-        #S = self.real.copy()
-        S = self._unit_vector(xyz) # used to be xyz --> S
-
+        S = self._unit_vector(xyz)
         q = self.k * (S - self.beam_vector)
 
         return q
@@ -1311,7 +1309,7 @@ class Shotset(object):
         """
 
         q = self.detector.recpolar[:,0]
-        q_vals = np.arange(0.0, q.max(), q_spacing)
+        q_vals = np.arange(q_spacing, q.max(), q_spacing)
 
         ind = np.digitize(q, q_vals)
 
@@ -1775,58 +1773,24 @@ class Rings(object):
         q_ind1 = self.q_index(q1)
         q_ind2 = self.q_index(q2)
 
-        rings1 = self.polar_intensities[:,q_ind1,:] # shots at ring1
-        rings2 = self.polar_intensities[:,q_ind2,:] # shots at ring2
-
-        if num_shots == 0:
-            # then do correlation for all shots
+        if num_shots == 0: # then do correlation for all shots
             num_shots = self.num_shots
 
-        # Method for returning the mean correlation
-        if mean_only:
-            intra = np.zeros( self.num_q  )
-            
-            # Check if mask exists
-            if self.polar_mask != None:
+        rings1 = self.polar_intensities[:num_shots,q_ind1,:] # shots at ring1
+        rings2 = self.polar_intensities[:num_shots,q_ind2,:] # shots at ring2
 
-                # Use brute force cpp method
-                mask1 = self.polar_mask[q_ind1]
-                mask2 = self.polar_mask[q_ind2]
-                for i in xrange(num_shots):
-                    intra += corr.correlate( rings1[i]*mask1, rings2[i]*mask2 )
-                    
-            # If mask does not exist, use the fft method for fast computation
-            else:
-                for i in xrange(num_shots):
-                    intra += corr.correlate_using_fft( rings1[i], rings2[i] )
-
-
-        # Method for returning all correlations
+        # Check if mask exists
+        if self.polar_mask != None:
+            mask1 = self.polar_mask[q_ind1,:]
+            mask2 = self.polar_mask[q_ind2,:]
         else:
-            intra = np.zeros( ( num_shots, self.num_q ) )
-            
-            # Check if mask exists
-            if self.polar_mask != None:
-                
-                # If mask exists, use brute force cpp method
-                mask1 = self.polar_mask[q_ind1]
-                mask2 = self.polar_mask[q_ind2]
-                
-                # todo : WARNING -- depending on our convention as to the correlation
-                #                   function, this may BE INCORRECT
-                for i in xrange(num_shots):
-                    intra[i,:] = corr.correlate( rings1[i]*mask1, rings2[i]*mask2 )
-                    
-            # If mask does not exist, use the fft method
-            else:
-                for i in xrange(num_shots):
-                    intra[i,:] = corr.correlate_using_fft( rings1[i], rings2[i] )
+            mask1 = None
+            mask2 = None     
 
-        # return the correlation, be it the mean or the full set of correlations
-        return intra
+        return self._correlate_rows(rings1, rings2, mask1, mask2, mean_only)
     
 
-    def correlate_inter(self, q1, q2, num_shots=0, mean_only=False):
+    def correlate_inter(self, q1, q2, num_pairs=0, mean_only=False):
         """
         Does intER-shot correlations for many shots.
 
@@ -1839,8 +1803,8 @@ class Rings(object):
 
         Optional Parameters
         -------------------
-        num_shots : int
-            number of shots to compute correlators for
+        num_pairs : int
+            number of pairs of shots to compute correlators for
         mean_only : bool
             whether or not to return every correlation, or the average
 
@@ -1855,48 +1819,127 @@ class Rings(object):
         q_ind1 = self.q_index(q1)
         q_ind2 = self.q_index(q2)
 
-        rings1 = self.polar_intensities[:,q_ind1,:]
-        rings2 = self.polar_intensities[:,q_ind2,:]
+        max_pairs = self.num_shots * (self.num_shots - 1) / 2
+        
+        if (num_pairs == 0) or (num_pairs > max_pairs):
+            inter_pairs = []
+            for i in range(max_pairs):
+                for j in range(i+1, max_pairs):
+                    inter_pairs.append([i,j])
+            inter_pairs = np.array(inter_pairs)
+        else:
+            inter_pairs = utils.random_pairs(self.num_shots, num_pairs)
 
-        if num_shots == 0:
-            num_shots = self.num_shots
+        rings1 = self.polar_intensities[inter_pairs[:,0],q_ind1,:] # shots at ring1
+        rings2 = self.polar_intensities[inter_pairs[:,1],q_ind2,:] # shots at ring2
+
+        # Check if mask exists
+        if self.polar_mask != None:
+            mask1 = self.polar_mask[q_ind1,:]
+            mask2 = self.polar_mask[q_ind2,:]
+        else:
+            mask1 = None
+            mask2 = None     
+
+        return self._correlate_rows(rings1, rings2, mask1, mask2, mean_only)
+        
+        
+    @staticmethod
+    def _correlate_rows(x, y, x_mask=None, y_mask=None, mean_only=False):
+        """
+        Compute the circular correlation function across the rows of x,y.
+        
+        Parameters
+        ----------
+        x,y : np.ndarray, float
+            2D arrays of size N x M, where N indexes "experiments" and M indexes
+            an observation vector for each experiment.
             
-        elif num_shots > self.num_shots * (self.num_shots - 1.) / 2. :
-            # total number of possible combinations
-            num_shots = self.num_shots * (self.num_shots - 1.) / 2.
+        Optional Parameters
+        -------------------
+        x_mask,y_mask : np.ndarray, bool
+            Arrays describing masks over the data. These are 1D arrays of size
+            M, with a single value for each data point.
+        
+        mean_only : bool
+            Return the mean of the correlation function. Default is to return
+            each correlation individually.
+            
+        Returns
+        -------
+        corr : np.ndarray, float
+            The N x M circular correlation function for each experiment. If
+            `mean_only` is true, this is just a len-M array, averaged over
+            the first dimension.
+        """
+        
+        if len(x.shape) == 1:
+            x = x[None,:]
+        elif len(x.shape) > 2:
+            raise ValueError('`x` must be two dimensional array')
+            
+        if len(y.shape) == 1:
+            y = y[None,:]
+        elif len(y.shape) > 2:
+            raise ValueError('`y` must be two dimensional array')
+        
+        n_row = x.shape[0]
+        assert y.shape[0] == n_row
 
-        # TJL saiz: this is better. Scales better and is actually right.
-        inter_pairs = utils.random_pairs(self.num_shots, num_shots)
+        n_col = x.shape[1]
+        assert y.shape[1] == n_col
+
+        if x_mask != None: 
+            assert len(x_mask) == n_col
+            x_mask = x_mask.astype(np.bool)
+
+        if y_mask != None:
+            assert len(y_mask) == n_col
+            y_mask = y_mask.astype(np.bool)
+
+        # if no mask
+        if ((x_mask == None) and (y_mask == None)):
+            x -= x.mean()
+            y -= y.mean()
+
+            n_delta = np.product(x.shape)
+            assert n_delta == np.product(y.shape)
+
+        # if using mask
+        else:
+
+            # compute the number of contributing pairs to the correlation fxn
+            n_deltas = np.zeros(n_col)
+            for i in range(n_col):
+                n_deltas[i] = np.sum( x_mask * np.roll(y_mask, i) )
+
+            # set all masked pts to zero
+            x *= x_mask
+            y *= y_mask
+
+            # subtract the mean (now w/o masked pts)
+            x -= np.sum(x, axis=1)[:,None] / np.sum(x_mask)
+            y -= np.sum(y, axis=1)[:,None] / np.sum(y_mask)
+
+        # use d-FFT + convolution thm
+        ffx = fftpack.fft(x, axis=1)
+        ffy = fftpack.fft(y, axis=1)
+        corr = np.real(fftpack.ifft( ffx * np.conjugate(ffy), axis=1 ))
+
+        # now, divide 
+
+        # if not using mask, divide rows by n_delts
+        if ((x_mask != None) and (y_mask != None)):
+            corr /= n_deltas
+
+        # normalize so the first element of each row is one (ez-ier than stds)
+        corr /= corr[:,0][:,None]
 
         if mean_only:
-            inter = np.zeros( self.num_q )
+            corr = corr.mean(axis=0) # average all shots
 
-            if self.polar_mask != None:
-                mask1 = self.polar_mask[q_ind1]
-                mask2 = self.polar_mask[q_ind2]
-                for i,j in inter_pairs:
-                    inter += corr.correlate( rings1[i]*mask1, rings2[j]*mask2 )
-            else:
-                for i,j in inter_pairs:
-                    inter += corr.correlate_using_fft( rings1[i], rings2[j] )
+        return corr
 
-        else:
-            inter = np.zeros( ( num_shots,rings1.shape[1] ) )
-
-            if self.polar_mask != None:
-                mask1 = self.polar_mask[q_ind1]
-                mask2 = self.polar_mask[q_ind2]
-                k = 0
-                for i,j in inter_pairs:
-                    inter[k] = corr.correlate( rings1[i]*mask1, rings2[j]*mask2 )
-                    k += 1
-            else:
-                k = 0
-                for i,j in inter_pairs:
-                    inter[k] = corr.correlate_using_fft( rings1[i], rings2[j] )
-                    k += 1
-
-        return inter
     
 
     def _convert_to_kam(self, q1, q2, cor):
@@ -2166,6 +2209,7 @@ class Rings(object):
         hdf.close()
 
         return rings_obj
+
 
 def _q_grid_as_xyz(q_values, num_phi, k):
     """
