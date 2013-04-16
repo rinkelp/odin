@@ -1866,6 +1866,8 @@ class Rings(object):
             num_shots = self.num_shots * (self.num_shots - 1.) / 2.
 
         # TJL saiz: this is better. Scales better and is actually right.
+        # Dermen sayz, this isn't the algorithm you proposed involving np.random.permutation which is what I was referring to
+        #  -- this is actually more or less the same algorithm as the one it replaced
         inter_pairs = utils.random_pairs(self.num_shots, num_shots)
 
         if mean_only:
