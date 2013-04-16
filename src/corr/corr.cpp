@@ -36,7 +36,7 @@ void Corr::correlate(float * ar1, float * ar2,float * arC)
       }
       i++;
     }
-    arC[phi] = arC[phi] / ar1_mean / ar2_mean / counts;
+    arC[phi] = arC[phi] / (ar1_mean * ar2_mean * counts);
     phi++;
   }
 

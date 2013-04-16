@@ -23,6 +23,7 @@ from odin.math2 import arctan3, smooth, find_overlap, freedman_diaconis
 from odin import scatter
 from odin.interp import Bcinterp
 from odin.utils import unique_rows, maxima
+from odin.corr import correlate as gap_correlate
 
 from mdtraj import trajectory, io
 
@@ -584,13 +585,13 @@ class Detector(Beam):
 
         Parameters
         ----------
-        qxyz : ndarray, float
+        xyz : ndarray, float
             The array of pixels (shape : N x 3)
 
         Returns
         -------
-        qmag : ndarray, float
-            The array of q-magnitudes, len N.
+        thetas : ndarray, float
+            The scattering angles for each pixel
         """
         u_xyz  = self._unit_vector(xyz)
         thetas = np.arccos(np.dot( u_xyz, self.beam_vector ))
@@ -1652,9 +1653,8 @@ class Rings(object):
         
         # this function was formerly: get_cos_psi_vals
         
-        wave   = self.k / 2. / np.pi     # wavelength in angstroms
-        t1     = np.pi/2. + np.arcsin( q1*wave / 4. / np.pi ) # theta 1 in spherical coor
-        t2     = np.pi/2. + np.arcsin( q2*wave / 4. / np.pi ) # theta 2 in spherical coor
+        t1     = np.pi/2. + np.arcsin( q1 / (2.*self.k) ) # theta 1 in spherical coor
+        t2     = np.pi/2. + np.arcsin( q2 / (2.*self.k) ) # theta 2 in spherical coor
         cospsi = np.cos(t1)*np.cos(t2) + np.sin(t1)*np.sin(t2) *\
                  np.cos( self.phi_values )
               
@@ -1847,7 +1847,10 @@ class Rings(object):
     @staticmethod
     def _correlate_rows(x, y, x_mask=None, y_mask=None, mean_only=False):
         """
-        Compute the circular correlation function across the rows of x,y.
+        Compute the circular correlation function across the rows of x,y. Note
+        that *all* ODIN correlation functions are defined as:
+        
+                    C(x,y) = < (x - <x>) (y - <y>) > / <x><y>
         
         Parameters
         ----------
@@ -1873,6 +1876,7 @@ class Rings(object):
             the first dimension.
         """
         
+        # do a shitload of typechecking -.-
         if len(x.shape) == 1:
             x = x[None,:]
         elif len(x.shape) > 2:
@@ -1882,12 +1886,12 @@ class Rings(object):
             y = y[None,:]
         elif len(y.shape) > 2:
             raise ValueError('`y` must be two dimensional array')
+            
+        if not y.shape == x.shape:
+            raise ValueError('`x`,`y` must have the same shape')
         
         n_row = x.shape[0]
-        assert y.shape[0] == n_row
-
         n_col = x.shape[1]
-        assert y.shape[1] == n_col
 
         if x_mask != None: 
             assert len(x_mask) == n_col
@@ -1896,50 +1900,34 @@ class Rings(object):
         if y_mask != None:
             assert len(y_mask) == n_col
             y_mask = y_mask.astype(np.bool)
-
+            
+            
+        # --- actually compute some correlators
         # if no mask
         if ((x_mask == None) and (y_mask == None)):
-            x -= x.mean()
-            y -= y.mean()
-
-            n_delta = np.product(x.shape)
-            assert n_delta == np.product(y.shape)
-
+            
+            x_bar = x.mean(axis=1)[:,None]
+            y_bar = y.mean(axis=1)[:,None]
+            
+            # use d-FFT + convolution thm
+            ffx = fftpack.fft(x - x_bar, axis=1)
+            ffy = fftpack.fft(y - y_bar, axis=1)
+            corr = np.real(fftpack.ifft( ffx * np.conjugate(ffy), axis=1 ))
+            assert corr.shape == (n_row, n_col)
+            
+            # normalize
+            corr = corr / ( float(n_col) * x_bar * y_bar )
+                    
         # if using mask
         else:
-
-            # compute the number of contributing pairs to the correlation fxn
-            n_deltas = np.zeros(n_col)
-            for i in range(n_col):
-                n_deltas[i] = np.sum( x_mask * np.roll(y_mask, i) )
-
-            # set all masked pts to zero
-            x *= x_mask
-            y *= y_mask
-
-            # subtract the mean (now w/o masked pts)
-            x -= np.sum(x, axis=1)[:,None] / np.sum(x_mask)
-            y -= np.sum(y, axis=1)[:,None] / np.sum(y_mask)
-
-        # use d-FFT + convolution thm
-        ffx = fftpack.fft(x, axis=1)
-        ffy = fftpack.fft(y, axis=1)
-        corr = np.real(fftpack.ifft( ffx * np.conjugate(ffy), axis=1 ))
-
-        # now, divide 
-
-        # if not using mask, divide rows by n_delts
-        if ((x_mask != None) and (y_mask != None)):
-            corr /= n_deltas
-
-        # normalize so the first element of each row is one (ez-ier than stds)
-        corr /= corr[:,0][:,None]
+            corr = np.zeros((n_row, n_col))
+            for i in range(n_row):
+                corr[i,:] = gap_correlate(x[i,:] * x_mask[:], y[i,:] * y_mask[:])
 
         if mean_only:
             corr = corr.mean(axis=0) # average all shots
 
         return corr
-
     
 
     def _convert_to_kam(self, q1, q2, cor):
