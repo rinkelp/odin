@@ -2107,13 +2107,12 @@ class Rings(object):
 	print "Warning, this method is still under development."
 	wave = self.k / 2. / np.pi
 	for i in xrange(self.num_q):
-	  q = self.q_values[i]
-  	  theta = np.arcsin( q*wave / 4./ np.pi)
-          SinTheta = np.sin( 2 * theta )
-	  for j in xrange(self.num_shots):
-	    correction  = outOfPlane * ( 1. - SinTheta**2  * np.cos(self.phi_values)**2 )
-	    correction += (1.-outOfPlane) * (1. - SinTheta**2 * np.sin( self.phi_values)** 2)
-	    self.polar_intensities[ j , i , : ]  /= correction
+	  q           = self.q_values[i]
+  	  theta       = np.arcsin( q*wave / 4./ np.pi)
+          SinTheta    = np.sin( 2 * theta )
+	  correction  = outOfPlane * ( 1. - SinTheta**2  * np.cos(self.phi_values)**2 )
+	  correction += (1.-outOfPlane) * (1. - SinTheta**2 * np.sin( self.phi_values)** 2)
+	  self.polar_intensities[ : , i , : ]  /= correction
 	
     def intensity_profile(self):
         """
