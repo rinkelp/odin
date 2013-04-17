@@ -1446,7 +1446,7 @@ class Shotset(object):
         return r
 
 
-    def save(self, filename, save_interpolation=True):
+    def save(self, filename):
         """
         Writes the current Shotset data to disk.
 
@@ -1454,11 +1454,6 @@ class Shotset(object):
         ----------
         filename : str
             The path to the shotset file to save.
-
-        Optional Parameters
-        -------------------
-        save_interpolation : bool
-            Save the polar interpolation along with the cartesian intensities.
         """
 
         if not filename.endswith('.shot'):
@@ -2170,7 +2165,7 @@ class Rings(object):
         logger.info('Wrote %s to disk.' % filename)
 
         return
-
+    
 
     @classmethod
     def load(cls, filename):
