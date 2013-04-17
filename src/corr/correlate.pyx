@@ -33,11 +33,11 @@ def correlate(A,B):
   del c
   return v3
 
-def correlate_using_fft(self, x, y):
+def correlate_using_fft(x, y):
   """
   Compute the correlation between 2 arrays using the 
   convolution theorem. Works well for unmasked arrays.
-  Passing masked arrays will results in numerical errors.
+  Passing masked arrays will result in numerical errors.
 
   Parameters
   ----------

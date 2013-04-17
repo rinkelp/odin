@@ -17,10 +17,6 @@ class TestCBF(object):
     def setup(self):
         self.cbf = parse.CBF(ref_file('test1.cbf'))
         
-    #def test_smoke_on_load_files(self):
-        #out = parse.CBF(ref_file('test2.cbf'))
-        # todo : could use more cbf example files (from a modern v. of cbflib)
-        
     def test_intensities_shape(self):
         s = self.cbf.intensities_shape
         assert s == (2527, 2463)
@@ -31,7 +27,7 @@ class TestCBF(object):
         
     def test_path_length(self):
         l = self.cbf.path_length
-        assert l == 0.2
+        assert l == 0.18801
         
     def test_wavelength(self):
         l = self.cbf.wavelength
@@ -41,23 +37,20 @@ class TestCBF(object):
         p = self.cbf.polarization
         assert p == 0.99
     
-    @expected_failure    
     def test_center(self):
         c = self.cbf.center
-        assert False
     
-    @expected_failure    
     def test_corner(self):
         c = self.cbf.corner
         x = self.cbf.pixel_size
         y = self.cbf.center
-        ref = (x[0] * float(y[0]), x[1] * float(y[1]))
+        ref = (-x[0] * float(y[0]), -x[1] * float(y[1]))
+        print ref, c
         assert ref == c
-        assert False
 
     def test_as_shot(self):
-        s = self.cbf.as_shot()
-        assert isinstance(s, xray.Shot)
+        s = self.cbf.as_shotset()
+        assert isinstance(s, xray.Shotset)
         
         
 class TestCXI(object):
