@@ -253,7 +253,7 @@ class TestShotset(object):
         pg = self.shot.polar_grid([1.0], 360)
         pg_ref = np.zeros((360, 2))
         pg_ref[:,0] = 1.0
-        pg_ref[:,1] = np.linspace(0.0, 2.0*np.pi, num=360)
+        pg_ref[:,1] = np.arange(0, 2.0*np.pi, 2.0*np.pi/float(360))
         assert_array_almost_equal(pg, pg_ref)
 
     def test_polar_grid_as_cart(self):
@@ -443,7 +443,6 @@ class TestRings(object):
         ref -= 1.0
 
         assert_allclose(ref, c)
-        
 
     def test_corr_rows_no_mask(self):
 
@@ -467,7 +466,6 @@ class TestRings(object):
         ref -= 1.0
         
         assert_allclose(ref, ring)
-        
 
     def test_corr_rows_w_mask(self):
 
@@ -501,14 +499,38 @@ class TestRings(object):
         assert_allclose(corr_mask, corr_nomask, rtol=1e-3)
         
     def test_correlate_intra(self):
-        raise NotImplementedError('test not in')
+        # smoke tests : these functions are very simple
+        intra = self.rings.correlate_intra(1.0, 1.0)
+        intra = self.rings.correlate_intra(1.0, 1.0, num_shots=1)
 
     def test_correlate_inter(self):
-        # inject a specific and carefully engineered test case into a Rings obj
-        raise NotImplementedError('test not in')
+        q = 1.0
+        q_ind = self.rings.q_index(q)
+        
+        # there's only one possible inter pair for these guys (only two shots)
+        inter = self.rings.correlate_inter(q, q, mean_only=True)
+        
+        x = self.rings.polar_intensities[0,q_ind,:].flatten()
+        y = self.rings.polar_intensities[1,q_ind,:].flatten()
+        ref = self.rings._correlate_rows(x, y, mean_only=True)
+        
+        assert_allclose(ref, inter)
+        
+        # also smoke test random pairs
+        rings2 = xray.Rings.simulate(self.traj, 1, self.q_values, self.num_phi, 3) # 1 molec, 3 shots
+        inter = rings2.correlate_inter(q, q, mean_only=True, num_pairs=1)
         
     def test_convert_to_kam(self):
-        raise NotImplementedError('test not in')
+        intra = self.rings.correlate_intra(1.0, 1.0, mean_only=True)
+        kam_corr = self.rings._convert_to_kam(1.0, 1.0, intra)
+        assert kam_corr.shape[1] == 2
+        assert kam_corr[:,0].min() >= -1.0
+        assert kam_corr[:,0].max() <=  1.0
+        
+        half = kam_corr.shape[0] / 2
+        
+        assert_array_almost_equal(kam_corr[:half,0], -kam_corr[half:,0][::-1])
+        # assert_array_almost_equal(kam_corr[1:half,1],  kam_corr[half:-1,1][::-1])
 
     def test_coefficients_smoke(self):
         order = 6
@@ -520,29 +542,18 @@ class TestRings(object):
 
     def test_legendre(self):
 
-        order = 10000
+        order = 300
         q1 = 1.0
-        q2 = 1.0
         cl = self.rings.legendre(q1, q1, order) # keep only q1, q1 correlation
         assert len(cl) == order
 
-        # compute the values of psi to use
-        t1 = np.arctan( self.rings.q_values[q1] / (2.0*self.rings.k) )
-        t2 = np.arctan( self.rings.q_values[q2] / (2.0*self.rings.k) )
-        psi = np.arccos( np.cos(t1)*np.cos(t2) + np.sin(t1)*np.sin(t2) \
-                         * np.cos( self.rings.phi_values * 2. * \
-                         np.pi/float(self.rings.num_phi) ) )
-
-        # reconstruct the correlation function
-        pred = np.polynomial.legendre.legval(np.cos(psi), cl)
-
         # make sure it matches up with the raw correlation
-        ring = self.rings._correlate_rows( self.rings.polar_intensities[:,q1,:],
-                                           self.rings.polar_intensities[:,q2,:],
-                                           mean_only=True )
-
-        # this is a high tol, but it's workin --TJL
-        assert_allclose(pred, ring, rtol=0.25)
+        ring = self.rings.correlate_intra(q1, q1, mean_only=True)
+        kam_ring = self.rings._convert_to_kam( q1, q1, ring )
+        
+        # reconstruct the correlation function
+        pred = np.polynomial.legendre.legval(kam_ring[:,0], cl)
+        assert_allclose(pred, kam_ring[:,1], rtol=0.1, atol=0.05)
 
     def test_io(self):
         self.rings.save('test.ring')

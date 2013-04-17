@@ -19,10 +19,10 @@ from scipy import interpolate, fftpack
 from scipy.ndimage import filters
 from scipy.special import legendre
 
-from odin.math2 import arctan3, smooth, find_overlap, freedman_diaconis
+from odin.math2 import arctan3, smooth
 from odin import scatter
 from odin.interp import Bcinterp
-from odin.utils import unique_rows, maxima
+from odin.utils import unique_rows, maxima, random_pairs
 from odin.corr import correlate as gap_correlate
 
 from mdtraj import trajectory, io
@@ -1012,7 +1012,7 @@ class Shotset(object):
         """
         Converts `phi_spacing` to the explicit values, all in RADIANS.
         """
-        phi_values = np.linspace(0.0, 2.0*np.pi, num=num_phi)
+        phi_values = np.arange(0, 2.0*np.pi, 2.0*np.pi/float(num_phi))
         return phi_values
 
 
@@ -1610,7 +1610,7 @@ class Rings(object):
 
     @property
     def phi_values(self):
-        return np.linspace(0.0, 2.0*np.pi, num=self.num_phi)
+        return np.arange(0, 2.0*np.pi, 2.0*np.pi/float(self.num_phi))
 
 
     @property
@@ -1823,12 +1823,12 @@ class Rings(object):
         
         if (num_pairs == 0) or (num_pairs > max_pairs):
             inter_pairs = []
-            for i in range(max_pairs):
-                for j in range(i+1, max_pairs):
+            for i in range(self.num_shots):
+                for j in range(i+1, self.num_shots):
                     inter_pairs.append([i,j])
             inter_pairs = np.array(inter_pairs)
         else:
-            inter_pairs = utils.random_pairs(self.num_shots, num_pairs)
+            inter_pairs = random_pairs(self.num_shots, num_pairs)
 
         rings1 = self.polar_intensities[inter_pairs[:,0],q_ind1,:] # shots at ring1
         rings2 = self.polar_intensities[inter_pairs[:,1],q_ind2,:] # shots at ring2
@@ -1930,7 +1930,7 @@ class Rings(object):
         return corr
     
 
-    def _convert_to_kam(self, q1, q2, cor):
+    def _convert_to_kam(self, q1, q2, corr):
         """
         Corrects the azimuthal intensity correlation on a detector for detector 
         curvature.
@@ -1940,7 +1940,7 @@ class Rings(object):
         ----------
         q1,q2 : float, float
             Inverse angstroms values of the intenisty rings
-        cor : ndarray,  float
+        corr : ndarray,  float
             Azimuathl correlation function of intensities along ring in q space
 
         Returns
@@ -1949,9 +1949,12 @@ class Rings(object):
             The Kam correlation function and the cos(psi) values
         """
         
+        if not len(corr.shape) == 1:
+            raise ValueError('`corr` must be a one-dimensional array')
+        
         cosPsi  = self._cospsi(q1,q2)           # azimuathal to cos(psi)
         cosPsi  = np.append( cosPsi, -cosPsi )  # Adding the Friedel pairs...
-        newCor  = np.append( cor, cor )         # C [cos(psi) ] = C [cos(-psi)]
+        newCor  = np.append( corr, corr )       # C [cos(psi) ] = C [cos(-psi)]
         
         kam_corr = np.vstack((cosPsi, newCor)).T
         kam_corr = kam_corr[ np.argsort(kam_corr[:,0]) ] # sort ascending angle
@@ -1996,8 +1999,7 @@ class Rings(object):
         corr = self._convert_to_kam( q1, q2, corr )
 
         # tests indicate this is a good numerical projection
-        c, fit_data = np.polynomial.legendre.legfit(corr[:,0], corr[:,1],
-                                                    order-1, full=True)
+        c = np.polynomial.legendre.legfit(corr[:,0], corr[:,1], order-1)
         return c
 
 
