@@ -17,7 +17,7 @@ def main_wrap(args):
     return main(*args)
 
 def main(traj, num_shots, num_molecules, detector, traj_weights=None, device_id=0):
-    shotset = xray.Shotset.simulate(traj, num_molecules, detector, num_shots, traj_weights=None, device_id=device_id)    
+    shotset = xray.Shotset.simulate(traj, detector, num_molecules, num_shots, traj_weights=None, device_id=device_id)    
     return shotset
     
 def save(output_file, shotset):
@@ -78,11 +78,11 @@ if __name__ == '__main__':
         
     # deal w/parallel
     if args.parallel == 1:
-        shotset = xray.Shotset.simulate(traj, args.nummolec, detector, args.numshots, 
+        shotset = xray.Shotset.simulate(traj, detector, args.nummolec, args.numshots, 
                                         traj_weights=weights, device_id=0) 
     elif args.parallel < 0:
         did = -1 * args.parallel
-        shotset = xray.Shotset.simulate(traj, args.nummolec, detector, args.numshots,
+        shotset = xray.Shotset.simulate(traj, detector, args.nummolec, args.numshots,
                                         traj_weights=weights, device_id=did)
     else:
         p = args.parallel

@@ -1293,7 +1293,7 @@ class Shotset(object):
         return polar_intensities, polar_mask
 
 
-    def intensity_profile(self, q_spacing=0.02):
+    def intensity_profile(self, q_spacing=0.05):
         """
         Averages over the azimuth phi to obtain an intensity profile.
 
