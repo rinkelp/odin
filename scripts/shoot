@@ -104,10 +104,10 @@ if __name__ == '__main__':
         shotsets = pool.map(main_wrap, main_args)
     
         # aggregate all the shotsets into one
-        s = []
-        for shotset in shotsets:
-            s.extend( shotset.shots )
-        shotset = xray.Shotset(s)
+        intensities = np.zeros(( len(shotsets), len(shotsets[0].intensities) ))
+        for s in shotsets:
+            intensities[i,:] = s.intensities
+        shotset = xray.Shotset(intensities, shotsets[0].detector, shotsets[0].mask)
         
     save(args.output, shotset)
 

@@ -23,6 +23,7 @@ import numpy as np
 
 from odin import xray
 from odin.math2 import find_center
+from mdtraj import io
 
 
 try:
@@ -328,33 +329,51 @@ class CBF(object):
     
         
     @classmethod
-    def files_to_shotset(cls, list_of_cbf_files):
+    def files_to_shotset(cls, list_of_cbf_files, shotset_filename=None):
         """
-        Convert a bunch of CBF files to a single ODIN shotset instance.
+        Convert a bunch of CBF files to a single ODIN shotset instance. If you 
+        write the shotset immediately to disk, does this in a smart "lazy" way 
+        so as to preseve memory.
         
         Parameters
         ----------
         list_of_cbf_files : list of str
             A list of paths to CBF files to convert.
         
+        Optional Parameters
+        -------------------
+        shotset_filename : str
+            The filename of the shotset to write to disk.
+            
         Returns
         -------
-        shotset : odin.xray.Shotset
-            A shotset object containing all the intensity data.
+        ss : odin.xray.Shotset
+            If `shotset_filename` is None, then returns the shotset object
         """
         
         # convert one CBF, and use it to get the detector, etc info
         seed_shot = cls(fn[0]).as_shotset()
         
-        # get the intensity data from the rest of the shots
-        intensities = [seed_shot.intensities]
-        for fn in list_of_cbf_files[1:]:
-            intensities.append( cls(fn).intensities ) 
+        if shotset_filename:
+            logger.info('writing CBF files straight to disk at: %s' % shotset_filename)
             
-        ss = xray.Shotset( np.array(intensities), seed_shot.detector, 
-                           seed_shot.mask )
+            seed_shot.save(shotset_filename)
+            
+            # now open a handle to that h5 file and add to it
+            for i,fn in enumerate(list_of_cbf_files[1:]):
+                 
+                # i+1 b/c we already saved one shot
+                io.saveh( filename, **{('shot%d' % i+1) = cls(fn).intensities} )
 
-        return ss
+        else:        
+            intensities = [seed_shot.intensities]
+            for fn in list_of_cbf_files[1:]:
+                intensities.append( cls(fn).intensities ) 
+            
+            ss = xray.Shotset( np.array(intensities), seed_shot.detector, 
+                               seed_shot.mask )
+
+            return ss
     
         
 class KittyH5(object):
