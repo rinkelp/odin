@@ -23,6 +23,7 @@ import numpy as np
 
 from odin import xray
 from odin.math2 import find_center
+from mdtraj import io
 
 
 try:
@@ -362,7 +363,7 @@ class CBF(object):
             for i,fn in enumerate(list_of_cbf_files[1:]):
                  
                 # i+1 b/c we already saved one shot
-                io.saveh( filename, ('shot%d' % i+1) = cls(fn).intensities )
+                io.saveh( filename, **{('shot%d' % i+1) = cls(fn).intensities} )
 
         else:        
             intensities = [seed_shot.intensities]

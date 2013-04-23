@@ -2048,9 +2048,8 @@ class Rings(object):
 
     @classmethod
     def simulate(cls, traj, num_molecules, q_values, num_phi, num_shots,
-                 energy=10, traj_weights=None, finite_photon=False,
-                 force_no_gpu=False, photons_scattered_per_shot=1e4,
-                 device_id=0):
+                 energy=10, traj_weights=None, force_no_gpu=False, 
+                 photons_scattered_per_shot=-1, device_id=0):
         """
         Simulate many scattering 'shot's, i.e. one exposure of x-rays to a
         sample, but onto a polar detector. Return that as a Rings object
@@ -2096,15 +2095,13 @@ class Rings(object):
             Boltzmann weight of each structure. Default: if traj_weights == None
             weights each structure equally.
 
-        finite_photon : bool
-            Whether or not to employ finite photon statistics in the simulation
-
         force_no_gpu : bool
             Run the (slow) CPU version of this function.
 
         photons_scattered_per_shot : int
             The number of photons scattered to the detector per shot. For use
-            with `finite_photon`.
+            with `finite_photon`. If "-1" (default), use continuous scattering
+            (infinite photon limit).
 
         Returns
         -------
@@ -2126,7 +2123,7 @@ class Rings(object):
         for i in range(num_shots):
             I = scatter.simulate_shot(traj, num_molecules, qxyz,
                                       traj_weights=traj_weights,
-                                      finite_photon=finite_photon,
+                                      finite_photon=photons_scattered_per_shot,
                                       force_no_gpu=force_no_gpu,
                                       device_id=device_id)
             polar_intensities[i,:,:] = I.reshape(len(q_values), num_phi)
