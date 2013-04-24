@@ -14,15 +14,10 @@ from odin.parse import CBF
 def main(input_fn, output_fn):
     
     if os.path.isdir(input_fn):
-        
         print "Locating CBF files in dir: %s" % input_fn
         cbf_files = glob( os.path.join( input_fn, '*.cbf' ) )
         print "Found %d CBF files" % len(cbf_files)
-        
-        shotset = parse.CBF.files_to_shotset(cbf_files)
-        
-        shotset.save(output_fn)
-        print "Saved: %s" % output_fn
+        shotset = CBF.files_to_shotset(cbf_files, shotset_filename=output_fn)
         
     else: # is file
         print "Loading single file: %s" % input_fn
