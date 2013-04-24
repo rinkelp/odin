@@ -2054,7 +2054,7 @@ class Rings(object):
     @classmethod
     def simulate(cls, traj, num_molecules, q_values, num_phi, num_shots,
                  energy=10, traj_weights=None, force_no_gpu=False, 
-                 photons_scattered_per_shot=-1, device_id=0):
+                 photons_scattered_per_shot=None, device_id=0):
         """
         Simulate many scattering 'shot's, i.e. one exposure of x-rays to a
         sample, but onto a polar detector. Return that as a Rings object

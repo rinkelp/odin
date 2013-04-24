@@ -553,7 +553,7 @@ class TestRings(object):
         
         # reconstruct the correlation function
         pred = np.polynomial.legendre.legval(kam_ring[:,0], cl)
-        assert_allclose(pred, kam_ring[:,1], rtol=0.1, atol=0.05)
+        assert_allclose(pred, kam_ring[:,1], rtol=0.1, atol=0.1)
 
     def test_io(self):
         self.rings.save('test.ring')
@@ -576,6 +576,7 @@ class TestMisc(object):
         assert np.all( np.abs( np.sqrt( np.sum( np.power(qxyz,2), axis=1 ) ) - \
                                np.repeat(q_values, num_phi)) < 1e-6 )
 
+                               
     def test_iprofile_consistency(self):
 
         t = structure.load_coor(ref_file('gold1k.coor'))
@@ -593,7 +594,7 @@ class TestMisc(object):
         ip1[:,1] = pi.sum(1)
 
         # compute from detector
-        ip2 = s.intensity_profile()
+        ip2 = s.intensity_profile(0.02)
 
         # compute from rings
         r = xray.Rings.simulate(t, 10, q_values, 360, 1)
@@ -609,9 +610,10 @@ class TestMisc(object):
         m3 = ip3[ind3,0]
         
         # discard the tails of the sim -- they have weak/noisy peaks
-        m1 = m1[(m1 > 1.55) * (m1 < 3.0)]
-        m2 = m2[(m2 > 1.55) * (m2 < 3.0)]
-        m3 = m3[(m3 > 1.55) * (m3 < 3.0)]
+        # there should be strong peaks at |q| ~ 2.66, 3.06
+        m1 = m1[(m1 > 2.0) * (m1 < 3.2)]
+        m2 = m2[(m2 > 2.0) * (m2 < 3.2)]
+        m3 = m3[(m3 > 2.0) * (m3 < 3.2)]
 
         # I'll let them be two q-brackets off
         assert_allclose(m1, m2, atol=0.045)

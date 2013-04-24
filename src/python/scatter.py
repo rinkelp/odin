@@ -59,8 +59,11 @@ def simulate_shot(traj, num_molecules, detector, traj_weights=None,
         weight of each structure. Default: if traj_weights == None, weights
         each structure equally.
         
-    finite_photon : bool
-        Whether or not to employ finite photon statistics in the simulation.
+    finite_photon : bool OR float
+        Whether or not to employ finite photon statistics in the simulation. If
+        this is "False", run a continuous simulation (infinite photons). If
+        "True", use the finite photon parameters from a xray.Detector object. If
+        a float, then that float specifies the mean photons scattered per shot.
         
     force_no_gpu : bool
         Run the (slow) CPU version of this function.
@@ -80,7 +83,8 @@ def simulate_shot(traj, num_molecules, detector, traj_weights=None,
         These are factory functions that call this function, and wrap the
         results into the Shot and Shotset classes, respectively.
     """
-        
+    
+    
     logger.debug('Performing scattering simulation...')
     logger.debug('Simulating %d copies in the dilute limit' % num_molecules)
 
@@ -89,6 +93,7 @@ def simulate_shot(traj, num_molecules, detector, traj_weights=None,
     traj_weights /= traj_weights.sum()
         
     num_per_shapshot = np.random.multinomial(num_molecules, traj_weights)
+    
         
     # get the scattering vectors
     if str(type(detector)).find('Detector') > -1:    
@@ -100,21 +105,27 @@ def simulate_shot(traj, num_molecules, detector, traj_weights=None,
         raise ValueError('`detector` must be {odin.xray.Detector, np.ndarray}')
     num_q = qxyz.shape[0]
     
+    
     # figure out finite photon statistics
-    if finite_photon != None:
-        if type(detector) == np.ndarray:
-            poisson_parameter = finite_photon
-        else:
-            if detector.beam == None:
-                raise RuntimeError('`detector` object must have a beam attribute if'
-                                   ' finite photon statistics are to be computed')
-            poisson_parameter = float(detector.beam.photons_scattered_per_shot)
-    else:
+    if finite_photon in [None, False]:
         poisson_parameter = 0.0 # flag to downstream code to not use stats
+    elif finite_photon == True:
+        try:
+            poisson_parameter = float(detector.beam.photons_scattered_per_shot)
+        except:
+            raise RuntimeError('`detector` object must have a beam attribute if'
+                               ' finite photon statistics are to be computed')
+    elif type(finite_photon) == float:
+        poisson_parameter = finite_photon
+    else:
+        raise TypeError('Finite photon must be one of {True, False, float},'
+                        ' got: %s' % str(finite_photon))
+        
     
     # extract the atomic numbers
     atomic_numbers = np.array([ a.element.atomic_number for a in traj.topology.atoms() ])
         
+    
     # iterate over snapshots in the trajectory
     intensities = np.zeros(num_q)
     for i,num in enumerate(num_per_shapshot):
