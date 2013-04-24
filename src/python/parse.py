@@ -23,6 +23,7 @@ import numpy as np
 
 from odin import xray
 from odin.math2 import find_center
+from mdtraj import io
 
 
 try:
@@ -37,7 +38,7 @@ class CBF(object):
     A class for parsing CBF files. Depends on fabio.
     """
     
-    def __init__(self, filename, mask=None):
+    def __init__(self, filename, mask=None, autocenter=True):
         """
         A light handle on a CBF file.
         
@@ -50,6 +51,10 @@ class CBF(object):
             Define a mask over the data. If `None` don't use a mask (default).
             Else should be a np array of dtype bool with the same shape as the
             intensities in the CBF file.
+            
+        autocenter : bool
+            Whether or not to optimize the center (given a shot containing)
+            diffuse rings.
         """
         
         if not FABIO_IMPORTED:
@@ -58,7 +63,7 @@ class CBF(object):
         
         logger.info('Reading: %s' % filename)
         self.filename = filename
-        
+        self.autocenter = autocenter
         
         # extract all interesting stuff w/fabio
         self._fabio_handle = fabio.open(filename)
@@ -256,7 +261,11 @@ class CBF(object):
         center : tuple of ints
             The indicies of the pixel nearest the center of the Bragg peaks.
         """
-        return find_center(self.intensities, mask=self.mask)
+        if self.autocenter:
+            center = find_center(self.intensities, mask=self.mask)
+        else:
+            center = np.array(self.intensities_shape) / 2.0
+        return center
     
         
     def _pilatus_mask(self, border_size=3):
@@ -328,33 +337,64 @@ class CBF(object):
     
         
     @classmethod
-    def files_to_shotset(cls, list_of_cbf_files):
+    def files_to_shotset(cls, list_of_cbf_files, shotset_filename=None,
+                         autocenter=True):
         """
-        Convert a bunch of CBF files to a single ODIN shotset instance.
+        Convert a bunch of CBF files to a single ODIN shotset instance. If you 
+        write the shotset immediately to disk, does this in a smart "lazy" way 
+        so as to preseve memory.
         
         Parameters
         ----------
         list_of_cbf_files : list of str
             A list of paths to CBF files to convert.
         
+        Optional Parameters
+        -------------------
+        shotset_filename : str
+            The filename of the shotset to write to disk.
+            
+        autocenter : bool
+            Whether or not to automatically determine the center of the detector.
+            
         Returns
         -------
-        shotset : odin.xray.Shotset
-            A shotset object containing all the intensity data.
+        ss : odin.xray.Shotset
+            If `shotset_filename` is None, then returns the shotset object
         """
         
         # convert one CBF, and use it to get the detector, etc info
-        seed_shot = cls(list_of_cbf_files[0]).as_shotset()
+        seed_shot = cls(list_of_cbf_files[0], autocenter=autocenter).as_shotset()
         
-        # get the intensity data from the rest of the shots
-        intensities = [seed_shot.intensities]
-        for fn in list_of_cbf_files[1:]:
-            intensities.append( cls(fn).intensities ) 
+        if shotset_filename:
+            logger.info('writing CBF files straight to disk at: %s' % shotset_filename)
             
-        ss = xray.Shotset( np.array(intensities), seed_shot.detector, 
-                           seed_shot.mask )
+            seed_shot.save(shotset_filename)
+            
+            # now open a handle to that h5 file and add to it
+            for i,fn in enumerate(list_of_cbf_files[1:]):
+                 
+                # i+1 b/c we already saved one shot
+                d = {('shot%d' % (i+1,)) : cls(fn).intensities.flatten()}
+                io.saveh( shotset_filename, **d )
+                
+            io.saveh( shotset_filename, num_shots=np.array([ len(list_of_cbf_files) ]) )
+            logger.info('Combined CBF data into: %s' % shotset_filename)
+            return
 
-        return ss
+        else:
+            shot_i = np.zeros(( len(list_of_cbf_files), seed_shot.intensities.shape[1] ))
+            shot_i[0,:] = seed_shot.intensities.flatten()
+            
+            for i,fn in enumerate(list_of_cbf_files[1:]):
+                x = cls(fn, autocenter=False).intensities.flatten()
+                if not len(x) == shot_i.shape[1]:
+                    raise ValueError('Variable number of pixels in shots!')
+                shot_i[i+1,:] = x
+            
+            ss = xray.Shotset( shot_i, seed_shot.detector, seed_shot.mask )
+
+            return ss
     
         
 class KittyH5(object):
