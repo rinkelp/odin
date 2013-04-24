@@ -1293,7 +1293,7 @@ class Shotset(object):
         return polar_intensities, polar_mask
 
 
-    def intensity_profile(self, q_spacing=0.02):
+    def intensity_profile(self, q_spacing=0.05):
         """
         Averages over the azimuth phi to obtain an intensity profile.
 
@@ -1446,7 +1446,7 @@ class Shotset(object):
         return r
 
 
-    def save(self, filename, save_interpolation=True):
+    def save(self, filename):
         """
         Writes the current Shotset data to disk.
 
@@ -1454,11 +1454,6 @@ class Shotset(object):
         ----------
         filename : str
             The path to the shotset file to save.
-
-        Optional Parameters
-        -------------------
-        save_interpolation : bool
-            Save the polar interpolation along with the cartesian intensities.
         """
 
         if not filename.endswith('.shot'):
@@ -2051,9 +2046,8 @@ class Rings(object):
 
     @classmethod
     def simulate(cls, traj, num_molecules, q_values, num_phi, num_shots,
-                 energy=10, traj_weights=None, finite_photon=False,
-                 force_no_gpu=False, photons_scattered_per_shot=1e4,
-                 device_id=0):
+                 energy=10, traj_weights=None, force_no_gpu=False, 
+                 photons_scattered_per_shot=-1, device_id=0):
         """
         Simulate many scattering 'shot's, i.e. one exposure of x-rays to a
         sample, but onto a polar detector. Return that as a Rings object
@@ -2099,15 +2093,13 @@ class Rings(object):
             Boltzmann weight of each structure. Default: if traj_weights == None
             weights each structure equally.
 
-        finite_photon : bool
-            Whether or not to employ finite photon statistics in the simulation
-
         force_no_gpu : bool
             Run the (slow) CPU version of this function.
 
         photons_scattered_per_shot : int
             The number of photons scattered to the detector per shot. For use
-            with `finite_photon`.
+            with `finite_photon`. If "-1" (default), use continuous scattering
+            (infinite photon limit).
 
         Returns
         -------
@@ -2129,7 +2121,7 @@ class Rings(object):
         for i in range(num_shots):
             I = scatter.simulate_shot(traj, num_molecules, qxyz,
                                       traj_weights=traj_weights,
-                                      finite_photon=finite_photon,
+                                      finite_photon=photons_scattered_per_shot,
                                       force_no_gpu=force_no_gpu,
                                       device_id=device_id)
             polar_intensities[i,:,:] = I.reshape(len(q_values), num_phi)
@@ -2168,7 +2160,7 @@ class Rings(object):
         logger.info('Wrote %s to disk.' % filename)
 
         return
-
+    
 
     @classmethod
     def load(cls, filename):
@@ -2197,6 +2189,33 @@ class Rings(object):
         hdf.close()
 
         return rings_obj
+        
+        
+    def append(self, other_rings):
+        """
+        Combine a two rings objects. We keep the mask from the current Rings.
+        
+        Parameters
+        ----------
+        other_rings : xray.Rings
+            A different rings object, but with the same q_values, num_phi.
+            
+        Returns
+        -------
+        combined : xray.Rings
+            A rings object with the two datasets combined.
+        """
+        
+        if not np.all(other_rings.q_values == self.q_values):
+            raise ValueError('Two rings must have exactly the same q_values')
+        if not other_rings.k == self.k:
+            raise ValueError('Two rings must have exactly the same wavenumber (k)')
+            
+        combined_pi = np.vstack( (self.polar_intensities, other_rings.polar_intensities) )
+        
+        combined = Rings(self.q_values, combined_pi, self.k, polar_mask=self.polar_mask)
+        
+        return combined
 
 
 def _q_grid_as_xyz(q_values, num_phi, k):

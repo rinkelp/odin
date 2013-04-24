@@ -1,0 +1,79 @@
+#!/usr/bin/env python
+
+"""
+Convert an ODIN shotset file to a rings object.
+"""
+
+import os
+
+from odin.utils import odinparser
+from odin import xray
+
+from mdtraj import io
+import numpy as np
+
+def main(input_fn, q_values, num_phi, output_fn, max_shots=-1, chunk_size=-1):
+    
+    # find q_values
+    q_values = np.loadtxt(q_values).flatten()
+    print "Generating rings at |q| = ", q_values
+    
+    # find out how many shots are in the shotset
+    hdf = io.loadh(input_fn)
+    num_shots = int(hdf['num_shots'])
+    if max_shots == -1: max_shots = num_shots
+    
+    # if we just want to convert everything...
+    if chunk_size == -1:
+        ss = xray.Shotset.load(input_fn, to_load=range(max_shots))
+        rings = ss.to_rings(q_values, num_phi=num_phi)
+        
+    # we want to load/convert in a lazy fashion to save memory
+    elif chunk_size > 0:
+        
+        ss = xray.Shotset.load(input_fn, to_load=[0]) # seed
+        rings = ss.to_rings(q_values, num_phi=num_phi)
+        
+        for i in range( 1, min(num_shots, max_shots), chunk_size ):
+            print "Converting shots: %d to %d" % (i, i+chunk_size)
+            ss = xray.Shotset.load(input_fn, to_load=range(i,i+chunk_size))
+            rings.append( ss.to_rings(q_values, num_phi=num_phi) )
+        
+    else:
+        raise ValueError('Invalid chunk size. Must be -1 or positive int. Got: %d' % chunk_size)
+        
+    # save the result
+    rings.save(output_fn)
+    
+    return
+    
+    
+if __name__ == '__main__':
+    
+    parser = odinparser('''Convert an ODIN shotset file (*.shot) to a rings 
+object that facilitates operations in polar space.''')
+    
+    parser.add_argument('input', type=str, 
+                        help='''A shotset file.''')
+    parser.add_argument('-q', '--qvalues', type=str, required=True,
+                        help='''A flat text file containing a list of numerical 
+                                values of |q|, in inverse Angstroms, to compute
+                                rings for.''')
+    parser.add_argument('-p', '--phi', type=int, default=360,
+                        help='''The number of points to interpolate in phi,
+                                around each ring''')
+    parser.add_argument('-m', '--maxshots', type=int, default=-1,
+                        help='''Maximum number of shots to convert. Default: -1 
+                                (means convert all).''')
+    parser.add_argument('-c', '--chunksize', type=int, default=-1,
+                        help='''Number of shots to convert at one time. More
+                                shots converted at once means faster exectution,
+                                but more memory used. Default: -1 (convert all
+                                at once).''')
+    parser.add_argument('-o', '--output', default='shotset.ring',
+                        help='The output file name. Default: shotset.ring')
+
+    args = parser.parse_args()
+
+    main(args.input, args.qvalues, args.phi, args.output, 
+         max_shots=args.maxshots, chunk_size=args.chunksize)

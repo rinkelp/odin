@@ -40,10 +40,10 @@ def main(input_file, max_intensity=0, npoints=1000):
     ax[0].set_yticklabels([])
     
     npoints = 1000
-    i_assembled = shotset.shots[0].assemble_image(npoints, npoints)
+    i_assembled = shotset.assemble_image(num_x=npoints, num_y=npoints)
     
     im = ax[1].imshow(i_assembled.T, cmap=cm.jet, interpolation="nearest")
-    im.set_clim(np.min(I[:,1]), max_intensity)
+    im.set_clim(0.0, max_intensity)
     ax[1].set_xlabel('x')
     ax[1].set_ylabel('y')
     ax[1].set_xticklabels([])

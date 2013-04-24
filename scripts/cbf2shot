@@ -14,15 +14,10 @@ from odin.parse import CBF
 def main(input_fn, output_fn):
     
     if os.path.isdir(input_fn):
-        
         print "Locating CBF files in dir: %s" % input_fn
         cbf_files = glob( os.path.join( input_fn, '*.cbf' ) )
         print "Found %d CBF files" % len(cbf_files)
-        
-        shotset = parse.CBF.files_to_shotset(cbf_files)
-        
-        shotset.save(output_fn)
-        print "Saved: %s" % output_fn
+        shotset = CBF.files_to_shotset(cbf_files, shotset_filename=output_fn)
         
     else: # is file
         print "Loading single file: %s" % input_fn
@@ -40,7 +35,7 @@ if __name__ == '__main__':
 ODIN shotset file (.shot). Files should share a common detector geometry and 
 mask, and differ only in intensity.''')
     
-    parser.add_argument('-i', '--input', type=str, 
+    parser.add_argument('input', type=str, 
                         help='''Either a single CBF file, or a directory 
                                 containing one or more CBF files.''')
     parser.add_argument('-o', '--output', default='shotset.shot',
