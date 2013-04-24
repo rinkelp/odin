@@ -15,9 +15,10 @@ import matplotlib.pyplot as plt
 def main(shotset_fn):
     
     ss = xray.Shotset.load(shotset_fn)
-    s = ss[0]
+    q_values = np.arange(0.4, ss.detector.q_max, 0.01)
+    r  = ss[0].to_rings(q_values)
     
-    im = InteractiveImshow(s.polar_intensities_2d.T)
+    im = InteractiveImshow(r.polar_intensities[0,:,:].T)
     plt.xlabel(r'$\phi$ / Degrees')
     plt.ylabel(r'q / $\AA^{-1}$')
     
