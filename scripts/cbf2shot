@@ -19,7 +19,7 @@ def main(input_fn, output_fn):
         cbf_files = glob( os.path.join( input_fn, '*.cbf' ) )
         print "Found %d CBF files" % len(cbf_files)
         
-        shotset = parse.CBF.files_to_shotset(cbf_files)
+        shotset = CBF.files_to_shotset(cbf_files)
         
         shotset.save(output_fn)
         print "Saved: %s" % output_fn

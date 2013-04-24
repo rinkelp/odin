@@ -344,7 +344,7 @@ class CBF(object):
         """
         
         # convert one CBF, and use it to get the detector, etc info
-        seed_shot = cls(fn[0]).as_shotset()
+        seed_shot = cls(list_of_cbf_files[0]).as_shotset()
         
         # get the intensity data from the rest of the shots
         intensities = [seed_shot.intensities]
