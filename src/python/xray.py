@@ -1822,9 +1822,6 @@ class Rings(object):
         else:
             inter_pairs = random_pairs(self.num_shots, num_pairs)
 
-        rings1 = self.polar_intensities[inter_pairs[:,0],q_ind1,:] # shots at ring1
-        rings2 = self.polar_intensities[inter_pairs[:,1],q_ind2,:] # shots at ring2
-
         # Check if mask exists
         if self.polar_mask != None:
             mask1 = self.polar_mask[q_ind1,:]
@@ -1833,7 +1830,17 @@ class Rings(object):
             mask1 = None
             mask2 = None     
 
-        return self._correlate_rows(rings1, rings2, mask1, mask2, mean_only)
+        # this will save some memory, which can quickly bloat...
+        # todo : run in real life and see what works
+        if mean_only:
+            corr = np.zeros(self.num_phi)
+            for i in xrange( inter_pairs.shape[0] ):
+                x = self.polar_intensities[inter_pairs[i,0],q_ind1,:] # shots at ring1
+                y = self.polar_intensities[inter_pairs[i,1],q_ind2,:] # shots at ring2
+                corr += self._correlate_rows(x, y, mask1, mask2, mean_only=True)
+            corr /= float(inter_pairs.shape[0])
+
+        return corr
         
         
     @staticmethod
