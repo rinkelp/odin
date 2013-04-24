@@ -35,7 +35,7 @@ if __name__ == '__main__':
 ODIN shotset file (.shot). Files should share a common detector geometry and 
 mask, and differ only in intensity.''')
     
-    parser.add_argument('-i', '--input', type=str, 
+    parser.add_argument('input', type=str, 
                         help='''Either a single CBF file, or a directory 
                                 containing one or more CBF files.''')
     parser.add_argument('-o', '--output', default='shotset.shot',

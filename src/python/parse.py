@@ -375,9 +375,10 @@ class CBF(object):
             for i,fn in enumerate(list_of_cbf_files[1:]):
                  
                 # i+1 b/c we already saved one shot
-                d = {('shot%d' % (i+1,)) : cls(fn).intensities}
+                d = {('shot%d' % (i+1,)) : cls(fn).intensities.flatten()}
                 io.saveh( shotset_filename, **d )
                 
+            io.saveh( shotset_filename, num_shots=np.array([ len(list_of_cbf_files) ]) )
             logger.info('Combined CBF data into: %s' % shotset_filename)
             return
 

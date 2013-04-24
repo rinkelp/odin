@@ -2191,6 +2191,33 @@ class Rings(object):
         hdf.close()
 
         return rings_obj
+        
+        
+    def append(self, other_rings):
+        """
+        Combine a two rings objects. We keep the mask from the current Rings.
+        
+        Parameters
+        ----------
+        other_rings : xray.Rings
+            A different rings object, but with the same q_values, num_phi.
+            
+        Returns
+        -------
+        combined : xray.Rings
+            A rings object with the two datasets combined.
+        """
+        
+        if not np.all(other_rings.q_values == self.q_values):
+            raise ValueError('Two rings must have exactly the same q_values')
+        if not other_rings.k == self.k:
+            raise ValueError('Two rings must have exactly the same wavenumber (k)')
+            
+        combined_pi = np.vstack( (self.polar_intensities, other_rings.polar_intensities) )
+        
+        combined = Rings(self.q_values, combined_pi, self.k, polar_mask=self.polar_mask)
+        
+        return combined
 
 
 def _q_grid_as_xyz(q_values, num_phi, k):
