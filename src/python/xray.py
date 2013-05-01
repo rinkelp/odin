@@ -1839,6 +1839,11 @@ class Rings(object):
                 y = self.polar_intensities[inter_pairs[i,1],q_ind2,:] # shots at ring2
                 corr += self._correlate_rows(x, y, mask1, mask2, mean_only=True)
             corr /= float(inter_pairs.shape[0])
+            
+        else:
+            x = self.polar_intensities[inter_pairs[:,0],q_ind1,:] # shots at ring1
+            y = self.polar_intensities[inter_pairs[:,1],q_ind2,:] # shots at ring2
+            corr = self._correlate_rows(x, y, mask1, mask2
 
         return corr
         
