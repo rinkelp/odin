@@ -17,7 +17,8 @@ class RingScatter
   int    n_rotations,Nphi; // num random rotations and num azimutha; bins per ring
   int    numAtomTypes,numAtoms; // num distinct atom types and total num atoms
   
-  float * rings;
+  float * ringsR;
+  float * ringsI;
   float * formfactors;
   string qstring;
 

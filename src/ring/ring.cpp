@@ -264,8 +264,8 @@ void RingScatter::kernel()
       }
     }
 //save the rings to hdf
-    herr_t  write_rings = H5Dwrite(ringsR_data_id, H5T_NATIVE_FLOAT, H5S_ALL, H5S_ALL, H5P_DEFAULT, ringsR);
-    herr_t  write_rings = H5Dwrite(ringsI_data_id, H5T_NATIVE_FLOAT, H5S_ALL, H5S_ALL, H5P_DEFAULT, ringsR);
+    herr_t  write_ringsR = H5Dwrite(ringsR_data_id, H5T_NATIVE_FLOAT, H5S_ALL, H5S_ALL, H5P_DEFAULT, ringsR);
+    herr_t  write_ringsI = H5Dwrite(ringsI_data_id, H5T_NATIVE_FLOAT, H5S_ALL, H5S_ALL, H5P_DEFAULT, ringsI);
     H5Dclose(ringsR_data_id);
     H5Dclose(ringsI_data_id);
   }
@@ -346,7 +346,8 @@ RingScatter::~RingScatter()
 {
   cout << "\n    HASTA LA VISTA, BABY..." << endl;
 
-  delete [] rings;
+  delete [] ringsR;
+  delete [] ringsI;
   delete [] formfactors;
   H5Gclose(h5_ring_group_id);
   H5Sclose(space_single);
