@@ -9,7 +9,7 @@ using namespace std;
 class RingScatter
 {
 
-  vector<float> quats,Q,THETA,XYZA,cromermann;
+  vector<float> quats,Q,THETA,XYZA,cromermann,Rx,Ry,Rz;
   vector<int> CM_AID; // atom type decoder for cromermann array
   vector<string> QVALS; // 
   
