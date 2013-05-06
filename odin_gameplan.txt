@@ -2,7 +2,6 @@
 
 ODIN game plan
 --------------
--- Fix Known Bugs
 -- X-ray scattering
 -- NMR
 -- Drive OpenMM

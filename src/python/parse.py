@@ -36,6 +36,15 @@ except ImportError as e:
 class CBF(object):
     """
     A class for parsing CBF files. Depends on fabio.
+    
+    NOTES ON GEOMETRY -- the geometry for different detectors is different.
+    
+    PILATUS 6M (SSRL 12-2)
+    ----------------------
+    Here, data are read out as a 2d array:
+        slow: horizontal wrt lab frame / first array dim  / scans in y
+        fast: vertical wrt lab frame   / second array dim / scans in x
+    
     """
     
     def __init__(self, filename, mask=None, autocenter=True):
@@ -104,6 +113,9 @@ class CBF(object):
         
     @property
     def intensities_shape(self):
+        """
+        Returns the shape (slow, fast)
+        """
         shp = (int(self._info['X-Binary-Size-Second-Dimension']), 
                int(self._info['X-Binary-Size-Fastest-Dimension']))
         return shp
@@ -138,7 +150,9 @@ class CBF(object):
     @property
     def center(self):
         """
-        The indicies of the pixel nearest the center
+        The center of the image, in PIXEL UNITS and as a tuple for dimensions
+        (SLOW, FAST). Note that this is effectively (y,x), if y is the
+        vertical direction in the lab frame.
         """
         if not hasattr(self, '_center'):
             self._center = self._find_center()
@@ -148,10 +162,11 @@ class CBF(object):
     @property
     def corner(self):
         """
-        The bottom left corner position, in real space.
+        The bottom left corner position, in real space (x,y). Note that this
+        corresponds to (FAST, SLOW) (!). This is the opposite of "center".
         """
-        return (-self.pixel_size[0] * self.center[0], 
-                -self.pixel_size[1] * self.center[1])
+        return (-self.pixel_size[1] * self.center[1], 
+                -self.pixel_size[0] * self.center[0])
         
         
     @property
@@ -259,7 +274,13 @@ class CBF(object):
         Returns
         -------
         center : tuple of ints
-            The indicies of the pixel nearest the center of the Bragg peaks.
+            The indicies of the pixel nearest the center of the Bragg peaks. The
+            center is returned in pixel units in terms of (slow, fast).
+            
+        See Also
+        --------
+        self.center
+        self.corner
         """
         if self.autocenter:
             center = find_center(self.intensities, mask=self.mask)
@@ -283,30 +304,35 @@ class CBF(object):
         border_size = int(border_size)
         mask = np.ones(self.intensities_shape, dtype=np.bool)
 
-        # below we have the rows (x_gaps) and columns (y_gaps) to mask
+        # below we have the cols (x_gaps) and rows (y_gaps) to mask
+        # these mask the ASIC gaps
 
-        x_gaps = [(486-border_size,494+border_size),
-                  (980-border_size,988+border_size),
-                  (1474-border_size,1482+border_size),
-                  (1968-border_size,1976+border_size)]
-
-        y_gaps = [(194-border_size,212+border_size),
-                  (406-border_size,424+border_size),
-                  (618-border_size,636+border_size),
-                  (830-border_size,848+border_size),
-                  (1042-border_size,1060+border_size),
-                  (1254-border_size,1272+border_size),
-                  (1466-border_size,1484+border_size),
-                  (1678-border_size,1696+border_size),
-                  (1890-border_size,1908+border_size),
-                  (2102-border_size,2120+border_size),
-                  (2314-border_size,2332+border_size)]
+        x_gaps = [(194-border_size,  212+border_size),
+                  (406-border_size,  424+border_size),
+                  (618-border_size,  636+border_size),
+                  (830-border_size,  848+border_size),
+                  (1042-border_size, 1060+border_size),
+                  (1254-border_size, 1272+border_size),
+                  (1466-border_size, 1484+border_size),
+                  (1678-border_size, 1696+border_size),
+                  (1890-border_size, 1908+border_size),
+                  (2102-border_size, 2120+border_size),
+                  (2314-border_size, 2332+border_size)]
+                  
+        y_gaps = [(486-border_size,  494+border_size),
+                  (980-border_size,  988+border_size),
+                  (1474-border_size, 1482+border_size),
+                  (1968-border_size, 1976+border_size)]
 
         for x in x_gaps:
             mask[x[0]:x[1],:] = np.bool(False)
 
         for y in y_gaps:
             mask[:,y[0]:y[1]] = np.bool(False)
+        
+            
+        # we also mask the beam stop for 12-2...
+        mask[1200:1325,1164:] = np.bool(False)
 
         return mask
 
