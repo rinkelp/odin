@@ -407,7 +407,7 @@ class CBF(object):
             for i,fn in enumerate(list_of_cbf_files[1:]):
                  
                 # i+1 b/c we already saved one shot
-                d = {('shot%d' % (i+1,)) : cls(fn).intensities.flatten()}
+                d = {('shot%d' % (i+1,)) : cls(fn, autocenter=False).intensities.flatten()}
                 io.saveh( shotset_filename, **d )
                 
             io.saveh( shotset_filename, num_shots=np.array([ len(list_of_cbf_files) ]) )
@@ -427,6 +427,56 @@ class CBF(object):
             ss = xray.Shotset( shot_i, seed_shot.detector, seed_shot.mask )
 
             return ss
+            
+            
+    @classmethod
+    def files_to_rings(cls, list_of_cbf_files, q_values, num_phi,
+                       autocenter=True):
+        """
+        Convert a bunch of CBF files to a single ODIN rings instance.
+
+        Parameters
+        ----------
+        list_of_cbf_files : list of str
+            A list of paths to CBF files to convert.
+            
+        q_values : ndarray, float
+            A one-D array containing the |q| values (in inverse Angstroms) that
+            you want to convert
+
+        Optional Parameters
+        -------------------
+        num_phi : int
+            The number of points around each ring to interpolate.
+        
+        shotset_filename : str
+            The filename of the shotset to write to disk.
+
+        autocenter : bool
+            Whether or not to automatically determine the center of the detector.
+
+        Returns
+        -------
+        rings : odin.xray.Rings
+            If `rings_filename` is None, then returns the shotset object
+        """
+        
+        # save the center from one so we don't have to compute it for all
+        seed_cbf = cls(list_of_cbf_files[0], autocenter=autocenter)
+        center = seed_cbf.center.copy()
+        
+        
+        seed_ss = seed_cbf.as_shotset()
+        seed_ring = seed_ss.to_rings(q_values, num_phi=num_phi)
+        
+        
+        for cbf_file in list_of_cbf_files[1:]:
+            ss = cls(list_of_cbf_files[0], autocenter=False).as_shotset()
+            r  = ss.to_rings(q_values, num_phi=num_phi)
+            seed_ring.append(r)
+            
+
+        return seed_ring
     
         
 class KittyH5(object):
