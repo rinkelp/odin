@@ -1693,30 +1693,32 @@ class Rings(object):
                              "of the `tolerance` parameter.")
         
         return int(q_ind)
-    
 
-    def dePolarize(self,outOfPlane):
-	""" 
-	Applies a polarization correction to the rings.
-	
-	Parameters 
-	----------
-	outOfPlane : float
-	    fraction of polarization out of the synchrotron plane (between 0 and 1)
-	"""
-        logger.warning("Warning, depolarize is UNTESTED!!")
-        wave = self.k / 2. / np.pi
-	for i in xrange(self.num_q):
-	  q           = self.q_values[i]
-  	  theta       = np.arcsin( q*wave / 4./ np.pi)
-          SinTheta    = np.sin( 2 * theta )
-	  phis = self.phi_values
-	  for j in xrange( len( phis ) ):
-	    correction  = outOfPlane      * ( 1. - SinTheta**2 *  np.cos( phis[j] )**2 ) 
-	    correction += (1.-outOfPlane) * ( 1. - SinTheta**2 *  np.sin( phis[j] )**2 ) 
-	    self.polar_intensities[ : , i , j ]  /= correction
 
+    def dePolarize(self, outOfPlane=0.99):
+        """
+        Applies a polarization correction to the rings.
+        Parameters
+        ----------
+        outOfPlane : float
+        fraction of polarization out of the synchrotron plane (between 0 and 1)
+        """
+        qs   = self.q_values
+        wave = 2. * np.pi / self.k
+        I    = self.polar_intensities
+        phis = np.linespace(0, 2*np.pi, self.num_phi )
         
+        for i in xrange( len ( qs ) ):
+            q         = qs[i]
+            theta     = np.arcsin( q*wave / 4./ np.pi)
+            SinTheta  = np.sin( 2 * theta )
+            phis      = np.linspace( 0,2*np.pi, num_phi )
+            correctn  = outOfPlane      * ( 1. - SinTheta**2 * np.cos( phis )**2 )
+            correctn += (1.-outOfPlane) * ( 1. - SinTheta**2 * np.sin( phis )**2 )
+            II[:,i]  /= correctn
+
+        return 
+
     def intensity_profile(self):
         """
         Averages over the azimuth phi to obtain an intensity profile.
