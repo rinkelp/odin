@@ -24,10 +24,12 @@ from odin import scatter
 from odin.interp import Bcinterp
 from odin.utils import unique_rows, maxima, random_pairs
 from odin.corr import correlate as gap_correlate
+# from odin import corr
 
 from mdtraj import trajectory, io
 
-from odin import corr
+import matplotlib.pyplot as plt
+
 
 # ------------------------------------------------------------------------------
 # FUNDAMENTAL CONSTANTS
@@ -1216,7 +1218,7 @@ class Shotset(object):
                 polar_intensities[i,:,:] = shot_pi.reshape(num_q, num_phi)
 
 
-            # mask points that missed
+            # unmask points that we have data for
             polar_mask[intersect] = np.bool(True)
 
             # next, mask any points that should be masked by the real mask
@@ -1232,9 +1234,13 @@ class Shotset(object):
                 sub_mask = self.mask[int_start:int_end].reshape(size)
                 sixteen_mask = filters.minimum_filter(sub_mask, size=(4,4),
                                                       mode='nearest')
-
-                u = unique_rows( np.floor(pix_n) ).astype(np.int)
-                polar_mask[intersect] = sixteen_mask[u] # false if masked
+                assert sixteen_mask.dtype == np.bool
+                
+                # copy the mask values from in sixteen_mask -- which is expanded
+                # from the original mask to include an area of 16 px around each
+                # originally masked px -- into the polar mask. False is masked.
+                mp = np.floor(pix_n).astype(np.int)
+                polar_mask[intersect] = sixteen_mask[mp[:,0],mp[:,1]]
 
             # increment index for self.intensities -- the real/measured intst.
             int_start += n_int
