@@ -1,0 +1,47 @@
+
+
+ODIN game plan
+--------------
+-- Fix Known Bugs
+-- X-ray scattering
+-- NMR
+-- Drive OpenMM
+
+
+Drive OpenMM
+------------
+
+(1) Implement or access the OpenMM API for an MC move
+(2) Implement MC hooks into ODIN
+(3) Generate a directory structure for keeping trajectory data around
+(4) MySQL db for keeping track of trajectories, predictions from trajs, expt data
+
+
+
+NMR
+---
+
+(1) Enumerate NMR experiments we might hope to predict, and find out what prediction methods exist to model those experiments.
+
+-- Chemical shifts
+-- J-couplings
+-- RDCs
+
+
+(2) Implement a program to acquire and parse available NMR datasets.
+
+-- BMRB, etc.
+
+(3) Acquire/implement prediction algorithms, along with a python interface.
+
+(4) Plug that interface into ODIN ExptData classes.
+
+
+
+
+X-ray Scattering
+----------------
+(1) Implement a KamSol program to speedily predict scattering patterns.
+(2) Plug this into ExptData
+
+
