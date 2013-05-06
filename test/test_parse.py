@@ -44,7 +44,7 @@ class TestCBF(object):
         c = self.cbf.corner
         x = self.cbf.pixel_size
         y = self.cbf.center
-        ref = (-x[0] * float(y[0]), -x[1] * float(y[1]))
+        ref = (-x[1] * float(y[1]), -x[0] * float(y[0]))
         print ref, c
         assert ref == c
 

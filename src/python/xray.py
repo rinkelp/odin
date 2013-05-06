@@ -1216,7 +1216,7 @@ class Shotset(object):
                 polar_intensities[i,:,:] = shot_pi.reshape(num_q, num_phi)
 
 
-            # mask points that missed
+            # unmask points that we have data for
             polar_mask[intersect] = np.bool(True)
 
             # next, mask any points that should be masked by the real mask
