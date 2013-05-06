@@ -93,11 +93,17 @@ class CBF(object):
             
         # add mask specific to the detector
         if self.detector_type.startswith('PILATUS 6M'):
+            
             logger.info('Identified detector type as: PILATUS 6M')
+            
+            # add the default mask
             if self.mask == None:
                 self.mask = self._pilatus_mask()
             else:
                 self.mask *= self._pilatus_mask()
+                
+            # also, mask any negative pixels
+            self.mask *= np.logical_not(self.intensities < 0.0)
             
         else:
             logger.debug('Unknown detector type: %s' % self._info['Detector'])
