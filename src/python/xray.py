@@ -1705,14 +1705,21 @@ class Rings(object):
         
         I      = self.polar_intensities
         mask   = self.polar_mask
+         
+#       give each shot unit mean 
+        I_mean = np.sum( I * mask, axis=2 ) / np.sum( mask,axis=1)
+        I     /= I_mean[:,:,None]
         
-        I_mean  = np.sum( I * mask, axis=2 ) / np.sum( mask,axis=1)
-        I /= I_mean[:,:,None]
-        I_mean  = np.sum( I*mask, axis=0 ) / self.num_shots
-        I = I*mask / I_mean
-        I = np.nan_to_num( I )
+#       divide each polar pixel by its mean across the shot set, normalzes out some detector artifacts
+        I_mean = np.sum( I*mask, axis=0 ) / self.num_shots
+        I     /= I_mean
         
-        return        
+#       This doesn;t matter since only masked pixels become nans in this normalization
+        I      = np.nan_to_num( I )
+        
+#       consider re-scaling the intensity in |q|
+        
+        return
 
 
     def dePolarize(self, outOfPlane=0.99):
