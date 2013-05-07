@@ -1695,7 +1695,7 @@ class Rings(object):
         return int(q_ind)
 
 
-   def normalize(self):
+    def normalize(self):
         """
         Normalizes the intensitues of each ring-shot by the average value around the ring.
         Parameters
