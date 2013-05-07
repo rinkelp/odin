@@ -1705,14 +1705,21 @@ class Rings(object):
         
         I      = self.polar_intensities
         mask   = self.polar_mask
+         
+#       give each shot unit mean 
+        I_mean = np.sum( I * mask, axis=2 ) / np.sum( mask,axis=1)
+        I     /= I_mean[:,:,None]
         
-        I_mean  = np.sum( I * mask, axis=2 ) / np.sum( mask,axis=1)
-        I /= I_mean[:,:,None]
-        I_mean  = np.sum( I*mask, axis=0 ) / self.num_shots
-        I = I*mask / I_mean
-        I = np.nan_to_num( I )
+#       divide each polar pixel by its mean across the shot set, normalzes out some detector artifacts
+        I_mean = np.sum( I*mask, axis=0 ) / self.num_shots
+        I     /= I_mean
         
-        return        
+#       This doesn;t matter since only masked pixels become nans in this normalization
+        I      = np.nan_to_num( I )
+        
+#       consider re-scaling the intensity in |q|
+        
+        return
 
 
     def dePolarize(self, outOfPlane=0.99):
@@ -1726,18 +1733,18 @@ class Rings(object):
         qs   = self.q_values
         wave = 2. * np.pi / self.k
         I    = self.polar_intensities
-        phis = np.linespace(0, 2*np.pi, self.num_phi )
+        phis = self.phi_values
         
         for i in xrange( len ( qs ) ):
             q         = qs[i]
             theta     = np.arcsin( q*wave / 4./ np.pi)
             SinTheta  = np.sin( 2 * theta )
-            phis      = np.linspace( 0,2*np.pi, num_phi )
             correctn  = outOfPlane      * ( 1. - SinTheta**2 * np.cos( phis )**2 )
             correctn += (1.-outOfPlane) * ( 1. - SinTheta**2 * np.sin( phis )**2 )
-            II[:,i]  /= correctn
+            I[:,i,:]  /= correctn
 
         return 
+    
 
     def intensity_profile(self):
         """
@@ -2252,10 +2259,13 @@ class Rings(object):
             raise ValueError('Two rings must have exactly the same wavenumber (k)')
             
         combined_pi = np.vstack( (self.polar_intensities, other_rings.polar_intensities) )
-        
-        combined = Rings(self.q_values, combined_pi, self.k, polar_mask=self.polar_mask)
-        
-        return combined
+        self.polar_intensities = combined_pi
+
+        # TJL changed call signature to be like List.append()
+        #combined = Rings(self.q_values, combined_pi, self.k, polar_mask=self.polar_mask)
+        #return combined
+
+        return
 
 
 def _q_grid_as_xyz(q_values, num_phi, k):
