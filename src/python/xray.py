@@ -1726,7 +1726,7 @@ class Rings(object):
         qs   = self.q_values
         wave = 2. * np.pi / self.k
         I    = self.polar_intensities
-        phis = np.linespace(0, 2*np.pi, self.num_phi )
+        phis = self.phi_values
         
         for i in xrange( len ( qs ) ):
             q         = qs[i]
