@@ -471,7 +471,7 @@ class CBF(object):
         
         
         for cbf_file in list_of_cbf_files[1:]:
-            ss = cls(list_of_cbf_files[0], autocenter=False).as_shotset()
+            ss = cls(cbf_file, autocenter=False).as_shotset()
             r  = ss.to_rings(q_values, num_phi=num_phi)
             seed_ring.append(r)
             
