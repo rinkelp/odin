@@ -1732,12 +1732,12 @@ class Rings(object):
             q         = qs[i]
             theta     = np.arcsin( q*wave / 4./ np.pi)
             SinTheta  = np.sin( 2 * theta )
-            phis      = np.linspace( 0,2*np.pi, num_phi )
             correctn  = outOfPlane      * ( 1. - SinTheta**2 * np.cos( phis )**2 )
             correctn += (1.-outOfPlane) * ( 1. - SinTheta**2 * np.sin( phis )**2 )
-            II[:,i]  /= correctn
+            I[:,i,:]  /= correctn
 
         return 
+    
 
     def intensity_profile(self):
         """
