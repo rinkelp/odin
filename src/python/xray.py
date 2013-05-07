@@ -1724,7 +1724,7 @@ class Rings(object):
         Parameters
         ----------
         outOfPlane : float
-        fraction of polarization out of the synchrotron plane (between 0 and 1)
+            The fraction of the beam polarization out of the synchrotron plane (between 0 and 1)
         """
         qs   = self.q_values
         wave = 2. * np.pi / self.k
