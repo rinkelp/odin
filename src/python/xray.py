@@ -1695,6 +1695,29 @@ class Rings(object):
         return int(q_ind)
 
 
+   def normalize(self):
+        """
+        Normalizes the intensitues of each ring-shot by the average value around the ring.
+        Parameters
+        ----------
+        None : void
+        """
+        I      = self.polar_intensities
+        mask   = self.polar_mask
+        
+        I_mean  = np.sum( I * mask, axis=2 ) / np.sum( mask,axis=1)
+
+	I /= I_mean[:,:,None]
+
+	I_mean  = np.sum( I*mask, axis=0 ) / self.num_shots
+
+	I = I*mask / I_mean
+
+	I = np.nan_to_num( I )
+
+        return        
+
+
     def dePolarize(self, outOfPlane=0.99):
         """
         Applies a polarization correction to the rings.
