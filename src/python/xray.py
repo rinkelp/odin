@@ -2252,10 +2252,13 @@ class Rings(object):
             raise ValueError('Two rings must have exactly the same wavenumber (k)')
             
         combined_pi = np.vstack( (self.polar_intensities, other_rings.polar_intensities) )
-        
-        combined = Rings(self.q_values, combined_pi, self.k, polar_mask=self.polar_mask)
-        
-        return combined
+        self.polar_intensities = combined_pi
+
+        # TJL changed call signature to be like List.append()
+        #combined = Rings(self.q_values, combined_pi, self.k, polar_mask=self.polar_mask)
+        #return combined
+
+        return
 
 
 def _q_grid_as_xyz(q_values, num_phi, k):
