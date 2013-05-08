@@ -9,13 +9,15 @@ using namespace std;
 class RingScatter
 {
 
-  vector<float> quats,Q,THETA,XYZA,cromermann,Rx,Ry,Rz;
+  vector<float> quats,Q,THETA,X,Y,Z,cromermann,Rx,Ry,Rz;
+  
   vector<int> CM_AID; // atom type decoder for cromermann array
   vector<string> QVALS; // 
   
   float  wavelen,qres; // wavelength and q resolution
   int    n_rotations,Nphi; // num random rotations and num azimutha; bins per ring
   int    numAtomTypes,numAtoms; // num distinct atom types and total num atoms
+  int     pass_rand;
   
   float * ringsR;
   float * ringsI;
@@ -41,7 +43,7 @@ class RingScatter
   void split_string(const string &s, char delim, vector<string> &elems);
 
 public:
-  RingScatter (string in_file, int Nphi_, int n_rotations_, float qres_, float wavelen_, string qstring_);
+  RingScatter (string in_file, int Nphi_, int n_rotations_, float qres_, float wavelen_, string qstring_, int rands);
  ~RingScatter ();
 
 };
