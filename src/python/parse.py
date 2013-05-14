@@ -289,7 +289,7 @@ class CBF(object):
         self.corner
         """
         if self.autocenter:
-            center = find_center(self.intensities, mask=self.mask)
+            center = find_center(self.intensities, mask=self.mask, pix_res=0.01)
         else:
             center = np.array(self.intensities_shape) / 2.0
         return center
