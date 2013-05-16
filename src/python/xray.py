@@ -773,7 +773,7 @@ class Detector(Beam):
                     (pix_n[:,1] >= 0.0) * (pix_n[:,1] <= float(shape[1]-1))
 
         logger.debug('%.3f %% of pixels intersected by grid %d' % \
-            ( (np.sum(intersect) / np.product(intersect.shape) * 100.0),
+            ( (float(np.sum(intersect)) / float(np.product(intersect.shape)) * 100.0),
             grid_index) )
 
         return pix_n[intersect], intersect
@@ -977,7 +977,12 @@ class Shotset(object):
     @property
     def num_shots(self):
         return self.intensities.shape[0]
-
+        
+        
+    @property
+    def num_pixels(self):
+        return self.intensities.shape[1]
+    
 
     def __len__(self):
         return self.num_shots
@@ -1191,13 +1196,16 @@ class Shotset(object):
             # compute how many pixels this grid has
             n_int = int( np.product(size) )
             int_end += n_int
+            
+            assert not int_end > self.num_pixels
 
             # compute where the scattering vectors intersect the detector
             pix_n, intersect = self.detector._compute_intersections(q_vectors, g)
 
             if np.sum(intersect) == 0:
-                logger.warning('Detector array (%d) had no pixels inside the \
-                interpolation area!' % g)
+                logger.debug('Detector array (%d) had no pixels inside the '
+                'interpolation area!' % g)
+                int_start += n_int # increment
                 continue
 
             # --- loop over shots
@@ -1209,14 +1217,14 @@ class Shotset(object):
 
                 # corner: (0,0); x/y size: 1.0; x is fast, y slow
                 shot_pi = np.zeros(num_q * num_phi)
-                shot_pm = np.zeros(num_q * num_phi, dtype=np.bool)
-
                 interp = Bcinterp(self.intensities[i,int_start:int_end],
                                   1.0, 1.0, size[1], size[0], 0.0, 0.0)
 
                 shot_pi[intersect] = interp.evaluate(pix_n[:,1], pix_n[:,0])
-                polar_intensities[i,:,:] = shot_pi.reshape(num_q, num_phi)
+                polar_intensities[i,:,:] += shot_pi.reshape(num_q, num_phi)
 
+                print intersect, i
+                
 
             # unmask points that we have data for
             polar_mask[intersect] = np.bool(True)
@@ -2301,4 +2309,33 @@ def _q_grid_as_xyz(q_values, num_phi, k):
     qxyz[:,2] = np.repeat(q_z, num_phi)                                      # q_z
 
     return qxyz
+
+
+def load(filename):
+    """
+    Load a file from disk, into a format corresponding to an object in 
+    odin.xray. Includes readers for {.dtc, .shot, .ring}.
+    
+    Parameters
+    ----------
+    filename : str
+        The path to a file.
+    
+    Returns
+    -------
+    obj : generic
+        An odin object, whos type depends on the file extension.
+    """
+    
+    if filename.endswith('.dtc'):
+        obj = Detector.load(filename)
+    elif filename.endswith('.shot'):
+        obj = Shotset.load(filename)
+    elif filename.endswith('.ring'):
+        obj = Rings.load(filename)
+    else:
+        raise IOError('Could not understand format of file: %s. Extension must '
+                      ' be one of {.dtc, .shot, .ring}.' % filename)
+        
+    return obj
 
