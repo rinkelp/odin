@@ -24,7 +24,6 @@ from odin import scatter
 from odin.interp import Bcinterp
 from odin.utils import unique_rows, maxima, random_pairs
 from odin.corr import correlate as gap_correlate
-# from odin import corr
 
 from mdtraj import trajectory, io
 
@@ -1222,8 +1221,6 @@ class Shotset(object):
 
                 shot_pi[intersect] = interp.evaluate(pix_n[:,1], pix_n[:,0])
                 polar_intensities[i,:,:] += shot_pi.reshape(num_q, num_phi)
-
-                print intersect, i
                 
 
             # unmask points that we have data for
@@ -2294,6 +2291,8 @@ def _q_grid_as_xyz(q_values, num_phi, k):
     qxyz : ndarray, float
         An N x 3 array of (q_x, q_y, q_z)
     """
+    
+    q_values = np.array(q_values)
 
     phi_values = np.linspace( 0.0, 2.0*np.pi, num=num_phi )
     num_q = len(q_values)

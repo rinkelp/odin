@@ -7,7 +7,7 @@ import os, sys
 import warnings
 from nose import SkipTest
 
-from odin import xray, utils, parse, structure, math2, utils
+from odin import xray, utils, parse, structure, math2, utils, cpuscatter
 from odin.testing import skip, ref_file, expected_failure, brute_force_masked_correlation
 from odin.refdata import cromer_mann_params
 from mdtraj import trajectory, io
@@ -353,7 +353,7 @@ class TestShotset(object):
 
     def test_to_rings(self):
         
-        t = structure.load_coor('reference/gold1k.coor')
+        t = structure.load_coor(ref_file('gold1k.coor'))
         shot = xray.Shotset.simulate(t, self.d, 1, 1)
         
         shot_ip = shot.intensity_profile(0.1)
@@ -372,6 +372,46 @@ class TestShotset(object):
         print x
         assert x < 0.2 # intensity mismatch
         assert_allclose(rings_ip[:,0], shot_ip[:,0], err_msg='test impl error')
+
+    def test_multi_panel_interp(self):
+        # regression test ensuring detectors w/multiple basisgrid panels
+        # are handled correctly
+        
+        t = structure.load_coor(ref_file('gold1k.coor'))
+        q_values = np.array([2.66])
+        multi_d = xray.Detector.load(ref_file('lcls_test.dtc'))
+        num_phi = 1080
+        num_molecules = 1
+        
+        xyzlist = t.xyz[0,:,:] * 10.0 # convert nm -> ang. / first snapshot
+        atomic_numbers = np.array([ a.element.atomic_number for a in t.topology.atoms() ])
+        
+        # generate a set of random numbers that we can use to make sure the
+        # two simulations have the same molecular orientation (and therefore)
+        # output
+        rfloats = np.random.rand(num_molecules, 3)
+        
+        # --- first, scatter onto a perfect ring
+        q_grid = xray._q_grid_as_xyz(q_values, num_phi, multi_d.k)
+        ring_i = cpuscatter.simulate(num_molecules, q_grid, xyzlist, 
+                                     atomic_numbers, rfloats=rfloats)
+        perf = xray.Rings(q_values, ring_i[None,None,:], multi_d.k)
+                                    
+        # --- next, to the full detector
+        q_grid2 = multi_d.reciprocal
+        real_i = cpuscatter.simulate(num_molecules, q_grid2, xyzlist, 
+                                     atomic_numbers, rfloats=rfloats)
+
+        # interpolate
+        ss = xray.Shotset(real_i, multi_d)
+        real = ss.to_rings(q_values, num_phi)
+        
+        # count the number of points that differ significantly between the two
+        diff = ( np.abs((perf.polar_intensities[0,0,:] - real.polar_intensities[0,0,:]) \
+                 / real.polar_intensities[0,0,:]) > 1e-3)
+        print np.sum(diff)
+        assert np.sum(diff) < 300
+
 
     def test_io(self):
         if os.path.exists('test.shot'): os.remove('test.shot')
