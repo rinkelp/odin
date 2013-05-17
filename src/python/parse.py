@@ -975,4 +975,46 @@ class CXI(object):
         return xray.Shot(intensities, d)
 
 
-
+def cheetah_instensities_to_odin(intensities):
+    """
+    Convert a Cheetah intensity array (shape: 1480, 1552) to a flat Odin array
+    that can be immediately used in a Shotset.
+        
+    Parameters
+    ----------
+    intensities : np.ndarray, float
+        The cheetah intensity data.
+        
+    Returns
+    -------
+    flat_intensities : np.ndarray, float
+        The Odin intensities
+    """
+        
+    if not intensities.shape == (1480, 1552):
+        raise ValueError('`intensities` argument array incorrect shape! Must be:'
+                         ' (1480, 1552), got %s.' % str(intensities.shape))
+        
+    flat_intensities = np.zeros(1480 * 1552, dtype=intensities.dtype)
+        
+    for q in range(4):
+        for twoXone in range(8):
+            
+            # extract the cheetah intensities
+            x_start = 388 * q
+            x_stop  = 388 * (q+1)
+            
+            y_start = 185 * twoXone
+            y_stop  = 185 * (twoXone + 1)
+            
+            # each sec is a ASIC, both belong to the same 2x1
+            sec1, sec2 = np.hsplit(raw_image[y_start:y_stop,x_start:x_stop], 2)
+            
+            # inject them into the Odin array
+            n_ASIC_pixels = 185 * 194
+            flat_start = (q * 8 + twoXone) * n_ASIC_pixels
+            
+            flat_intensities[flat_start:flat_start+n_ASIC_pixels] = sec1.flatten()
+            flat_intensities[flat_start+n_ASIC_pixels:flat_start+n_ASIC_pixels*2] = sec2.flatten()
+            
+    return flat_intensities
