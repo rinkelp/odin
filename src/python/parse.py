@@ -36,6 +36,15 @@ except ImportError as e:
 class CBF(object):
     """
     A class for parsing CBF files. Depends on fabio.
+    
+    NOTES ON GEOMETRY -- the geometry for different detectors is different.
+    
+    PILATUS 6M (SSRL 12-2)
+    ----------------------
+    Here, data are read out as a 2d array:
+        slow: horizontal wrt lab frame / first array dim  / scans in y
+        fast: vertical wrt lab frame   / second array dim / scans in x
+    
     """
     
     def __init__(self, filename, mask=None, autocenter=True):
@@ -84,11 +93,17 @@ class CBF(object):
             
         # add mask specific to the detector
         if self.detector_type.startswith('PILATUS 6M'):
+            
             logger.info('Identified detector type as: PILATUS 6M')
+            
+            # add the default mask
             if self.mask == None:
                 self.mask = self._pilatus_mask()
             else:
                 self.mask *= self._pilatus_mask()
+                
+            # also, mask any negative pixels
+            self.mask *= np.logical_not(self.intensities < 0.0)
             
         else:
             logger.debug('Unknown detector type: %s' % self._info['Detector'])
@@ -104,6 +119,9 @@ class CBF(object):
         
     @property
     def intensities_shape(self):
+        """
+        Returns the shape (slow, fast)
+        """
         shp = (int(self._info['X-Binary-Size-Second-Dimension']), 
                int(self._info['X-Binary-Size-Fastest-Dimension']))
         return shp
@@ -138,7 +156,9 @@ class CBF(object):
     @property
     def center(self):
         """
-        The indicies of the pixel nearest the center
+        The center of the image, in PIXEL UNITS and as a tuple for dimensions
+        (SLOW, FAST). Note that this is effectively (y,x), if y is the
+        vertical direction in the lab frame.
         """
         if not hasattr(self, '_center'):
             self._center = self._find_center()
@@ -148,10 +168,11 @@ class CBF(object):
     @property
     def corner(self):
         """
-        The bottom left corner position, in real space.
+        The bottom left corner position, in real space (x,y). Note that this
+        corresponds to (FAST, SLOW) (!). This is the opposite of "center".
         """
-        return (-self.pixel_size[0] * self.center[0], 
-                -self.pixel_size[1] * self.center[1])
+        return (-self.pixel_size[1] * self.center[1], 
+                -self.pixel_size[0] * self.center[0])
         
         
     @property
@@ -259,10 +280,16 @@ class CBF(object):
         Returns
         -------
         center : tuple of ints
-            The indicies of the pixel nearest the center of the Bragg peaks.
+            The indicies of the pixel nearest the center of the Bragg peaks. The
+            center is returned in pixel units in terms of (slow, fast).
+            
+        See Also
+        --------
+        self.center
+        self.corner
         """
         if self.autocenter:
-            center = find_center(self.intensities, mask=self.mask)
+            center = find_center(self.intensities, mask=self.mask, pix_res=0.01)
         else:
             center = np.array(self.intensities_shape) / 2.0
         return center
@@ -283,30 +310,35 @@ class CBF(object):
         border_size = int(border_size)
         mask = np.ones(self.intensities_shape, dtype=np.bool)
 
-        # below we have the rows (x_gaps) and columns (y_gaps) to mask
+        # below we have the cols (x_gaps) and rows (y_gaps) to mask
+        # these mask the ASIC gaps
 
-        x_gaps = [(486-border_size,494+border_size),
-                  (980-border_size,988+border_size),
-                  (1474-border_size,1482+border_size),
-                  (1968-border_size,1976+border_size)]
-
-        y_gaps = [(194-border_size,212+border_size),
-                  (406-border_size,424+border_size),
-                  (618-border_size,636+border_size),
-                  (830-border_size,848+border_size),
-                  (1042-border_size,1060+border_size),
-                  (1254-border_size,1272+border_size),
-                  (1466-border_size,1484+border_size),
-                  (1678-border_size,1696+border_size),
-                  (1890-border_size,1908+border_size),
-                  (2102-border_size,2120+border_size),
-                  (2314-border_size,2332+border_size)]
+        x_gaps = [(194-border_size,  212+border_size),
+                  (406-border_size,  424+border_size),
+                  (618-border_size,  636+border_size),
+                  (830-border_size,  848+border_size),
+                  (1042-border_size, 1060+border_size),
+                  (1254-border_size, 1272+border_size),
+                  (1466-border_size, 1484+border_size),
+                  (1678-border_size, 1696+border_size),
+                  (1890-border_size, 1908+border_size),
+                  (2102-border_size, 2120+border_size),
+                  (2314-border_size, 2332+border_size)]
+                  
+        y_gaps = [(486-border_size,  494+border_size),
+                  (980-border_size,  988+border_size),
+                  (1474-border_size, 1482+border_size),
+                  (1968-border_size, 1976+border_size)]
 
         for x in x_gaps:
             mask[x[0]:x[1],:] = np.bool(False)
 
         for y in y_gaps:
             mask[:,y[0]:y[1]] = np.bool(False)
+        
+            
+        # we also mask the beam stop for 12-2...
+        mask[1200:1325,1164:] = np.bool(False)
 
         return mask
 
@@ -375,7 +407,7 @@ class CBF(object):
             for i,fn in enumerate(list_of_cbf_files[1:]):
                  
                 # i+1 b/c we already saved one shot
-                d = {('shot%d' % (i+1,)) : cls(fn).intensities.flatten()}
+                d = {('shot%d' % (i+1,)) : cls(fn, autocenter=False).intensities.flatten()}
                 io.saveh( shotset_filename, **d )
                 
             io.saveh( shotset_filename, num_shots=np.array([ len(list_of_cbf_files) ]) )
@@ -395,6 +427,58 @@ class CBF(object):
             ss = xray.Shotset( shot_i, seed_shot.detector, seed_shot.mask )
 
             return ss
+            
+            
+    @classmethod
+    def files_to_rings(cls, list_of_cbf_files, q_values, num_phi,
+                       autocenter=True):
+        """
+        Convert a bunch of CBF files to a single ODIN rings instance.
+
+        Parameters
+        ----------
+        list_of_cbf_files : list of str
+            A list of paths to CBF files to convert.
+            
+        q_values : ndarray, float
+            A one-D array containing the |q| values (in inverse Angstroms) that
+            you want to convert
+
+        Optional Parameters
+        -------------------
+        num_phi : int
+            The number of points around each ring to interpolate.
+        
+        shotset_filename : str
+            The filename of the shotset to write to disk.
+
+        autocenter : bool
+            Whether or not to automatically determine the center of the detector.
+
+        Returns
+        -------
+        rings : odin.xray.Rings
+            If `rings_filename` is None, then returns the shotset object
+        """
+        
+        # save the center from one so we don't have to compute it for all
+        seed_cbf = cls(list_of_cbf_files[0], autocenter=autocenter)
+        center = seed_cbf.center.copy()
+        
+        
+        seed_ss = seed_cbf.as_shotset()
+        seed_ring = seed_ss.to_rings(q_values, num_phi=num_phi)
+        
+        
+        for cbf_file in list_of_cbf_files[1:]:
+            cbf = cls(cbf_file, autocenter=False)
+            cbf._center = center
+            ss = cbf.as_shotset()
+            r  = ss.to_rings(q_values, num_phi=num_phi)
+            seed_ring.append(r)
+            
+
+        return seed_ring
     
         
 class KittyH5(object):
@@ -891,4 +975,46 @@ class CXI(object):
         return xray.Shot(intensities, d)
 
 
-
+def cheetah_instensities_to_odin(intensities):
+    """
+    Convert a Cheetah intensity array (shape: 1480, 1552) to a flat Odin array
+    that can be immediately used in a Shotset.
+        
+    Parameters
+    ----------
+    intensities : np.ndarray, float
+        The cheetah intensity data.
+        
+    Returns
+    -------
+    flat_intensities : np.ndarray, float
+        The Odin intensities
+    """
+        
+    if not intensities.shape == (1480, 1552):
+        raise ValueError('`intensities` argument array incorrect shape! Must be:'
+                         ' (1480, 1552), got %s.' % str(intensities.shape))
+        
+    flat_intensities = np.zeros(1480 * 1552, dtype=intensities.dtype)
+        
+    for q in range(4):
+        for twoXone in range(8):
+            
+            # extract the cheetah intensities
+            x_start = 388 * q
+            x_stop  = 388 * (q+1)
+            
+            y_start = 185 * twoXone
+            y_stop  = 185 * (twoXone + 1)
+            
+            # each sec is a ASIC, both belong to the same 2x1
+            sec1, sec2 = np.hsplit(raw_image[y_start:y_stop,x_start:x_stop], 2)
+            
+            # inject them into the Odin array
+            n_ASIC_pixels = 185 * 194
+            flat_start = (q * 8 + twoXone) * n_ASIC_pixels
+            
+            flat_intensities[flat_start:flat_start+n_ASIC_pixels] = sec1.flatten()
+            flat_intensities[flat_start+n_ASIC_pixels:flat_start+n_ASIC_pixels*2] = sec2.flatten()
+            
+    return flat_intensities

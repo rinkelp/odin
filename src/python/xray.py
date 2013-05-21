@@ -27,7 +27,8 @@ from odin.corr import correlate as gap_correlate
 
 from mdtraj import trajectory, io
 
-from odin import corr
+import matplotlib.pyplot as plt
+
 
 # ------------------------------------------------------------------------------
 # FUNDAMENTAL CONSTANTS
@@ -771,7 +772,7 @@ class Detector(Beam):
                     (pix_n[:,1] >= 0.0) * (pix_n[:,1] <= float(shape[1]-1))
 
         logger.debug('%.3f %% of pixels intersected by grid %d' % \
-            ( (np.sum(intersect) / np.product(intersect.shape) * 100.0),
+            ( (float(np.sum(intersect)) / float(np.product(intersect.shape)) * 100.0),
             grid_index) )
 
         return pix_n[intersect], intersect
@@ -975,7 +976,12 @@ class Shotset(object):
     @property
     def num_shots(self):
         return self.intensities.shape[0]
-
+        
+        
+    @property
+    def num_pixels(self):
+        return self.intensities.shape[1]
+    
 
     def __len__(self):
         return self.num_shots
@@ -1189,13 +1195,16 @@ class Shotset(object):
             # compute how many pixels this grid has
             n_int = int( np.product(size) )
             int_end += n_int
+            
+            assert not int_end > self.num_pixels
 
             # compute where the scattering vectors intersect the detector
             pix_n, intersect = self.detector._compute_intersections(q_vectors, g)
 
             if np.sum(intersect) == 0:
-                logger.warning('Detector array (%d) had no pixels inside the \
-                interpolation area!' % g)
+                logger.debug('Detector array (%d) had no pixels inside the '
+                'interpolation area!' % g)
+                int_start += n_int # increment
                 continue
 
             # --- loop over shots
@@ -1207,16 +1216,14 @@ class Shotset(object):
 
                 # corner: (0,0); x/y size: 1.0; x is fast, y slow
                 shot_pi = np.zeros(num_q * num_phi)
-                shot_pm = np.zeros(num_q * num_phi, dtype=np.bool)
-
                 interp = Bcinterp(self.intensities[i,int_start:int_end],
                                   1.0, 1.0, size[1], size[0], 0.0, 0.0)
 
                 shot_pi[intersect] = interp.evaluate(pix_n[:,1], pix_n[:,0])
-                polar_intensities[i,:,:] = shot_pi.reshape(num_q, num_phi)
+                polar_intensities[i,:,:] += shot_pi.reshape(num_q, num_phi)
+                
 
-
-            # mask points that missed
+            # unmask points that we have data for
             polar_mask[intersect] = np.bool(True)
 
             # next, mask any points that should be masked by the real mask
@@ -1232,9 +1239,13 @@ class Shotset(object):
                 sub_mask = self.mask[int_start:int_end].reshape(size)
                 sixteen_mask = filters.minimum_filter(sub_mask, size=(4,4),
                                                       mode='nearest')
-
-                u = unique_rows( np.floor(pix_n) ).astype(np.int)
-                polar_mask[intersect] = sixteen_mask[u] # false if masked
+                assert sixteen_mask.dtype == np.bool
+                
+                # copy the mask values from in sixteen_mask -- which is expanded
+                # from the original mask to include an area of 16 px around each
+                # originally masked px -- into the polar mask. False is masked.
+                mp = np.floor(pix_n).astype(np.int)
+                polar_mask[intersect] = sixteen_mask[mp[:,0],mp[:,1]]
 
             # increment index for self.intensities -- the real/measured intst.
             int_start += n_int
@@ -1687,30 +1698,59 @@ class Rings(object):
                              "of the `tolerance` parameter.")
         
         return int(q_ind)
+
+
+    def normalize(self):
+        """
+        Normalizes the intensitues of each ring-shot by the average value around the ring.
+        Parameters
+        ----------
+        None : void
+        """
+        
+        I      = self.polar_intensities
+        mask   = self.polar_mask
+         
+#       give each shot unit mean 
+        I_mean = np.sum( I * mask, axis=2 ) / np.sum( mask,axis=1)
+        I     /= I_mean[:,:,None]
+        
+#       divide each polar pixel by its mean across the shot set, normalzes out some detector artifacts
+        I_mean = np.sum( I*mask, axis=0 ) / self.num_shots
+        I     /= I_mean
+        
+#       This doesn;t matter since only masked pixels become nans in this normalization
+        I      = np.nan_to_num( I )
+        
+#       consider re-scaling the intensity in |q|
+        
+        return
+
+
+    def dePolarize(self, outOfPlane=0.99):
+        """
+        Applies a polarization correction to the rings.
+        Parameters
+        ----------
+        outOfPlane : float
+            The fraction of the beam polarization out of the synchrotron plane (between 0 and 1)
+        """
+        qs   = self.q_values
+        wave = 2. * np.pi / self.k
+        I    = self.polar_intensities
+        phis = self.phi_values
+        
+        for i in xrange( len ( qs ) ):
+            q         = qs[i]
+            theta     = np.arcsin( q*wave / 4./ np.pi)
+            SinTheta  = np.sin( 2 * theta )
+            correctn  = outOfPlane      * ( 1. - SinTheta**2 * np.cos( phis )**2 )
+            correctn += (1.-outOfPlane) * ( 1. - SinTheta**2 * np.sin( phis )**2 )
+            I[:,i,:]  /= correctn
+
+        return 
     
 
-    def dePolarize(self,outOfPlane):
-	""" 
-	Applies a polarization correction to the rings.
-	
-	Parameters 
-	----------
-	outOfPlane : float
-	    fraction of polarization out of the synchrotron plane (between 0 and 1)
-	"""
-        logger.warning("Warning, depolarize is UNTESTED!!")
-        wave = self.k / 2. / np.pi
-	for i in xrange(self.num_q):
-	  q           = self.q_values[i]
-  	  theta       = np.arcsin( q*wave / 4./ np.pi)
-          SinTheta    = np.sin( 2 * theta )
-	  phis = self.phi_values
-	  for j in xrange( len( phis ) ):
-	    correction  = outOfPlane      * ( 1. - SinTheta**2 *  np.cos( phis[j] )**2 ) 
-	    correction += (1.-outOfPlane) * ( 1. - SinTheta**2 *  np.sin( phis[j] )**2 ) 
-	    self.polar_intensities[ : , i , j ]  /= correction
-
-        
     def intensity_profile(self):
         """
         Averages over the azimuth phi to obtain an intensity profile.
@@ -2224,10 +2264,13 @@ class Rings(object):
             raise ValueError('Two rings must have exactly the same wavenumber (k)')
             
         combined_pi = np.vstack( (self.polar_intensities, other_rings.polar_intensities) )
-        
-        combined = Rings(self.q_values, combined_pi, self.k, polar_mask=self.polar_mask)
-        
-        return combined
+        self.polar_intensities = combined_pi
+
+        # TJL changed call signature to be like List.append()
+        #combined = Rings(self.q_values, combined_pi, self.k, polar_mask=self.polar_mask)
+        #return combined
+
+        return
 
 
 def _q_grid_as_xyz(q_values, num_phi, k):
@@ -2248,6 +2291,8 @@ def _q_grid_as_xyz(q_values, num_phi, k):
     qxyz : ndarray, float
         An N x 3 array of (q_x, q_y, q_z)
     """
+    
+    q_values = np.array(q_values)
 
     phi_values = np.linspace( 0.0, 2.0*np.pi, num=num_phi )
     num_q = len(q_values)
@@ -2263,4 +2308,33 @@ def _q_grid_as_xyz(q_values, num_phi, k):
     qxyz[:,2] = np.repeat(q_z, num_phi)                                      # q_z
 
     return qxyz
+
+
+def load(filename):
+    """
+    Load a file from disk, into a format corresponding to an object in 
+    odin.xray. Includes readers for {.dtc, .shot, .ring}.
+    
+    Parameters
+    ----------
+    filename : str
+        The path to a file.
+    
+    Returns
+    -------
+    obj : generic
+        An odin object, whos type depends on the file extension.
+    """
+    
+    if filename.endswith('.dtc'):
+        obj = Detector.load(filename)
+    elif filename.endswith('.shot'):
+        obj = Shotset.load(filename)
+    elif filename.endswith('.ring'):
+        obj = Rings.load(filename)
+    else:
+        raise IOError('Could not understand format of file: %s. Extension must '
+                      ' be one of {.dtc, .shot, .ring}.' % filename)
+        
+    return obj
 
