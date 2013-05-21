@@ -20,7 +20,7 @@ using namespace std;
 
 RingScatter::RingScatter (
      string in_file, int   Nphi_,    int    n_rotations_,
-     float  qres_,   float wavelen_, string qstring_) 
+     float  qres_,   float wavelen_, string qstring_, int pass_rand_) 
 {
 
   Nphi        = Nphi_;        // num azimuthal points around each ring on detector
@@ -30,8 +30,10 @@ RingScatter::RingScatter (
                               // --> each integer is in units of qres
   n_rotations = n_rotations_; // number of random orientations to sample
   
-  rings       = new float[n_rotations*Nphi];
+  pass_rand    = pass_rand_;
 
+  ringsR       = new float[n_rotations*Nphi];
+  ringsI       = new float[n_rotations*Nphi];
 
 /*
   OPEN THE INPUT FILE CONTAING THE COORDINATE/CROMERMANN INFO.
@@ -48,15 +50,20 @@ RingScatter::RingScatter (
 /*
   READ THE ATOMIC COORDINATE INFO
 */
-  hid_t    data_id_xyza  = H5Dopen(h5_file_id,"xyza",H5P_DEFAULT); // open coordinate dataset
-  hid_t    space_xyza    = H5Dget_space (data_id_xyza);             // data space of coordinate dataset
-  hsize_t  size          = H5Dget_storage_size( data_id_xyza );     // size in bytes (BYTES) of coordinate info
-  numAtoms               = (int)size/16;                            // 4 floats per atom
-  float   *xyza          = new float[numAtoms*4];                   // x,y,z,id for each atom
-  herr_t   read_xyza     = H5Dread(data_id_xyza, H5T_NATIVE_FLOAT, H5S_ALL, H5S_ALL, H5P_DEFAULT, xyza);
+  hid_t    data_id_xyza  =  H5Dopen(h5_file_id,"xyza",H5P_DEFAULT);  // open coordinate dataset
+  hid_t    space_xyza    =  H5Dget_space (data_id_xyza);             // data space of coordinate dataset
+  hsize_t  size          =  H5Dget_storage_size( data_id_xyza );     // size in bytes (BYTES) of coordinate info
+  numAtoms               =  (int)size/16;                            // 4 floats per atom
+  float   *xyza          =  new float[numAtoms*4];                   // x,y,z,id for each atom
+  herr_t   read_xyza     =  H5Dread(data_id_xyza, H5T_NATIVE_FLOAT, H5S_ALL, H5S_ALL, H5P_DEFAULT, xyza);
   
-  for(int i=0;i < numAtoms*4;i++)
-    XYZA.push_back(xyza[i]);     // initialize the coordinate info
+  for(int i=0;i < numAtoms*4;i+=4)
+  {
+    X.push_back(xyza[i]);     // initialize the coordinate info
+    Y.push_back(xyza[i+1]);     // initialize the coordinate info
+    Z.push_back(xyza[i+2]);     // initialize the coordinate info
+  }
+  
   H5Dclose(data_id_xyza);        //close the dataset to keep things clean
 
   cout << "\n    Found coordinate information for " << numAtoms << " atoms ...\n";
@@ -64,11 +71,12 @@ RingScatter::RingScatter (
 /*
   READ THE CROMERMANN PARAMETERS
 */
+
   hid_t  data_id_cm_params  = H5Dopen(h5_file_id,"cm_param",H5P_DEFAULT);  // open coordinate dataset
-  size                      = H5Dget_storage_size( data_id_xyza );         // size in bytes (BYTES) of coordinate info
+  size                      = H5Dget_storage_size( data_id_cm_params );         // size in bytes (BYTES) of coordinate info
   numAtomTypes              = (int)size/36;                                // 9 floats per atom type
   float   *cm_params        = new float[numAtomTypes*9];                   // x,y,z,id for each atom
-  herr_t   read_cm_params   = H5Dread(data_id_xyza, H5T_NATIVE_FLOAT, H5S_ALL, H5S_ALL, H5P_DEFAULT, cm_params);
+  herr_t   read_cm_params   = H5Dread(data_id_cm_params, H5T_NATIVE_FLOAT, H5S_ALL, H5S_ALL, H5P_DEFAULT, cm_params);
   
   for(int i=0;i < numAtomTypes*9;i++)
     cromermann.push_back(cm_params[i]);     // initialize the parameter info
@@ -76,20 +84,59 @@ RingScatter::RingScatter (
   delete [] cm_params;
   formfactors = new float[numAtomTypes];    // array for storing form factos (see RingScatter::kernel)
 
-
 /*
   READ THE CROMERMANN ATOM IDS
 */
+
   hid_t    data_id_cm_aid  = H5Dopen(h5_file_id,"cm_aid",H5P_DEFAULT); // open coordinate dataset
   int     *cm_aid          = new int[numAtoms];                        // x,y,z,id for each atom
-  herr_t   read_cm_aid     = H5Dread(data_id_xyza, H5T_NATIVE_FLOAT, H5S_ALL, H5S_ALL, H5P_DEFAULT, cm_aid);
+  herr_t   read_cm_aid     = H5Dread(data_id_cm_aid, H5T_NATIVE_FLOAT, H5S_ALL, H5S_ALL, H5P_DEFAULT, cm_aid);
   
   for(int i=0;i < numAtoms;i++)
     CM_AID.push_back(cm_aid[i]);     // initialize the atom id info
   H5Dclose(data_id_cm_aid);          //close the dataset to keep things clean
   delete [] cm_aid;
 
+
+/*
+  READ THE RANDOM POSITIONS OF MOLECULES
+*/  
+  hid_t    data_id_rand_pos  = H5Dopen(h5_file_id,"rand_pos",H5P_DEFAULT);
+  float   *rand_pos          = new float[n_rotations*3];
+  herr_t   read_rand_pos     = H5Dread(data_id_rand_pos, H5T_NATIVE_FLOAT, H5S_ALL, H5S_ALL, H5P_DEFAULT, rand_pos);
+  
+  for(int i=0;i < n_rotations*3;i++)
+  {
+    Rx.push_back( rand_pos[i]  );    
+    Ry.push_back( rand_pos[i+1] );   
+    Rz.push_back( rand_pos[i+2] );
+  }
+  H5Dclose(data_id_rand_pos);          //close the dataset to keep things clean
+  delete [] rand_pos;
+
   H5Fclose(h5_file_id);             // close the file so we can re-open it and truncate 
+
+/*
+  READ THE RANDOM NUMBERS FOR QUATERNION GENERATION (IS PASSED FROM PYTHON )
+*/  
+  if (pass_rand == 1 )
+  {
+    cout << "Using numbers for pre-defined orientations ... \n";
+    hid_t    data_id_rands  =  H5Dopen(h5_file_id,"rands",H5P_DEFAULT);
+    float   *rands          =  new float[n_rotations*3];
+    herr_t   read_rand_pos  =  H5Dread(data_id_rands, H5T_NATIVE_FLOAT, H5S_ALL, H5S_ALL, H5P_DEFAULT, rands);
+
+    for(int i=0;i < 4*n_rotations;i++)
+      quats.push_back(0);
+    for (int im=0; im < n_rotations*3; im += 3)
+    {
+      generate_random_quaternion(
+        rands[im],       rands[im+1],         rands[im+2], 
+        quats[4*im/3], quats[4*im/3+1], quats[4*im/3+2], quats[4*im/3+3]);
+    }
+    H5Dclose(data_id_rands);          //close the dataset to keep things clean
+    delete [] rands;
+  }
 
 /*
   OVERWRITE EXISTING COORDINATE/CROMERMANN FILE AND RE-SAVE THE COORDINATE INFO
@@ -123,22 +170,27 @@ RingScatter::RingScatter (
 
 
 /*
-  INITIALIZE RANDOM QUATERNIONS FOR ROTATIONS
+  INITIALIZE RANDOM QUATERNIONS FOR ROTATIONS IF NOT PASSED FROM PYTHON
 */
 
-  sleep(500);         // delay to avoid rotation repeats
-  srand (time(NULL)); // intitalize random seed
-  for(int i=0;i < 4*n_rotations;i++)
-    quats.push_back(0);
-  for (int im=0; im < n_rotations; im ++)
+
+  if(pass_rand == 0 )
   {
-    float rand1   = (float)rand()/RAND_MAX;
-    float rand2   = (float)rand()/RAND_MAX;
-    float rand3   = (float)rand()/RAND_MAX;
+    cout << "Generating random orientaions ...\n";
+    sleep(500);         // delay to avoid rotation repeats
+    srand (time(NULL)); // intitalize random seed
+    for(int i=0;i < 4*n_rotations;i++)
+      quats.push_back(0);
+    for (int im=0; im < n_rotations; im ++)
+    {
+      float rand1   = (float)rand()/RAND_MAX;
+      float rand2   = (float)rand()/RAND_MAX;
+      float rand3   = (float)rand()/RAND_MAX;
   
-    generate_random_quaternion(
-      rand1,       rand2,         rand3, 
-      quats[4*im], quats[4*im+1], quats[4*im+2], quats[4*im+3]);
+      generate_random_quaternion(
+        rand1,       rand2,         rand3, 
+        quats[4*im], quats[4*im+1], quats[4*im+2], quats[4*im+3]);
+    }
   }
 
 
@@ -183,7 +235,7 @@ void RingScatter::kernel()
     float qz       = q*sin(theta);           // z-component of q vector
 
 /*
-    COMPUTE THE CROMERMANN PARAMETERS FOR THIS Q VALUE (THEY ARE EQUAL FRO A GIVEN Q)
+    COMPUTE THE CROMERMANN PARAMETERS FOR THIS Q VALUE (THEY ARE EQUAL FOR A GIVEN Q)
     author tjlane
 */
     float qo = q / (16*M_PI*M_PI); // qo is (sin(theta)/lambda)^2
@@ -204,10 +256,11 @@ void RingScatter::kernel()
     }
 
     cout << "    ---> Computing the scattering ring at q = "<< q << " Ang^-1 ...\n";
+    cout << "    ---> for " << n_rotations << " molecules, each one having " << numAtoms << " atoms. \n";
   
-    hid_t  rings_data_id = H5Dcreate1(h5_ring_group_id,("ring_"+QVALS[i]).c_str() , H5T_NATIVE_FLOAT, space_rings , H5P_DEFAULT);
+    hid_t  ringsR_data_id = H5Dcreate1(h5_ring_group_id,("ringR_"+QVALS[i]).c_str() , H5T_NATIVE_FLOAT, space_rings , H5P_DEFAULT);
+    hid_t  ringsI_data_id = H5Dcreate1(h5_ring_group_id,("ringI_"+QVALS[i]).c_str() , H5T_NATIVE_FLOAT, space_rings , H5P_DEFAULT);
   
-
     for (int im=0; im < n_rotations; im ++)
     {
       float  phi(0);
@@ -217,25 +270,28 @@ void RingScatter::kernel()
         float qx = q*cosTheta*cos(phi);
         float qy = q*cosTheta*sin(phi);
         float QsumR(0),QsumI(0); // sum1 = real part, sum2 = im part
-        for(int a = 0; a < numAtoms; a+=4)
+        for(int a = 0; a < numAtoms; a+=1)
         {
           // we are rotating more times than necessary, but this is better for mem management. 
-          rotate( XYZA[a],     XYZA[a+1],     XYZA[a+2],
+          rotate( X[a],     Y[a],     Z[a],
                   quats[4*im], quats[4*im+1], quats[4*im+2], quats[4*im+3],
                   ax,          ay,            az );
-	  float phase = ax*qx + ay*qy + az*qz;
-	  QsumR      +=  formfactors[ CM_AID[a] ] * cos(phase);
-	  QsumI      +=  formfactors[ CM_AID[a] ] * sin(phase); 
+	      float phase = (ax+Rx[im])*qx + (ay+Ry[im])*qy + (az+Rz[im])*qz;
+	      QsumR      +=  formfactors[ CM_AID[a] ] * cos(phase);
+	      QsumI      +=  formfactors[ CM_AID[a] ] * sin(phase);
 
         }
-        rings[int( im*Nphi + phiIndex )] = QsumR*QsumR + QsumI*QsumI;
+        ringsR[int( im*Nphi + phiIndex )] = QsumR;
+        ringsI[int( im*Nphi + phiIndex )] = QsumI;
         phi += 2*M_PI/float(Nphi);
         phiIndex += 1;
       }
     }
 //save the rings to hdf
-    herr_t  write_rings = H5Dwrite(rings_data_id, H5T_NATIVE_FLOAT, H5S_ALL, H5S_ALL, H5P_DEFAULT, rings);
-    H5Dclose(rings_data_id);
+    herr_t  write_ringsR = H5Dwrite(ringsR_data_id, H5T_NATIVE_FLOAT, H5S_ALL, H5S_ALL, H5P_DEFAULT, ringsR);
+    herr_t  write_ringsI = H5Dwrite(ringsI_data_id, H5T_NATIVE_FLOAT, H5S_ALL, H5S_ALL, H5P_DEFAULT, ringsI);
+    H5Dclose(ringsR_data_id);
+    H5Dclose(ringsI_data_id);
   }
 
 }
@@ -314,7 +370,8 @@ RingScatter::~RingScatter()
 {
   cout << "\n    HASTA LA VISTA, BABY..." << endl;
 
-  delete [] rings;
+  delete [] ringsR;
+  delete [] ringsI;
   delete [] formfactors;
   H5Gclose(h5_ring_group_id);
   H5Sclose(space_single);
